@@ -1,0 +1,38 @@
+# Sample config for XB360 mimick
+
+name: Sample XB360 mimick
+actions:
+- name: "Default"
+  layers:
+  - name: "Default"
+    level : 0
+    # BQ.{s,e,w,n} imply ButtonQuad should be Buttons; consistency checks after.
+    BQ.s : (A)
+    BQ.e : (B)
+    BQ.w : (X)
+    BQ.n : (Y)
+    # LP.{u,l,r,d} imply LeftPad is Direction Pad.
+    LP.u: (DUP)
+    LP.l: (DLT)
+    LP.r: (DRT)
+    LP.d: (DDN)
+    # RightPad is Right Joystick as a whole.
+    RP: (RJ)
+    # The Joystick is Left Joystick as a whole.
+    JS: (LJ)
+    # LS and RS clicks.
+    LS: (LS)
+    RS: (RS)
+    # other binary switches.
+    LB: (LB)
+    RB: (RB)
+    GU: (GU)
+    BK: (BK)
+    ST: (ST)
+    # Triggers.
+    LT.f: (LT)
+    RT.f: (RT)
+    # Triggers analog on.
+    LT: (LT)
+    RT: (RT)
+

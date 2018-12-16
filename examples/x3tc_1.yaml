@@ -1,0 +1,64 @@
+# First draft, X3:TC configuration
+
+name: "X3TC Experimental 1, PS3pad"
+revision: 1
+actions:
+- name: Default
+  layers:
+  - name: Default
+    LJ: (LJ)
+    RJ: (RJ)
+    BK: sanity
+    ST: <Pause>
+    RT.f: <RightControl>
+    DP.u: <Up>
+    DP.l: <Left>
+    DP.r: <Right>
+    DP.d: <Down>
+    BQ.n: <T>
+    BQ.w: <M>
+    BQ.e: <Tab>
+    BQ.s: <Backspace>
+    LB: shifter 1
+    LT.f: shifter 2
+    RB: shifter 3
+    LS: "apply 6th_axis"
+
+  - name: dummy
+
+  - name: 6th_axis
+    LS: "peel 6th_axis"
+    RJ.u: <W>
+    RJ.d: <S>
+    RJ.l: <Q>
+    RJ.r: <E>
+
+  - name: Commerce1
+    DP.u: <PageUp>
+    DP.d: <PageDown>
+    DP.l: <Home>
+    DP.r: <End>
+
+  - name: Combat1
+    BQ.n: <Shift> <T>
+    BQ.w: <>
+    BQ.e: <Shift> <F>
+    BQ.s: <>
+
+  shifting:
+    0:
+      +LB: "transit 1"
+      +RB: "transit 4"
+    1:
+      overlays: [ Commerce1 ]
+      -LB: "transit 0"
+      +RB: "transit 5"
+    4:
+      overlays: [ Combat1 ]
+      +LB: "transit 5"
+      -RB: "transit 0"
+    5:
+      overlays: [ ]
+      -LB: "transit 4"
+      -RB: "transit 1"
+
