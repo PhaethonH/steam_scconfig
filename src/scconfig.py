@@ -197,6 +197,13 @@ class EncodableDict (object):
   def __nonzero__ (self):
     return bool(self.valid_keys)
 
+  @staticmethod
+  def decode_kv (kv):
+    retval = EncodableDict()
+    for k,v in kv.items():
+      retval[k] = v
+    return retval
+
 
 
 class Activator (object):
@@ -252,6 +259,15 @@ Responses include:
     if self.settings:
       kv['settings'] = self.settings.encode_kv()
     return kv
+  @staticmethod
+  def decode_kv (kv):
+    retval = Activator(None)
+    for (bind_name, bind_val) in kv['bindings'].items():
+      if bind_name == 'binding':
+        retval.add_binding_str(bind_val)
+    if 'settings' in kv:
+      retval.settings = EncodableDict.decode_kv(kv['settings'])
+    return retval
 
 
 class ControllerInput (object):
@@ -283,6 +299,14 @@ class ControllerInput (object):
         kv_activators[signal] = activator.encode_kv()
     kv['activators'] = kv_activators
     return kv
+  @staticmethod
+  def decode_kv (kv):
+    retval = ControllerInput(None)
+    for (act_signal,act_kv) in kv['activators'].items():
+      act = Activator.decode_kv(act_kv)
+      act.signal = act_signal
+      retval.activators.append(act)
+    return retval
 
 class Group (object):
   """A group of controls.
@@ -326,6 +350,19 @@ Notable example include the four cardinal points of a d-pad to form not just a d
       kv['settings'] = self.settings.encode_kv()
 
     return kv
+
+  @staticmethod
+  def decode_kv (kv):
+    retval = Group()
+    retval.index = int(kv['id'])
+    retval.mode = kv['mode']
+    for (inp_name,inp_kv) in kv['inputs'].items():
+      inp = ControllerInput.decode_kv(inp_kv)
+      inp.ideal_input = inp_name
+      retval.inputs[inp_name] = inp
+    if 'settings' in kv:
+      retval.settings = EncodableDict.decode_kv(kv['settings'])
+    return retval
 
 
 class ActionLayer (object):
@@ -411,32 +448,21 @@ class Preset (object):
 
     return kv
 
-
-#class Settings (object):
-#  def __init__ (self):
-#    self.cursor_show = None
-#    self.cursor_hide = None
-#    self.left_trackpad_mode = None
-#    self.right_trackpad_mode = None
-#
-#  def encode (self):
-#    lop = []
-#    if self.cursor_show is not None:
-#      lop.append( ('action_set_trigger_cursor_show', str(self.cursor_show)) )
-#    if self.cursor_hide is not None:
-#      lop.append( ('action_set_trigger_cursor_hide', str(self.cursor_hide)) )
-#    if self.left_trackpad_mode is not None:
-#      lop.append( ('left_trackpad_mode', str(self.left_trackpad_mode)) )
-#    if self.right_trackpad_mode is not None:
-#      lop.append( ('right_trackpad_mode', str(self.right_trackpad_mode)) )
-#    return lop
-#
-#  def __nonzero__ (self):
-##    return any(map(lambda x: x is not None, [self.cursor_show, self.cursor_hide, self.left_trackpad_mode, self.right_trackpad_mode]))
-#    return any(
-#      map(
-#       lambda x: x is not None,
-#       [self.cursor_show, self.cursor_hide, self.left_trackpad_mode, self.right_trackpad_mode]))
+  @staticmethod
+  def decode_kv (kv):
+    retval = Preset()
+    retval.index = int(kv['id'])
+    retval.name = kv['name']
+    for gid in kv['group_source_bindings']:
+      binding = kv['group_source_bindings'][gid]
+      parts = binding.split(' ',2)
+      groupsrc = parts[0]
+      active = (parts[1] == 'active')
+      modeshift = (parts[2] == 'modeshift' if len(parts) > 2 else False)
+      gsb = GroupSourceBinding(groupsrc, active, modeshift)
+      gsb.groupid = int(gid)
+      retval.gsb.append(gsb)
+    return retval
 
 
 class Mapping (object):
@@ -525,6 +551,25 @@ class Mapping (object):
 
     return kv
 
+  @staticmethod
+  def decode_kv (kv):
+    retval = Mapping(int(kv['version']))
+    retval.revision = int(kv['revision'])
+    retval.title = kv['title']
+    retval.description = kv['description']
+    retval.creator = kv['creator']
+    retval.controller_type = kv['controller_type']
+    retval.timestamp = kv['Timestamp']
+    for grp_kv in kv.get_all('group', []):
+      grp = Group.decode_kv(grp_kv)
+      retval.groups.append(grp)
+    for preset_kv in kv.get_all('preset',[]):
+      preset = Preset.decode_kv(preset_kv)
+      retval.presets.append(preset)
+    if 'settings' in kv:
+      retval.settings = EncodableDict.decode_kv(kv['settings'])
+    return retval
+
 
 class ControllerConfig (object):
   def __init__ (self):
@@ -545,4 +590,12 @@ class ControllerConfig (object):
     for m in self.mappings:
       kv['controller_mappings'] = m.encode_kv()
     return kv
+
+  @staticmethod
+  def decode_kv (kv):
+    retval = ControllerConfig()
+    for valmap in kv.get_all('controller_mappings', []):
+      mapping = Mapping.decode_kv(valmap)
+      retval.mappings.append(mapping)
+    return retval
 

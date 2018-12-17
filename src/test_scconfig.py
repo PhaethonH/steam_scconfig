@@ -148,7 +148,7 @@ PRESET_DEFAULTS1 = [('controller_mappings',
 
 
 class TestScconfigEncoding (unittest.TestCase):
-  def test_mapping0 (self):
+  def test_dumping0 (self):
     self.buffer = True
     config = scconfig.ControllerConfig()
 
@@ -255,9 +255,21 @@ class TestScconfigEncoding (unittest.TestCase):
     fulldump_kv = scvdf.dumps(kv)
     self.assertEqual(fulldump_pair, fulldump_kv)
     fulldump = fulldump_kv
-    print(fulldump)
+    #print(fulldump)
     hasher = hashlib.new("md5")
     hasher.update(fulldump)
+    self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
+
+  def test_loading0 (self):
+    kv = scvdf.DictMultivalue()
+    kv.update_pairs(PRESET_DEFAULTS1)
+    config = scconfig.ControllerConfig.decode_kv(kv)
+
+    kv = config.encode_kv()
+    fulldump_kv = scvdf.dumps(kv)
+    #print(fulldump_kv)
+    hasher = hashlib.new("md5")
+    hasher.update(fulldump_kv)
     self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
 
 
