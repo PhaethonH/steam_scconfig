@@ -413,57 +413,6 @@ Takes advantage of the typical behavior of appending to list-of-pairs.
 
 
 
-# Convert stream of tokens into object (list of 2-tuples).
-def _reparse (tokenizer, interim=None, depth=0, storetype=list):
-  # First token: accept scalar || end of k/v pairs.
-  k = None
-  token = tokenizer.next_token()
-  while not k:
-    if not token:  # end of stream.
-      return interim  # whatever has been built so far.
-    (toktype,tokval) = token
-    if toktype in (Tokenizer.TOK_UNQUOTED, Tokenizer.TOK_QUOTED):
-      k = tokval
-    elif toktype == Tokenizer.TOK_DENEST:
-      if depth > 0:
-        return interim
-      else:
-        return None   # error in nesting depth
-    elif toktype == Tokenizer.TOK_END_OF_STREAM:
-      return interim
-    else:
-      token = tokenizer.next_token()
-
-  # Second: accept either a scalar, nested k/v pairs
-  v = None
-  token = tokenizer.next_token()
-  while not v:
-    if not token:  # end of stream || unpaired key.
-      raise RuntimeError("Unpaired key")
-    (toktype,tokval) = token
-    if toktype in (Tokenizer.TOK_QUOTED, Tokenizer.TOK_UNQUOTED):
-      v = tokval
-    elif toktype in (Tokenizer.TOK_DENEST, Tokenizer.TOK_END_OF_STREAM):
-      # unpaired key
-      raise RuntimeError("Unpaired key")
-    elif toktype == Tokenizer.TOK_NEST:
-      v = _reparse(tokenizer, None, depth+1, storetype)
-    else:
-      token = tokenizer.next_token()
-
-  # TODO: interpret directives here.
-
-  if not interim:
-    interim = storetype()
-  try:
-    interim.append((k,v))
-  except AttributeError as e:
-    interim[k] = v
-
-  # tail recursion.
-  return _reparse(tokenizer, interim, depth, storetype)
-
-
 def _parse (tokenizer, interim=None, depth=0, storetype=list):
   halt = False
   if interim is None:
@@ -536,42 +485,6 @@ def _stringlike (x):
     return True
   except AttributeError:
     return False
-
-def _reprint (iterlop, accumulator, indent=""):
-  # Head of list.
-  try:
-    head = iterlop.__next__()
-  except StopIteration:
-    # Terminating case.
-    return accumulator
-  (k, v) = head
-
-  # Encode key part of pair.
-  if not _stringlike(k):
-    raise RuntimeError("Only strings may be key")
-  accumulator.append(indent)
-  accumulator.append('"{}"'.format(k))
-
-  # Encode value part of pair.
-  if _stringlike(v):
-    # one-line k/v, separator then value
-    accumulator.append("\t\t")
-    accumulator.append('"{}"'.format(v))
-  else:
-    # formatting minutiae
-    accumulator.extend(["\n", indent, "{", "\n"])
-    # the nested k/v
-    try:
-      iv = v.items()
-    except AttributeError as e:
-      iv = iter(v)
-    accumulator.extend(_reprint(iv, [], "{}{}".format(indent, "\t")))
-    # formatting minutiae
-    accumulator.extend([indent, "}"])
-  accumulator.append("\n")
-
-  # tail recursion: continue writing out next in list.
-  return _reprint(iterlop, accumulator, indent)
 
 # Convert to list of strings (can be passed to ''.join() for printing).
 def _toLOS (iterlop, accumulator, indent=""):
