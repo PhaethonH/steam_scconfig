@@ -144,7 +144,7 @@ baz""")
         ])
 
 
-class TestVdfParser (unittest.TestCase):
+class TestVdfReader (unittest.TestCase):
   def test_parse1 (self):
     src = '''"foo" "bar"'''
     res = scvdf.loads(src)
@@ -206,6 +206,18 @@ class TestVdfParser (unittest.TestCase):
     #print("res = {!r}".format(res))
     self.assertIsNot(res, None)
     self.assertNotEqual(res, [])
+
+
+class TestVdfWriter (unittest.TestCase):
+  def test_save1 (self):
+    data = [ ("foo", "bar") ]
+    res = scvdf.dumps(data)
+    self.assertEqual(res, '''"foo" "bar"\n''')
+
+  def test_save2 (self):
+    data = [ ("foo", "bar"), ("quux", "quuux") ]
+    res = scvdf.dumps(data)
+    self.assertEqual(res, '''"foo" "bar"\n"quux" "quuux"\n''')
 
 
 

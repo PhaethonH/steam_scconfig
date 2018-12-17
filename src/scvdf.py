@@ -347,7 +347,7 @@ class Parser (object):
     pass
 
 
-def reparse (tokenizer, interim=None, depth=0):
+def _reparse (tokenizer, interim=None, depth=0):
   # First token: accept scalar || end of k/v pairs.
   k = None
   token = tokenizer.next_token()
@@ -380,25 +380,65 @@ def reparse (tokenizer, interim=None, depth=0):
       # unpaired key
       raise RuntimeError("Unpaired key")
     elif toktype == Tokenizer.TOK_NEST:
-      v = reparse(tokenizer, None, depth+1)
+      v = _reparse(tokenizer, None, depth+1)
     else:
       token = tokenizer.next_token()
+
+  # TODO: interpret directives here.
 
   if not interim:
     interim = []
   interim.append((k,v))
 
   # tail recursion.
-  return reparse(tokenizer, interim, depth)
+  return _reparse(tokenizer, interim, depth)
 
 
 
 def load (srcstream):
   tokenizer = StreamTokenizer(srcstream)
-  return reparse(tokenizer, [])
+  return _reparse(tokenizer, [])
 
 def loads (srcstream):
   tokenizer = StringTokenizer(srcstream)
-  return reparse(tokenizer, [])
+  return _reparse(tokenizer, [])
 
+
+
+
+def _stringlike (x):
+  try:
+    x.strip
+    return True
+  except AttributeError:
+    return False
+
+def _reprint (lo2t, accumulator):
+  if len(lo2t) == 0:
+    return accumulator
+
+  head = lo2t[0]
+  (k, v) = head
+  if not _stringlike(k):
+    raise RuntimeError("Only strings may be key")
+  accumulator.append('"{}"'.format(k))
+
+  accumulator.append(' ')
+
+  if _stringlike(v):
+    accumulator.append('"{}"'.format(v))
+  else:
+    accumulator.append(" {\n")
+    accumulator.extend(_reprint(v, []))
+    accumulator.append(" }")
+  accumulator.append("\n")
+
+  # tail recursion.
+  return _reprint(lo2t[1:], accumulator)
+
+
+def dumps (lo2t):
+  """Dump list of 2-tuples in VDF format."""
+  parts = _reprint(lo2t, [])
+  return ''.join(parts)
 
