@@ -348,7 +348,7 @@ class Parser (object):
 
 
 def reparse (tokenizer, interim=None, depth=0):
-  # First token: accept scalar, end of k/v pairs.
+  # First token: accept scalar || end of k/v pairs.
   k = None
   token = tokenizer.next_token()
   while not k:
@@ -371,7 +371,7 @@ def reparse (tokenizer, interim=None, depth=0):
   v = None
   token = tokenizer.next_token()
   while not v:
-    if not token:  # end of stream, unpaired key.
+    if not token:  # end of stream || unpaired key.
       raise RuntimeError("Unpaired key")
     (toktype,tokval) = token
     if toktype in (Tokenizer.TOK_QUOTED, Tokenizer.TOK_UNQUOTED):
@@ -395,10 +395,10 @@ def reparse (tokenizer, interim=None, depth=0):
 
 def load (srcstream):
   tokenizer = StreamTokenizer(srcstream)
-  return reparse(tokenizer)
+  return reparse(tokenizer, [])
 
 def loads (srcstream):
   tokenizer = StringTokenizer(srcstream)
-  return reparse(tokenizer)
+  return reparse(tokenizer, [])
 
 
