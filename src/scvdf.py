@@ -413,32 +413,47 @@ def _stringlike (x):
   except AttributeError:
     return False
 
-def _reprint (lo2t, accumulator):
+def _reprint (lo2t, accumulator, indent=""):
+  # Terminating case.
+  if not lo2t:
+    return accumulator
   if len(lo2t) == 0:
     return accumulator
 
-  head = lo2t[0]
-  (k, v) = head
+  # Head of list.
+  (k, v) = lo2t[0]
+
+  # Encode key part of pair.
   if not _stringlike(k):
     raise RuntimeError("Only strings may be key")
+  accumulator.append(indent)
   accumulator.append('"{}"'.format(k))
 
-  accumulator.append(' ')
-
+  # Encode value part of pair.
   if _stringlike(v):
+    # one-line k/v, separator then value
+    accumulator.append("\t\t")
     accumulator.append('"{}"'.format(v))
   else:
-    accumulator.append(" {\n")
-    accumulator.extend(_reprint(v, []))
-    accumulator.append(" }")
+    # formatting minutiae
+    accumulator.extend(["\n", indent, "{", "\n"])
+    # the nested k/v
+    accumulator.extend(_reprint(v, [], "{}{}".format(indent, "\t")))
+    # formatting minutiae
+    accumulator.extend([indent, "}"])
   accumulator.append("\n")
 
-  # tail recursion.
-  return _reprint(lo2t[1:], accumulator)
+  # tail recursion: continue writing out next in list.
+  return _reprint(lo2t[1:], accumulator, indent)
 
 
 def dumps (lo2t):
   """Dump list of 2-tuples in VDF format."""
   parts = _reprint(lo2t, [])
   return ''.join(parts)
+
+def dump (lo2t, f):
+  parts = _reprint(lo2t, [])
+  for p in parts:
+    f.write(p)
 
