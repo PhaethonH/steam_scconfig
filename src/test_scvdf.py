@@ -3,16 +3,20 @@
 import sys, unittest
 
 import scvdf
-from scvdf import Tokenizer
+from scvdf import Tokenizer, StreamTokenizer, StringTokenizer, TokenizeState
 
 class TestVdfTokenizer (unittest.TestCase):
+  def setUp (self):
+    TokenizeState.DEBUG = False
+#    self.buffer = False
+
   def prepare (self, test_string):
     try:
       from StringIO import StringIO
     except ImportError:
       from io import StringIO
     self.f = StringIO(test_string)
-    self.tokenizer = Tokenizer(self.f)
+    self.tokenizer = StreamTokenizer(self.f)
 
   def test_unquoted (self):
     self.prepare("foo")
@@ -94,13 +98,11 @@ class TestVdfTokenizer (unittest.TestCase):
     self.assertGreater(len(res[1]), 0)
 
   def test_unquoted_into_comment (self):
-    #TokenizeState.DEBUG = True
     self.prepare("foo//bar")
     res = self.tokenizer.next_token()
     self.assertEqual(res, (Tokenizer.TOK_UNQUOTED, "foo"))
     res = self.tokenizer.next_token()
     self.assertEqual(res[0], Tokenizer.TOK_COMMENT)
-    #TokenizeState.DEBUG = False
 
     self.prepare("foo //bar")
     res = self.tokenizer.next_token()
@@ -143,6 +145,8 @@ baz""")
 
 
 if __name__ == "__main__":
+  #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted'])
   #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted_into_comment'])
+  #unittest.main(defaultTest=['TestVdfTokenizer.test_quoted_esc'])
   unittest.main()
 

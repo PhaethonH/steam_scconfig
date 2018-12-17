@@ -41,6 +41,7 @@ class Token (object):
 
 
 
+# Convert stream of characters into stream of tokens.
 class Tokenizer (object):
   """Tokenizer class, instance state for tokenizing a text stream.
 
@@ -61,84 +62,142 @@ Token types:
   TOK_DENEST = 'DENEST'
   TOK_COMMENT = 'COMMENT'
 
-  def __init__ (self, srcstream):
-    self.srcstream = srcstream
+  def __init__ (self):
+    self.ch = None      # Currently examined character.
     self.pushback = []  # Stack, characters pushed back for retokenizing.
     self.build = []     # List of characters for currently-built token.
     self.state = TokenizeBegin(self)
     # One token pending for processing
-    # TODO: make it a queue of tokens?
-    self.pending = None
+    self.pending = []
 
-  def nextch (self):
-    ch = ''
-    if self.pushback:
-      ch = self.pushback.pop()
-    else:
-      ch = self.srcstream.read(1)
-    return ch
-
-  def nop (self, ch=None):
-    """op: do nothing"""
+  def NOP (self):
+    """op: do nothing; ignore character"""
     return self
 
-  def pushch (self, ch):
+  def UNGET (self):
     """op: copy character to pushback (re-read) stack."""
-    self.pushback.append(ch)
+    self.pushback.append(self.ch)
     return self
 
-  def discard (self, ch=None):
-    """op: ignore character."""
-    return self
-
-  def consume (self, ch):
+  def LIT (self):
     """op: append character to token buffer."""
-    self.build.append(ch)
+    self.build.append(self.ch)
     return self
 
-  def drop (self, n):
-    """op: drop 'n' characters from end of token buffer."""
-    while n > 0:
-      ch = self.build.pop()
-      #self.pushch(ch)
-      n -= 1
+  def RTRIM (self):
+    """op: drop 1 character from end of token buffer."""
+    self.build.pop()
     return self
 
-  def clear (self, _=None):
+  def CLR (self):
     """op: reset token buffer (discard all accumulated characters)."""
     self.build = []
     return self
 
-  def advance (self, explicit_type=None):
+  def COMMIT (self, explicit_type=None):
     """op: token is complete."""
     if self.build:
       toktype = explicit_type
       if toktype is None:
         toktype = self.state.TOKTYPE
       tokval = ''.join(self.build)
-      self.pending = (toktype, tokval)
+      self.pending.append((toktype, tokval))
       self.build = []
     return self
 
+  def feed (self, ch):
+    """Primary entry point -- feed character to tokenizer.
+Returns boolean, whether a token is not ready.
+
+This sense allows looping on feed() until token is ready:
+
+while tokenizer.feed(ch):
+  pass
+token = tokenizer.next_token()
+
+"""
+    if not self.state:
+      return False
+    # continue feeding any pushed-back characters.
+    while self.pushback and self.state:
+      self.ch = self.pushback.pop()
+      self.state = self.state.handle()
+    # feed newest character.
+    self.ch = ch
+    self.state = self.state.handle()
+    # This sense allows looping feed() until a token is ready.
+    return not self.pending
+
+  def next_token (self):
+    if not self.pending:
+      return None
+    retval = self.pending[0]
+    self.pending = self.pending[1:]
+    return retval
+
+
+class StreamTokenizer (Tokenizer):
+  """Extend Tokenizer to automatically feed from a stream."""
+  def __init__ (self, srcstream):
+    Tokenizer.__init__(self)
+    self.srcstream = srcstream
+
   def next_token (self):
     """Retrieve next token."""
-    while self.state:
-      self.state = self.state.handle()
-      if self.pending is not None:
-        retval = self.pending
-        self.pending = None
-        return retval
+    if self.pending:
+      return super(StreamTokenizer,self).next_token()
+    while self.state and not self.pending:
+      ch = self.srcstream.read(1)
+      self.feed(ch)
+      if self.pending:
+        return super(StreamTokenizer,self).next_token()
     return None
 
   def __iter__ (self):
     """Retrieve next token, iterator idiom."""
     while self.state:
-      self.state = self.state.handle()
-      if self.pending is not None:
-        retval = self.pending
-        self.pending = None
-        yield retval
+      ch = self.srcstream.read(1)
+      while self.feed(ch):
+        ch = self.srcstream.read(1)
+        #print("to-feed {!r}".format(ch))
+      while self.pending:
+        yield super(StreamTokenizer,self).next_token()
     return
+
+
+class StringTokenizer (Tokenizer):
+  """Extend Tokenizer to automatically feed from a stream."""
+  def __init__ (self, srcstring):
+    Tokenizer.__init__(self)
+    self.srcstring = srcstring
+    self.srcofs = 0
+
+  def next_token (self):
+    """Retrieve next token."""
+    if self.pending:
+      return super(StreamTokenizer,self).next_token()
+    while self.state and not self.pending:
+      ch = self.srcstring[self.srcofs]
+      self.srcofs += 1
+      self.feed(ch)
+      if self.pending:
+        return super(StreamTokenizer,self).next_token()
+    return None
+
+  def __iter__ (self):
+    """Retrieve next token, iterator idiom."""
+    while self.state:
+      ch = self.srcstring[self.srcofs]
+      self.srcofs += 1
+      while self.feed(ch):
+        ch = self.srcstring[self.srcofs]
+        self.srcofs += 1
+        #print("to-feed {!r}".format(ch))
+      while self.pending:
+        yield super(StreamTokenizer,self).next_token()
+    return
+
+
 
 
 # Tokenizer states (State Pattern)
@@ -158,7 +217,7 @@ class TokenizeState (object):
     """common entry point -- extract one character, pass to feed()."""
     if not self.context:
       return None
-    ch = self.context.nextch()
+    ch = self.context.ch
     if TokenizeState.DEBUG:
       print("handling ({},{!r})".format(self.__class__, ch))
     try:
@@ -179,31 +238,31 @@ class TokenizeFinish (TokenizeState):
 class TokenizeBegin (TokenizeState):
   TOKTYPE=Tokenizer.TOK_WS
   def feed (self, ch):
-    if is_eos(ch): return TokenizeFinish(self.context.discard(ch))
+    if is_eos(ch): return TokenizeFinish(self.context.NOP())
     if is_whitespace(ch): return self
-    if is_dquote(ch): return TokenizeQuoted(self.context.discard(ch))
-    if is_nestopen(ch): return TokenizeNesting(self.context.consume(ch))
-    if is_nestclose(ch): return TokenizeDenesting(self.context.consume(ch))
-    if is_comment0(ch): return TokenizeSemicomment(self.context.consume(ch))
-    if is_any(ch): return TokenizeUnquoted(self.context.consume(ch))
+    if is_dquote(ch): return TokenizeQuoted(self.context.NOP())
+    if is_nestopen(ch): return TokenizeNesting(self.context.LIT())
+    if is_nestclose(ch): return TokenizeDenesting(self.context.LIT())
+    if is_comment0(ch): return TokenizeSemicomment(self.context.LIT())
+    if is_any(ch): return TokenizeUnquoted(self.context.LIT())
     return TokenizeError(self.context)
 
 ### Quoted token.
 class TokenizeQuoted (TokenizeState):
   TOKTYPE=Tokenizer.TOK_QUOTED
   def feed (self, ch):
-    if is_eos(ch): return TokenizeFinish(self.context.advance())
-    if is_dquote(ch): return TokenizeBegin(self.context.advance())
-    if is_escape(ch): return TokenizeEscaped(self.context.discard(ch))
-    if is_comment0(ch): return TokenizeSemicomment(self.context.discard(ch))
-    self.context.consume(ch)
+    if is_eos(ch): return TokenizeFinish(self.context.COMMIT())
+    if is_dquote(ch): return TokenizeBegin(self.context.COMMIT())
+    if is_escape(ch): return TokenizeEscaped(self.context.NOP())
+    if is_comment0(ch): return TokenizeSemicomment(self.context.NOP())
+    self.context.LIT()
     return self
 
 class TokenizeEscaped (TokenizeState):
   TOKTYPE=Tokenizer.TOK_QUOTED
   def feed (self, ch):
-    if is_eos(ch): return TokenizeFinish(self.context.advance())
-    return TokenizeQuoted(self.context.consume(ch))
+    if is_eos(ch): return TokenizeFinish(self.context.COMMIT())
+    return TokenizeQuoted(self.context.LIT())
 
 
 ### Unquoted... stuff.
@@ -211,9 +270,9 @@ class TokenizeEscaped (TokenizeState):
 class TokenizeNesting (TokenizeState):
   TOKTYPE=Tokenizer.TOK_NEST
   def feed (self, ch):
-    if is_eos(ch): return TokenizeFinish(self.context.advance())
+    if is_eos(ch): return TokenizeFinish(self.context.COMMIT())
     # Anything: push back and redo from Begin.
-    return TokenizeBegin(self.context.pushch(ch).advance())
+    return TokenizeBegin(self.context.UNGET().COMMIT())
 
 class TokenizeDenesting (TokenizeNesting):
   TOKTYPE=Tokenizer.TOK_DENEST
@@ -223,12 +282,12 @@ class TokenizeUncomment (TokenizeState):
   """Base/common class for Unquoted and Semicomment"""
   TOKTYPE=Tokenizer.TOK_UNQUOTED
   def feed (self, ch):
-    if is_eos(ch): return TokenizeFinish(self.context.advance())
+    if is_eos(ch): return TokenizeFinish(self.context.COMMIT())
     if is_whitespace(ch) or is_dquote(ch) or is_nestopen(ch) or is_nestclose(ch):
       # Re-examine what caused end-of-token after advancing.
-      return TokenizeBegin(self.context.pushch(ch).advance())
+      return TokenizeBegin(self.context.UNGET().COMMIT())
 
-    return TokenizeUnquoted(self.context.consume(ch))
+    return TokenizeUnquoted(self.context.LIT())
 
 class TokenizeSemicomment (TokenizeUncomment):
   """Comment delimiter is two characters.
@@ -238,7 +297,7 @@ If the second character does follow, drop the first character of the comment del
 """
   TOKTYPE=Tokenizer.TOK_UNQUOTED
   def feed (self, ch):
-    if is_comment1(ch): return TokenizeComment(self.context.drop(1).advance())
+    if is_comment1(ch): return TokenizeComment(self.context.RTRIM().COMMIT())
     return super(TokenizeSemicomment,self).feed(ch)
 
 class TokenizeUnquoted (TokenizeUncomment):
@@ -250,7 +309,7 @@ class TokenizeUnquoted (TokenizeUncomment):
   TOKTYPE=Tokenizer.TOK_UNQUOTED
   def feed (self, ch):
     # Might be a comment, otherwise character is part of token.
-    if is_comment0(ch): return TokenizeSemicomment(self.context.consume(ch))
+    if is_comment0(ch): return TokenizeSemicomment(self.context.LIT())
     return super(TokenizeUnquoted,self).feed(ch)
 
 
@@ -258,9 +317,9 @@ class TokenizeComment (TokenizeState):
   """Comment continues until end of line."""
   TOKTYPE=Tokenizer.TOK_COMMENT
   def feed (self, ch):
-    if is_eos(ch): return TokenizeFinish(self.context.advance())
-    if is_eol(ch): return TokenizeBegin(self.context.advance())
-    self.context.consume(ch)
+    if is_eos(ch): return TokenizeFinish(self.context.COMMIT())
+    if is_eol(ch): return TokenizeBegin(self.context.COMMIT())
+    self.context.LIT()
     return self
 
 
