@@ -209,15 +209,68 @@ class TestVdfReader (unittest.TestCase):
 
 
 class TestVdfWriter (unittest.TestCase):
+  # Interfield separator to expect.
+  IFS="\t\t"
+
+  def setUp (self):
+    self.buffer = False
+    return
+
   def test_save1 (self):
     data = [ ("foo", "bar") ]
     res = scvdf.dumps(data)
-    self.assertEqual(res, '''"foo" "bar"\n''')
+    self.assertEqual(res, '''"foo"{IFS}"bar"\n'''.format(IFS=self.IFS))
 
   def test_save2 (self):
     data = [ ("foo", "bar"), ("quux", "quuux") ]
     res = scvdf.dumps(data)
-    self.assertEqual(res, '''"foo" "bar"\n"quux" "quuux"\n''')
+    self.assertEqual(res, '''"foo"{IFS}"bar"\n"quux"{IFS}"quuux"\n'''.format(IFS=self.IFS))
+
+  def test_sub1 (self):
+    data = [ ("foo", [ ("a","b") ] ) ]
+    res = scvdf.dumps(data)
+    self.assertEqual(res, '''\
+"foo"
+{{
+\t"a"{IFS}"b"
+}}
+'''.format(IFS=self.IFS))
+
+  def test_sub2 (self):
+    data = [ ("foo", [ ("a", [ ("aa","bb") ] ) ] ) ]
+    res = scvdf.dumps(data)
+    self.assertEqual(res, '''\
+"foo"
+{{
+\t"a"
+\t{{
+\t\t"aa"{IFS}"bb"
+\t}}
+}}
+'''.format(IFS=self.IFS))
+
+  def test_load_save_1 (self):
+    fname = '../examples/defaults1_0.vdf'
+    f = open(fname, 'rt')
+    literal = f.read()
+    f.close()
+    res = scvdf.loads(literal)
+    out = scvdf.dumps(res)
+    self.assertEqual(literal, out)
+
+    import hashlib
+    try:
+      from StringIO import StringIO
+    except ImportError:
+      from io import StringIO
+#    OUTFNAME = "output.txt"
+    g = StringIO()
+    scvdf.dump(res, g)
+    summer = hashlib.new("md5")
+    summer.update(g.getvalue().encode("utf-8"))
+    digested = summer.hexdigest()
+    self.assertEqual(digested, "99d8c4ded89ec867519792db86d3bffc")
+
 
 
 
