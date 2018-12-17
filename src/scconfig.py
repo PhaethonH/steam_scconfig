@@ -198,7 +198,7 @@ class EncodableDict (object):
     return bool(self.valid_keys)
 
   @staticmethod
-  def decode_kv (kv):
+  def decode_kv (kv, parentkey=None):
     retval = EncodableDict()
     for k,v in kv.items():
       retval[k] = v
@@ -260,13 +260,13 @@ Responses include:
       kv['settings'] = self.settings.encode_kv()
     return kv
   @staticmethod
-  def decode_kv (kv):
-    retval = Activator(None)
+  def decode_kv (kv, parentkey=None):
+    retval = Activator(parentkey)
     for (bind_name, bind_val) in kv['bindings'].items():
       if bind_name == 'binding':
         retval.add_binding_str(bind_val)
     if 'settings' in kv:
-      retval.settings = EncodableDict.decode_kv(kv['settings'])
+      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
     return retval
 
 
@@ -300,11 +300,11 @@ class ControllerInput (object):
     kv['activators'] = kv_activators
     return kv
   @staticmethod
-  def decode_kv (kv):
-    retval = ControllerInput(None)
+  def decode_kv (kv, parentkey=None):
+    retval = ControllerInput(parentkey)
     for (act_signal,act_kv) in kv['activators'].items():
-      act = Activator.decode_kv(act_kv)
-      act.signal = act_signal
+      act = Activator.decode_kv(act_kv, act_signal)
+      #act.signal = act_signal
       retval.activators.append(act)
     return retval
 
@@ -352,16 +352,16 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     return kv
 
   @staticmethod
-  def decode_kv (kv):
+  def decode_kv (kv, parentkey=None):
     retval = Group()
     retval.index = int(kv['id'])
     retval.mode = kv['mode']
     for (inp_name,inp_kv) in kv['inputs'].items():
-      inp = ControllerInput.decode_kv(inp_kv)
-      inp.ideal_input = inp_name
+      inp = ControllerInput.decode_kv(inp_kv, inp_name)
+      #inp.ideal_input = inp_name
       retval.inputs[inp_name] = inp
     if 'settings' in kv:
-      retval.settings = EncodableDict.decode_kv(kv['settings'])
+      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
     return retval
 
 
@@ -449,7 +449,7 @@ class Preset (object):
     return kv
 
   @staticmethod
-  def decode_kv (kv):
+  def decode_kv (kv, parentkey=None):
     retval = Preset()
     retval.index = int(kv['id'])
     retval.name = kv['name']
@@ -552,7 +552,7 @@ class Mapping (object):
     return kv
 
   @staticmethod
-  def decode_kv (kv):
+  def decode_kv (kv, parentkey=None):
     retval = Mapping(int(kv['version']))
     retval.revision = int(kv['revision'])
     retval.title = kv['title']
@@ -561,13 +561,13 @@ class Mapping (object):
     retval.controller_type = kv['controller_type']
     retval.timestamp = kv['Timestamp']
     for grp_kv in kv.get_all('group', []):
-      grp = Group.decode_kv(grp_kv)
+      grp = Group.decode_kv(grp_kv, 'group')
       retval.groups.append(grp)
     for preset_kv in kv.get_all('preset',[]):
-      preset = Preset.decode_kv(preset_kv)
+      preset = Preset.decode_kv(preset_kv, 'preset')
       retval.presets.append(preset)
     if 'settings' in kv:
-      retval.settings = EncodableDict.decode_kv(kv['settings'])
+      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
     return retval
 
 
@@ -592,10 +592,10 @@ class ControllerConfig (object):
     return kv
 
   @staticmethod
-  def decode_kv (kv):
+  def decode_kv (kv, parentkey=None):
     retval = ControllerConfig()
     for valmap in kv.get_all('controller_mappings', []):
-      mapping = Mapping.decode_kv(valmap)
+      mapping = Mapping.decode_kv(valmap, 'controller_mappings')
       retval.mappings.append(mapping)
     return retval
 
