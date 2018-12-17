@@ -3,12 +3,27 @@
 import sys
 
 # VDF parser, rewritten for use in externally configuring Steam Controller.
-# pip-installable library "vdf" left much to be desired.
+#
+# pip-installable library "vdf" left much to be desired for this use.
 
 # Yields (converts to) a list of (k,v) 2-tuples.
 #   [ (first_key, first_value), (second_key, second_value), ... ]
 # Any of the value may be a nested VDF list-of-tuples:
 #   [ (nesting_key, [ ( keyA, valueA ), ( keyB, valueB ), ... ] ), ( second_key, second_value ), ... ]
+
+# DictMultivalue maps keys to list of values, for assigning to same key multiple times.
+# If the key was assigned only once, the value is the original assigned value (in the same sense as the built-in dict)
+# If the key was already assigned before, the looked up value becomes a list of each subsequent values assigned to the key.
+# e.g. d=DictMultivalue()
+# d['a'] = 1     # { "a": 1 }
+# d['a'] = 2     # { "a": [1,2] }
+# d['a'] = 3     # { "a": [1,2,3] }
+# del d['a']     # {}
+# d['a'] = ['A','A', 'A']    # { "a": ['A', 'A', 'A'] }
+# d['a'] = 100               # { "a": [ ['A', 'A', 'A'], 100 ] }
+# d['a'] = None              # { "a": [ ['A', 'A', 'A'], 100, None ] }
+#
+# N.B. VDF does not support a native list type.
 
 
 
@@ -51,7 +66,7 @@ Token types:
   TOK_QUOTED = 'QUOTED'
   TOK_UNQUOTED = 'UNQUOTED'
   TOK_NEST = 'NEST'
-  TOK_DENEST = 'DENEST'
+  TOK_DENEST = 'DENEST'    # De-nest - end of nested k/v pairs.
   TOK_COMMENT = 'COMMENT'
 
   def __init__ (self):
@@ -341,7 +356,20 @@ class Parser (object):
 
 
 class DictMultivalue (dict):
-  """Allow multiple values per dictionary entry."""
+  """Allow multiple values per dictionary entry.
+
+
+example evolution:
+d = DictMultivalue()       # {}
+d['a'] = 1                 # { "a": 1 }
+d['a'] = 2                 # { "a": [1,2] }
+d['a'] = 3                 # { "a": [1,2,3] }
+del d['a']                 # {}
+d['a'] = ['A','A', 'A']    # { "a": ['A', 'A', 'A'] }
+d['a'] = 100               # { "a": [ ['A', 'A', 'A'], 100 ] }
+d['a'] = None              # { "a": [ ['A', 'A', 'A'], 100, None ] }
+
+"""
   def __init__ (self, *args, **kwargs):
     super(dict,self).__init__(*args, **kwargs)
     self.multiset = set()
