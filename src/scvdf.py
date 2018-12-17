@@ -373,6 +373,7 @@ d['a'] = None              # { "a": [ ['A', 'A', 'A'], 100, None ] }
   def __init__ (self, *args, **kwargs):
     super(dict,self).__init__(*args, **kwargs)
     self.multiset = set()
+    self.keyorder = []
 
   def append (self, pair):
     """List sense, assume element is 2-tuple of (key,value).
@@ -396,6 +397,18 @@ Takes advantage of the typical behavior of appending to list-of-pairs.
     else:
       # New dict key.
       super(DictMultivalue,self).__setitem__(k,v)
+      self.keyorder.append(k)
+
+  def items (self):
+    """Iterate dict's (key,value) pairs."""
+    for k in self.keyorder:
+      direct = self.__getitem__(k)
+      if k in self.multiset:
+        for mv in direct:
+          yield (k, mv)
+      else:
+        yield (k, direct)
+    return
 
 
 
@@ -469,15 +482,14 @@ def _stringlike (x):
   except AttributeError:
     return False
 
-def _reprint (lo2t, accumulator, indent=""):
-  # Terminating case.
-  if not lo2t:
-    return accumulator
-  if len(lo2t) == 0:
-    return accumulator
-
+def _reprint (iterlop, accumulator, indent=""):
   # Head of list.
-  (k, v) = lo2t[0]
+  try:
+    head = iterlop.__next__()
+  except StopIteration:
+    # Terminating case.
+    return accumulator
+  (k, v) = head
 
   # Encode key part of pair.
   if not _stringlike(k):
@@ -494,22 +506,34 @@ def _reprint (lo2t, accumulator, indent=""):
     # formatting minutiae
     accumulator.extend(["\n", indent, "{", "\n"])
     # the nested k/v
-    accumulator.extend(_reprint(v, [], "{}{}".format(indent, "\t")))
+    try:
+      iv = v.items()
+    except AttributeError as e:
+      iv = iter(v)
+    accumulator.extend(_reprint(iv, [], "{}{}".format(indent, "\t")))
     # formatting minutiae
     accumulator.extend([indent, "}"])
   accumulator.append("\n")
 
   # tail recursion: continue writing out next in list.
-  return _reprint(lo2t[1:], accumulator, indent)
+  return _reprint(iterlop, accumulator, indent)
 
 
-def dumps (lo2t):
+def dumps (store):
   """Dump list of 2-tuples in VDF format."""
-  parts = _reprint(lo2t, [])
+  if isinstance(store,dict):
+    iterlop = store.items()
+  else:
+    iterlop = iter(store)
+  parts = _reprint(iterlop, [])
   return ''.join(parts)
 
-def dump (lo2t, f):
-  parts = _reprint(lo2t, [])
+def dump (store, f):
+  if isinstance(store,dict):
+    iterlop = store.items()
+  else:
+    iterlop = iter(store)
+  parts = _reprint(iterlop, [])
   for p in parts:
     f.write(p)
 

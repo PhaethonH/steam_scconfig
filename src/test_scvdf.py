@@ -239,7 +239,9 @@ class TestVdfReader (unittest.TestCase):
     src = r'''
 "example"
 {
-  "group" { "id" "0" }
+  "group" { "id" "0"
+  "first" "1"
+  }
   "group"
   {
     "id" "1" }
@@ -250,7 +252,11 @@ class TestVdfReader (unittest.TestCase):
 }
 '''
     res = scvdf.loads(src, scvdf.DictMultivalue)
-    self.assertEqual(res, {"example": { "group": [ {"id":'0'}, {"id":'1'}, {"id":'2'}]}})
+    self.assertEqual(res, {"example": { "group": [ {"id":'0',"first":"1"}, {"id":'1'}, {"id":'2'}]}})
+    example = res['example']
+    items = [ x for x in example.items() ]
+    #print("items = {!r}".format(items))
+    self.assertEqual(len(items), 3)
 
 
 class TestVdfWriter (unittest.TestCase):
@@ -299,7 +305,7 @@ class TestVdfWriter (unittest.TestCase):
     f = open(fname, 'rt')
     literal = f.read()
     f.close()
-    res = scvdf.loads(literal)
+    res = scvdf.loads(literal, scvdf.DictMultivalue)
     out = scvdf.dumps(res)
     self.assertEqual(literal, out)
 
@@ -325,5 +331,6 @@ if __name__ == "__main__":
   #unittest.main(defaultTest=['TestVdfTokenizer.test_quoted_esc'])
   #unittest.main(defaultTest=['TestVdfReader.test_parse1sub'])
   #unittest.main(defaultTest=['TestVdfReader.test_dictmultivalue'])
+  #unittest.main(defaultTest=['TestVdfWriter.test_load_save_1'])
   unittest.main()
 
