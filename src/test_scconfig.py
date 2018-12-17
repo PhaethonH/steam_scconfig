@@ -149,6 +149,7 @@ PRESET_DEFAULTS1 = [('controller_mappings',
 
 class TestScconfigEncoding (unittest.TestCase):
   def test_mapping0 (self):
+    self.buffer = True
     config = scconfig.ControllerConfig()
 
     mapping = config.make_mapping()
@@ -247,10 +248,14 @@ class TestScconfigEncoding (unittest.TestCase):
     preset0.add_gsb(4, 'left_trigger', True, False)
     preset0.add_gsb(5, 'right_trigger', True, False)
 
-    lop = config.encode()
+    lop = config.encode_pair()
+    kv = config.encode_kv()
 
-    fulldump = scvdf.dumps(lop)
-    #print(fulldump)
+    fulldump_pair = scvdf.dumps(lop)
+    fulldump_kv = scvdf.dumps(kv)
+    self.assertEqual(fulldump_pair, fulldump_kv)
+    fulldump = fulldump_kv
+    print(fulldump)
     hasher = hashlib.new("md5")
     hasher.update(fulldump)
     self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")

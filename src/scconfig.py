@@ -175,19 +175,25 @@ class EncodableDict (object):
   def __delitem__ (self, k):
     del self.store[k]
     self.valid_keys.remove(k)
-  def encode (self):
+  def encode_pair (self):
     lop = []
     for k in self.valid_keys:
-      #v = None
+      v = self.store[k]
       try:
-        #v = self.store[k].encode()
-        lop.append(self.store[k].encode())
+        lop.append(v.encode_pair())
       except AttributeError as e:
-        #v = str(v)
-        lop.append( (k,str(self.store[k])) )
-      #lop.append( (k,v) )
+        lop.append( (k,str(v)) )
     whole = (self.whole_key, lop)
     return whole
+  def encode_kv (self):
+    kv = scvdf.DictMultivalue()
+    for k in self.valid_keys:
+      v = self.store[k]
+      try:
+        kv[k] = v.encode_kv()
+      except AttributeError as e:
+        kv[k] = str(v)
+    return kv
   def __nonzero__ (self):
     return bool(self.valid_keys)
 
@@ -223,7 +229,7 @@ Responses include:
   def add_binding_str (self, binding_str):
     bindinfo = decode_binding(binding_str)
     return self.add_binding_obj(bindinfo)
-  def encode (self):
+  def encode_pair (self):
     lop = []
 
     kv_bindings = []
@@ -233,10 +239,19 @@ Responses include:
     lop.append( ('bindings', kv_bindings) )
 
     if self.settings:
-      lop.append( self.settings.encode() )
+      lop.append( self.settings.encode_pair() )
 
     whole = ( (str(self.signal),lop) )
     return whole
+  def encode_kv (self):
+    kv = scvdf.DictMultivalue()
+    kv_bindings = scvdf.DictMultivalue()
+    for binding in self.bindings:
+      kv_bindings['binding'] = str(binding)
+    kv['bindings'] = kv_bindings
+    if self.settings:
+      kv['settings'] = self.settings.encode_kv()
+    return kv
 
 
 class ControllerInput (object):
@@ -248,16 +263,26 @@ class ControllerInput (object):
     activator = Activator(activator_signal)
     self.activators.append(activator)
     return activator
-  def encode (self):
+  def encode_pair (self):
     lop = []
     kv_activators = []
     if self.activators:
       for activator in self.activators:
-        kv_activators.append( activator.encode() )
+        kv_activators.append( activator.encode_pair() )
     lop.append( ('activators', kv_activators) )
 
     whole = ( self.ideal_input, lop )
     return whole
+  def encode_kv (self):
+    kv = scvdf.DictMultivalue()
+    kv_activators = scvdf.DictMultivalue()
+    if self.activators:
+      for activator in self.activators:
+        #kv_activators.append( activator.encode_pair() )
+        signal = activator.signal
+        kv_activators[signal] = activator.encode_kv()
+    kv['activators'] = kv_activators
+    return kv
 
 class Group (object):
   """A group of controls.
@@ -275,19 +300,32 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     self.inputs[cluster] = cipt
     return cipt
 
-  def encode (self):
+  def encode_pair (self):
     lop = []
     lop.append( ('id', str(self.index)) )
     lop.append( ('mode', str(self.mode)) )
 
     if self.inputs:
-      lop.append( self.inputs.encode() )
+      lop.append( self.inputs.encode_pair() )
 
     if self.settings:
-      lop.append( self.settings.encode() )
+      lop.append( self.settings.encode_pair() )
 
     whole = ('group', lop)
     return whole
+
+  def encode_kv (self):
+    kv = scvdf.DictMultivalue()
+    kv['id'] = str(self.index)
+    kv['mode'] = str(self.mode)
+
+    if self.inputs:
+      kv['inputs'] = self.inputs.encode_kv()
+
+    if self.settings:
+      kv['settings'] = self.settings.encode_kv()
+
+    return kv
 
 
 class ActionLayer (object):
@@ -313,7 +351,7 @@ class GroupSourceBinding (object):
     self.active = active
     self.modeshift = modeshift
 
-  def encode (self):
+  def encode_pair (self):
     rhs = []
     rhs.append(self.grpsrc)
     if self.active:
@@ -323,6 +361,16 @@ class GroupSourceBinding (object):
     encoding = ' '.join(rhs)
     whole = ( str(self.groupid), encoding )
     return whole
+
+  def encode_kv (self):
+    rhs = []
+    rhs.append(self.grpsrc)
+    if self.active:
+      rhs.append("active")
+    if self.modeshift:
+      rhs.append("modeshift")
+    val = ' '.join(rhs)
+    return val
 
 
 class Preset (object):
@@ -337,18 +385,31 @@ class Preset (object):
     self.gsb.append(gsb)
     return gsb
 
-  def encode (self):
+  def encode_pair (self):
     lop = []
     lop.append( ('id', str(self.index)) )
     lop.append( ('name', str(self.name)) )
 
     kv_gsb = []
     for elt in self.gsb:
-      kv_gsb.append(elt.encode())
+      kv_gsb.append(elt.encode_pair())
     lop.append( ('group_source_bindings', kv_gsb) )
 
     whole = ('preset', lop)
     return whole
+
+  def encode_kv (self):
+    kv = scvdf.DictMultivalue()
+    kv['id'] = str(self.index)
+    kv['name'] = str(self.name)
+
+    kv_gsb = scvdf.DictMultivalue()
+    for elt in self.gsb:
+      gid = str(elt.groupid)
+      kv_gsb[gid] = elt.encode_kv()
+    kv['group_source_bindings'] = kv_gsb
+
+    return kv
 
 
 #class Settings (object):
@@ -419,8 +480,7 @@ class Mapping (object):
     self.presets.append(preset)
     return preset
 
-  def encode (self):
-    """Encode object to list of pairs (scvdf)."""
+  def encode_pair (self):
     lop = []
     lop.append( ('version', str(self.version)) )
     lop.append( ('revision', str(self.revision)) )
@@ -430,20 +490,40 @@ class Mapping (object):
     lop.append( ('controller_type', str(self.controller_type)) )
     lop.append( ('Timestamp', str(self.timestamp)) )
 
+    for grp in self.groups:
+      lop.append( grp.encode_pair() )
+    for preset in self.presets:
+      lop.append( preset.encode_pair() )
+    if self.settings:
+      lop.append( self.settings.encode_pair() )
+
+    whole = ('controller_mappings', lop)
+    return whole
+
+  def encode_kv (self):
+    """Encode object to list of pairs (scvdf)."""
+    kv = scvdf.DictMultivalue()
+    kv['version'] = str(self.version)
+    kv['revision'] = str(self.revision)
+    kv['title'] = str(self.title)
+    kv['description'] = str(self.description)
+    kv['creator'] = str(self.creator)
+    kv['controller_type'] = str(self.controller_type)
+    kv['Timestamp'] = str(self.timestamp)
+
     # TODO: action sets
     # TODO: action layers
 
     for grp in self.groups:
-      lop.append( grp.encode() )
+      kv['group'] = grp.encode_kv()
 
     for preset in self.presets:
-      lop.append( preset.encode() )
+      kv['preset'] = preset.encode_kv()
 
     if self.settings:
-      lop.append( self.settings.encode() )
+      kv['settings'] = self.settings.encode_kv()
 
-    whole = ('controller_mappings', lop)
-    return whole
+    return kv
 
 
 class ControllerConfig (object):
@@ -455,9 +535,14 @@ class ControllerConfig (object):
     self.mappings.append(mapping)
     return mapping
 
-  def encode (self):
+  def encode_pair  (self):
     lop = []
     for m in self.mappings:
-      lop.append( m.encode() )
+      lop.append( m.encode_pair() )
     return lop
+  def encode_kv (self):
+    kv = scvdf.DictMultivalue()
+    for m in self.mappings:
+      kv['controller_mappings'] = m.encode_kv()
+    return kv
 

@@ -520,17 +520,17 @@ def _toLOS (iterlop, accumulator, indent=""):
 
 def dumps (store):
   """Dump list of 2-tuples in VDF format."""
-  if isinstance(store,dict):
+  try:
     iterlop = store.items()
-  else:
+  except AttributeError:
     iterlop = iter(store)
   parts = _toLOS(iterlop, [])
   return ''.join(parts)
 
 def dump (store, f):
-  if isinstance(store,dict):
+  try:
     iterlop = store.items()
-  else:
+  except AttributeError:
     iterlop = iter(store)
   parts = _toLOS(iterlop, [])
   for p in parts:
