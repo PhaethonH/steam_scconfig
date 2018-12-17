@@ -348,41 +348,51 @@ class Parser (object):
 
 
 def reparse (tokenizer, depth=0):
-  retval = []
+  retval = None
   # First, expect a scalar (unquoted or quoted); ignore comment
   halt = False
   while not halt:
-    k = tokenizer.next_token()
-#    print('examine k = {!r}'.format(k))
-    if not k:
-      return retval
-    while not (k[0] in (Tokenizer.TOK_QUOTED, Tokenizer.TOK_UNQUOTED)):
-      if (k[0] == Tokenizer.TOK_NEST):
-        raise RuntimeError("Unacceptable key found")
-      if (k[0] == Tokenizer.TOK_DENEST):
+
+    # First token: accept scalar, end of k/v pairs.
+    k = None
+    token = tokenizer.next_token()
+    while not k:
+      if not token:  # end of stream.
+        return retval  # whatever has been built so far.
+      (toktype,tokval) = token
+      if toktype in (Tokenizer.TOK_UNQUOTED, Tokenizer.TOK_QUOTED):
+        k = tokval
+      elif toktype == Tokenizer.TOK_DENEST:
         if depth > 0:
           return retval
         else:
           return None   # error in nesting depth
-      if (k[0] == Tokenizer.TOK_END_OF_STREAM):
+      elif toktype == Tokenizer.TOK_END_OF_STREAM:
         return retval
-      k = tokenizer.next_token()
-    # Second, expect either a scalar, or nestopen
-    v = tokenizer.next_token()
-#    print('examine v = {!r}'.format(v))
-    if not v:
-      return None
-    while not v[0] == Tokenizer.TOK_END_OF_STREAM:
-      if v[0] in (Tokenizer.TOK_QUOTED, Tokenizer.TOK_UNQUOTED):
-        retval.append((k[1],v[1]))
-        break
-      if v[0] in (Tokenizer.TOK_END_OF_STREAM, Tokenizer.TOK_DENEST):
-        # Error: Unpaired key.
+      else:
+        token = tokenizer.next_token()
+
+    # Second: accept either a scalar, nested k/v pairs
+    v = None
+    token = tokenizer.next_token()
+    while not v:
+      if not token:  # end of stream, unpaired key.
         raise RuntimeError("Unpaired key")
-      if v[0] in (Tokenizer.TOK_NEST,):
-        subkv = reparse(tokenizer, depth+1)
-        retval.append((k[1], subkv))
-        break
+      (toktype,tokval) = token
+      if toktype in (Tokenizer.TOK_QUOTED, Tokenizer.TOK_UNQUOTED):
+        v = tokval
+      elif toktype in (Tokenizer.TOK_DENEST, Tokenizer.TOK_END_OF_STREAM):
+        # unpaired key
+        raise RuntimeError("Unpaired key")
+      elif toktype == Tokenizer.TOK_NEST:
+        v = reparse(tokenizer, depth+1)
+      else:
+        token = tokenizer.next_token()
+
+    if not retval:
+      retval = []
+    retval.append((k,v))
+
   return retval
 
 
