@@ -11,12 +11,13 @@ class TestVdfTokenizer (unittest.TestCase):
 #    self.buffer = False
 
   def prepare (self, test_string):
-    try:
-      from StringIO import StringIO
-    except ImportError:
-      from io import StringIO
-    self.f = StringIO(test_string)
-    self.tokenizer = StreamTokenizer(self.f)
+#    try:
+#      from StringIO import StringIO
+#    except ImportError:
+#      from io import StringIO
+#    self.f = StringIO(test_string)
+#    self.tokenizer = StreamTokenizer(self.f)
+    self.tokenizer = StringTokenizer(test_string)
 
   def test_unquoted (self):
     self.prepare("foo")
@@ -143,10 +144,49 @@ baz""")
         ])
 
 
+class TestVdfParser (unittest.TestCase):
+  def test_parse1 (self):
+    src = '''"foo" "bar"'''
+    res = scvdf.loads(src)
+    #print("res = {!r}".format(res))
+    self.assertEqual(res, [("foo","bar")])
+
+  def test_parse2 (self):
+    src = r'''
+"foo" "bar"
+"quux" "\"quuux\""
+'''
+    res = scvdf.loads(src)
+    #print("res = {!r}".format(res))
+    self.assertEqual(res, [("foo","bar"), ("quux", '"quuux"')])
+
+  def test_parse1sub (self):
+    src = r'''
+"foo" {
+ "a" "b"
+}
+'''
+    res = scvdf.loads(src)
+    #print("res = {!r}".format(res))
+    self.assertEqual( res, [("foo", [("a","b")])] )
+
+  def test_parse1sub2 (self):
+    src = r'''
+"foo" {
+  // line comment
+  "a" { "aa" "bb" }  // winged comment
+}
+'''
+    res = scvdf.loads(src)
+    #print("res = {!r}".format(res))
+    self.assertEqual( res, [("foo", [ ("a",[("aa","bb")]) ])] )
+
+
 
 if __name__ == "__main__":
   #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted'])
   #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted_into_comment'])
   #unittest.main(defaultTest=['TestVdfTokenizer.test_quoted_esc'])
+  #unittest.main(defaultTest=['TestVdfParser.test_parse1sub'])
   unittest.main()
 

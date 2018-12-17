@@ -130,7 +130,10 @@ token = tokenizer.next_token()
 
   def next_token (self):
     if not self.pending:
-      return None
+      if not self.state:
+        # no more possible.
+        return (Tokenizer.END_OF_STREAM, '')
+      return None   # not ready.
     retval = self.pending[0]
     self.pending = self.pending[1:]
     return retval
@@ -159,7 +162,6 @@ class StreamTokenizer (Tokenizer):
       ch = self.srcstream.read(1)
       while self.feed(ch):
         ch = self.srcstream.read(1)
-        #print("to-feed {!r}".format(ch))
       while self.pending:
         yield super(StreamTokenizer,self).next_token()
     return
@@ -172,29 +174,32 @@ class StringTokenizer (Tokenizer):
     self.srcstring = srcstring
     self.srcofs = 0
 
+  def readch (self):
+    if self.srcofs < len(self.srcstring):
+      ch = self.srcstring[self.srcofs]
+      self.srcofs += 1
+      return ch
+    return ''
+
   def next_token (self):
     """Retrieve next token."""
     if self.pending:
-      return super(StreamTokenizer,self).next_token()
+      return super(StringTokenizer,self).next_token()
     while self.state and not self.pending:
-      ch = self.srcstring[self.srcofs]
-      self.srcofs += 1
+      ch = self.readch()
       self.feed(ch)
       if self.pending:
-        return super(StreamTokenizer,self).next_token()
+        return super(StringTokenizer,self).next_token()
     return None
 
   def __iter__ (self):
     """Retrieve next token, iterator idiom."""
     while self.state:
-      ch = self.srcstring[self.srcofs]
-      self.srcofs += 1
+      ch = self.readch()
       while self.feed(ch):
-        ch = self.srcstring[self.srcofs]
-        self.srcofs += 1
-        #print("to-feed {!r}".format(ch))
+        ch = self.readch()
       while self.pending:
-        yield super(StreamTokenizer,self).next_token()
+        yield super(StringTokenizer,self).next_token()
     return
 
 
@@ -322,5 +327,72 @@ class TokenizeComment (TokenizeState):
     self.context.LIT()
     return self
 
+
+
+
+
+
+
+##########
+# Parser #
+##########
+
+# Convert stream of tokens into object (list of 2-tuples).
+class Parser (object):
+  def __init__ (self):
+    self.tokenizer = None
+    self.store = []
+
+  def parse (self, srcstream):
+    pass
+
+
+def reparse (tokenizer, depth=0):
+  retval = []
+  # First, expect a scalar (unquoted or quoted); ignore comment
+  halt = False
+  while not halt:
+    k = tokenizer.next_token()
+#    print('examine k = {!r}'.format(k))
+    if not k:
+      return retval
+    while not (k[0] in (Tokenizer.TOK_QUOTED, Tokenizer.TOK_UNQUOTED)):
+      if (k[0] == Tokenizer.TOK_NEST):
+        raise RuntimeError("Unacceptable key found")
+      if (k[0] == Tokenizer.TOK_DENEST):
+        if depth > 0:
+          return retval
+        else:
+          return None   # error in nesting depth
+      if (k[0] == Tokenizer.TOK_END_OF_STREAM):
+        return retval
+      k = tokenizer.next_token()
+    # Second, expect either a scalar, or nestopen
+    v = tokenizer.next_token()
+#    print('examine v = {!r}'.format(v))
+    if not v:
+      return None
+    while not v[0] == Tokenizer.TOK_END_OF_STREAM:
+      if v[0] in (Tokenizer.TOK_QUOTED, Tokenizer.TOK_UNQUOTED):
+        retval.append((k[1],v[1]))
+        break
+      if v[0] in (Tokenizer.TOK_END_OF_STREAM, Tokenizer.TOK_DENEST):
+        # Error: Unpaired key.
+        raise RuntimeError("Unpaired key")
+      if v[0] in (Tokenizer.TOK_NEST,):
+        subkv = reparse(tokenizer, depth+1)
+        retval.append((k[1], subkv))
+        break
+  return retval
+
+
+
+def load (srcstream):
+  tokenizer = StreamTokenizer(srcstream)
+  return reparse(tokenizer)
+
+def loads (srcstream):
+  tokenizer = StringTokenizer(srcstream)
+  return reparse(tokenizer)
 
 
