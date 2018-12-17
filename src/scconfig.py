@@ -88,6 +88,7 @@ class Binding_Host (BindingBase):
     'host_suspend': "host_suspend",
     'host_restart': "host_restart",
     'host_poweroff': "host_poweroff",
+  }
   def __init__ (self, details, label=None):
     pass
 
@@ -134,20 +135,74 @@ Responses include:
   change action sets
   set controller lights
 """
-  def __init__ (self):
-    pass
-  pass
+  def __init__ (self, signal):
+    self.signal = signal
+    self.bindings = []
+  def encode (self):
+    lop = []
 
+    kv_bindings = []
+    if self.bindings:
+      pass
+    lop.append( ('bindings', kv_bindings) )
+
+    whole = ( (str(self.signal),lop) )
+    return whole
+
+
+class ControllerInput (object):
+  """An input descrition within a group."""
+  def __init__ (self, cluster):
+    self.cluster = cluster
+    self.activators = []
+  def make_activator (self, activator_signal):
+    activator = Activator(activator_signal)
+    self.activators.append(activator)
+    return activator
+  def encode (self):
+    lop = []
+    kv_activators = []
+    if self.activators:
+      for activator in self.activators:
+        kv_activators.append( activator.encode() )
+    lop.append( ('activators', kv_activators) )
+    return lop
 
 class Group (object):
   """A group of controls.
 Multiple controller elements combine together into groups that act as a unit to form a higher-order input type.
 Notable example include the four cardinal points of a d-pad to form not just a d-pad, but also pie menu control.
 """
-  pass
+  def __init__ (self):
+    self.index = 0
+    self.mode = ""
+    self.inputs = {}
+
+  def make_input (self, cluster):
+    cipt = ControllerInput(cluster)
+    self.inputs[cluster] = cipt
+    return cipt
+
+  def encode (self):
+    lop = []
+    lop.append( ('id', str(self.index)) )
+    lop.append( ('mode', str(self.mode)) )
+
+    kv_inputs = []
+    if self.inputs:
+      for inpitem in self.inputs.items():
+        (k,v) = inpitem
+        subkv = v.encode()
+        kv_inputs.append( (k,subkv) )
+    lop.append( ('inputs', kv_inputs) )
+
+    return lop
+
 
 class ActionLayer (object):
-  """Action Layer, consists of one or more  ..."""
+  """tuple_key='action_layer'
+Action Layer, consists of one or more  ...
+"""
   pass
 
 
@@ -156,17 +211,91 @@ class ActionSet (object):
   pass
 
 
+class GroupSourceBinding (object):
+  VALID_GROUPS = [
+    "switch", "dpad", "button_diamond", "left_trigger", "right_trigger",
+    "joystick", "right_joystick"
+    ]
+  def __init__ (self, groupsrc, active=True, modeshift=False):
+    self.groupid = 0
+    self.grpsrc = groupsrc
+    self.active = active
+    self.modeshift = modeshift
+
+  def encode (self):
+    rhs = []
+    rhs.append(self.grpsrc)
+    if self.active:
+      rhs.append("active")
+    if self.modeshift:
+      rhs.append("modeshift")
+    encoding = ' '.join(rhs)
+    return ( str(self.groupid), encoding )
+
+
+class Preset (object):
+  def __init__ (self):
+    self.index = 0
+    self.name = ""
+    self.gsb = []
+
+  def add_gsb (self, groupid, groupsrc, active=True, modeshift=False):
+    gsb = GroupSourceBinding(groupsrc, active, modeshift)
+    gsb.groupid = groupid
+    self.gsb.append(gsb)
+    return gsb
+
+  def encode (self):
+    lop = []
+    lop.append( ('id', str(self.index)) )
+    lop.append( ('name', str(self.name)) )
+
+    kv_gsb = []
+    if self.gsb:
+      for elt in self.gsb:
+        kv_gsb.append(elt.encode())
+    lop.append( ('group_source_bindings', kv_gsb) )
+
+    return lop
+
+
+#class Settings (object):
+#  def __init__ (self):
+#    self.cursor_show = None
+#    self.cursor_hide = None
+#    self.left_trackpad_mode = None
+#    self.right_trackpad_mode = None
+#
+#  def encode (self):
+#    lop = []
+#    if self.cursor_show is not None:
+#      lop.append( ('action_set_trigger_cursor_show', str(self.cursor_show)) )
+#    if self.cursor_hide is not None:
+#      lop.append( ('action_set_trigger_cursor_hide', str(self.cursor_hide)) )
+#    if self.left_trackpad_mode is not None:
+#      lop.append( ('left_trackpad_mode', str(self.left_trackpad_mode)) )
+#    if self.right_trackpad_mode is not None:
+#      lop.append( ('right_trackpad_mode', str(self.right_trackpad_mode)) )
+#    return lop
+#
+#  def __nonzero__ (self):
+##    return any(map(lambda x: x is not None, [self.cursor_show, self.cursor_hide, self.left_trackpad_mode, self.right_trackpad_mode]))
+#    return any(
+#      map(
+#       lambda x: x is not None,
+#       [self.cursor_show, self.cursor_hide, self.left_trackpad_mode, self.right_trackpad_mode]))
+
+
 class Mapping (object):
   """Encapsulates controller mapping (toplevel)"""
-  pass
-  def __init __(self):
+  def __init__ (self):
     self.version = 3
     self.revision = 0
     self.title = "Unnamed"
     self.description = "Unnamed configuration"
     self.creator = 0
     self.controller_type = "controller_ps3"
-    self.timetsamp = "0"
+    self.timestamp = "0"
     # List of Action Sets
     self.actions = []
     # List of Action Layers
@@ -177,4 +306,58 @@ class Mapping (object):
     self.presets = []
     # Miscellaneous settings
     self.settings = {}
+
+  def make_group (self, mode, index=None):
+    # TODO: auto-index
+    groupid = 0
+    group = Group()
+    group.index = groupid
+    group.mode = mode
+    self.groups.append(group)
+    return group
+
+  def make_preset (self, name, index=None):
+    # TODO: determine unique presetid by scanning.
+    presetid = 0
+    preset = Preset()
+    preset.index = presetid
+    preset.name = name
+    self.presets.append(preset)
+    return preset
+
+  def encode (self):
+    """Encode object to list of pairs (scvdf)."""
+    lop = []
+    lop.append( ('version', str(self.version)) )
+    lop.append( ('revision', str(self.revision)) )
+    lop.append( ('title', str(self.title)) )
+    lop.append( ('description', str(self.description)) )
+    lop.append( ('creator', str(self.creator)) )
+    lop.append( ('controller_type', str(self.controller_type)) )
+    lop.append( ('Timestamp', str(self.timestamp)) )
+    # TODO: nested encoding.
+
+    if self.groups:
+      for grp in self.groups:
+        lop.append( ('group', grp.encode()) )
+    else:
+      lop.append( ('group', []) )
+
+    kv_presets = []
+    if self.presets:
+      for preset in self.presets:
+        lop.append( ('preset', preset.encode()) )
+    else:
+      lop.append( ('preset', []) )
+
+    kv_settings = []
+    if self.settings:
+      for elt in self.settings.items():
+        (k,v) = elt
+        kv_settings.append( (k,str(v)) )
+    lop.append( ('settings', kv_settings) )
+
+    toplevel = [ ('controller_mapping', lop) ]
+    return toplevel
+
 
