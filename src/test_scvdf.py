@@ -181,6 +181,32 @@ class TestVdfParser (unittest.TestCase):
     #print("res = {!r}".format(res))
     self.assertEqual( res, [("foo", [ ("a",[("aa","bb")]) ])] )
 
+  def test_empty (self):
+    src = ''
+    res = scvdf.loads(src)
+    self.assertEqual( res, [] )
+
+  def test_only_comment (self):
+    src = '//empty vdf\n'
+    res = scvdf.loads(src)
+    self.assertEqual( res, [] )
+
+  def test_bad_1 (self):
+    src = r'''}'''
+    res = scvdf.loads(src)
+    self.assertEqual( res, None )
+
+  def test_load_1 (self):
+    fname = '../examples/defaults1_0.vdf'
+    f = open(fname, 'rt')
+    res = scvdf.load(f)
+    f.close()
+#    import pprint
+#    pprint.pprint(res)
+    #print("res = {!r}".format(res))
+    self.assertIsNot(res, None)
+    self.assertNotEqual(res, [])
+
 
 
 if __name__ == "__main__":
