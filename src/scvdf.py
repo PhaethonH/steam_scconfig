@@ -573,6 +573,37 @@ def _reprint (iterlop, accumulator, indent=""):
   # tail recursion: continue writing out next in list.
   return _reprint(iterlop, accumulator, indent)
 
+# Convert to list of strings (can be passed to ''.join() for printing).
+def _toLOS (iterlop, accumulator, indent=""):
+  # Head of list.
+  for pair in iterlop:
+    (k, v) = pair
+
+    # Encode key part of pair.
+    if not _stringlike(k):
+      raise RuntimeError("Only strings may be key")
+    accumulator.append(indent)
+    accumulator.append('"{}"'.format(k))
+
+    # Encode value part of pair.
+    if _stringlike(v):
+      # one-line k/v, separator then value
+      accumulator.append("\t\t")
+      accumulator.append('"{}"'.format(v))
+    else:
+      # formatting minutiae
+      accumulator.extend(["\n", indent, "{", "\n"])
+      # the nested k/v
+      try:
+        iv = v.items()
+      except AttributeError as e:
+        iv = iter(v)
+      accumulator.extend(_toLOS(iv, [], "{}{}".format(indent, "\t")))
+      # formatting minutiae
+      accumulator.extend([indent, "}"])
+    accumulator.append("\n")
+  return accumulator
+
 
 def dumps (store):
   """Dump list of 2-tuples in VDF format."""
@@ -580,7 +611,7 @@ def dumps (store):
     iterlop = store.items()
   else:
     iterlop = iter(store)
-  parts = _reprint(iterlop, [])
+  parts = _toLOS(iterlop, [])
   return ''.join(parts)
 
 def dump (store, f):
@@ -588,7 +619,7 @@ def dump (store, f):
     iterlop = store.items()
   else:
     iterlop = iter(store)
-  parts = _reprint(iterlop, [])
+  parts = _toLOS(iterlop, [])
   for p in parts:
     f.write(p)
 

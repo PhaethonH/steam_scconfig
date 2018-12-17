@@ -348,6 +348,28 @@ class TestVdfWriter (unittest.TestCase):
     digested = summer.hexdigest()
     self.assertEqual(digested, "99d8c4ded89ec867519792db86d3bffc")
 
+  def test_load_save_2 (self):
+    fname = '../examples/com³-wip3_0.vdf'
+    f = open(fname, 'rt')
+    literal = f.read()
+    f.close()
+    res = scvdf.loads(literal, scvdf.DictMultivalue)
+    out = scvdf.dumps(res)
+    self.assertEqual(literal, out)
+
+    import hashlib
+    try:
+      from StringIO import StringIO
+    except ImportError:
+      from io import StringIO
+#    OUTFNAME = "output.txt"
+    g = StringIO()
+    scvdf.dump(res, g)
+    summer = hashlib.new("md5")
+    summer.update(g.getvalue().encode("utf-8"))
+    digested = summer.hexdigest()
+    self.assertEqual(digested, "01dc2f4e9b6c8f86e2d1678c2763540d")
+
 
 
 
