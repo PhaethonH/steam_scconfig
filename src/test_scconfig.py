@@ -149,19 +149,21 @@ PRESET_DEFAULTS1 = [('controller_mappings',
 
 class TestScconfigEncoding (unittest.TestCase):
   def test_mapping0 (self):
-    toplevel = scconfig.Mapping()
-    toplevel.version = '3'
-    toplevel.revision = '2'
-    toplevel.title = 'Defaults1'
-    toplevel.description = 'Evocation of built-in gamepad binds by corrupting save files.'
-    toplevel.creator = '76561198085425470'
-    toplevel.controller_type = 'controller_steamcontroller_gordon'
-    toplevel.timestamp = '-366082071'
+    config = scconfig.ControllerConfig()
 
-    toplevel.settings['left_trackpad_mode'] = 0
-    toplevel.settings['right_trackpad_mode'] = 0
+    mapping = config.make_mapping()
+    mapping.version = '3'
+    mapping.revision = '2'
+    mapping.title = 'Defaults1'
+    mapping.description = 'Evocation of built-in gamepad binds by corrupting save files.'
+    mapping.creator = '76561198085425470'
+    mapping.controller_type = 'controller_steamcontroller_gordon'
+    mapping.timestamp = '-366082071'
 
-    group0 = toplevel.make_group("four_buttons", 0)
+    mapping.settings['left_trackpad_mode'] = 0
+    mapping.settings['right_trackpad_mode'] = 0
+
+    group0 = mapping.make_group("four_buttons", 0)
     inp = group0.make_input("button_a")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button A")
@@ -175,7 +177,7 @@ class TestScconfigEncoding (unittest.TestCase):
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button Y")
 
-    group1 = toplevel.make_group("dpad", 1)
+    group1 = mapping.make_group("dpad", 1)
     inp = group1.make_input("dpad_north")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str('xinput_button dpad_up')
@@ -190,33 +192,33 @@ class TestScconfigEncoding (unittest.TestCase):
     activator.add_binding_str('xinput_button dpad_left')
     group1.settings['deadzone'] = 5000
 
-    group2 = toplevel.make_group("joystick_camera", 2)
+    group2 = mapping.make_group("joystick_camera", 2)
     inp = group2.make_input("click")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button JOYSTICK_RIGHT")
     activator.settings['haptic_intensity'] = 1
 
-    group3 = toplevel.make_group("joystick_move", 3)
+    group3 = mapping.make_group("joystick_move", 3)
     inp = group3.make_input("click")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button JOYSTICK_LEFT")
     activator.settings['haptic_intensity'] = 2
 
-    group4 = toplevel.make_group("trigger", 4)
+    group4 = mapping.make_group("trigger", 4)
     inp = group4.make_input("click")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button TRIGGER_LEFT")
     activator.settings['haptic_intensity'] = 2
     group4.settings['output_trigger'] = 1
 
-    group5 = toplevel.make_group("trigger", 5)
+    group5 = mapping.make_group("trigger", 5)
     inp = group5.make_input("click")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button TRIGGER_RIGHT")
     activator.settings['haptic_intensity'] = 2
     group5.settings['output_trigger'] = 2
 
-    group6 = toplevel.make_group("switches", 6)
+    group6 = mapping.make_group("switches", 6)
     inp = group6.make_input('button_escape')
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button start")
@@ -236,7 +238,7 @@ class TestScconfigEncoding (unittest.TestCase):
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button x")
 
-    preset0 = toplevel.make_preset("Default", 0)
+    preset0 = mapping.make_preset("Default", 0)
     preset0.add_gsb(6, 'switch', True, False)
     preset0.add_gsb(0, 'button_diamond', True, False)
     preset0.add_gsb(1, 'left_trackpad', True, False)
@@ -245,7 +247,7 @@ class TestScconfigEncoding (unittest.TestCase):
     preset0.add_gsb(4, 'left_trigger', True, False)
     preset0.add_gsb(5, 'right_trigger', True, False)
 
-    lop = toplevel.encode()
+    lop = config.encode()
 
     fulldump = scvdf.dumps(lop)
     #print(fulldump)

@@ -158,6 +158,41 @@ def dict2lop (kv_dict):
 
 
 
+
+class EncodableDict (object):
+  def __init__ (self, whole_key=None):
+    if whole_key is None:
+      self.whole_key = 'settings'
+    else:
+      self.whole_key = whole_key
+    self.valid_keys = []  # also maintain order.
+    self.store = {}
+  def __setitem__ (self, k, v):
+    self.valid_keys.append(k)
+    self.store[k] = v
+  def __getitem__ (self, k):
+    return self.store[k]
+  def __delitem__ (self, k):
+    del self.store[k]
+    self.valid_keys.remove(k)
+  def encode (self):
+    lop = []
+    for k in self.valid_keys:
+      #v = None
+      try:
+        #v = self.store[k].encode()
+        lop.append(self.store[k].encode())
+      except AttributeError as e:
+        #v = str(v)
+        lop.append( (k,str(self.store[k])) )
+      #lop.append( (k,v) )
+    whole = (self.whole_key, lop)
+    return whole
+  def __nonzero__ (self):
+    return bool(self.valid_keys)
+
+
+
 class Activator (object):
   """Activator element within a list of activators.
 Each activator specifies what button-activation signal to respond to, and how to respond to it (usually with a controller, keyboard, or mouse key/button press).
@@ -181,7 +216,7 @@ Responses include:
   def __init__ (self, signal):
     self.signal = signal
     self.bindings = []
-    self.settings = scvdf.DictMultivalue()
+    self.settings = EncodableDict()
   def add_binding_obj (self, binding_obj):
     self.bindings.append(binding_obj)
     return binding_obj
@@ -198,16 +233,16 @@ Responses include:
     lop.append( ('bindings', kv_bindings) )
 
     if self.settings:
-      lop.append( ('settings', dict2lop(self.settings)) )
+      lop.append( self.settings.encode() )
 
     whole = ( (str(self.signal),lop) )
     return whole
 
 
 class ControllerInput (object):
-  """An input descrition within a group."""
-  def __init__ (self, cluster):
-    self.cluster = cluster
+  """An input description within a group."""
+  def __init__ (self, input_element):
+    self.ideal_input = input_element
     self.activators = []
   def make_activator (self, activator_signal):
     activator = Activator(activator_signal)
@@ -220,7 +255,9 @@ class ControllerInput (object):
       for activator in self.activators:
         kv_activators.append( activator.encode() )
     lop.append( ('activators', kv_activators) )
-    return lop
+
+    whole = ( self.ideal_input, lop )
+    return whole
 
 class Group (object):
   """A group of controls.
@@ -230,8 +267,8 @@ Notable example include the four cardinal points of a d-pad to form not just a d
   def __init__ (self):
     self.index = 0
     self.mode = ""
-    self.inputs = scvdf.DictMultivalue()
-    self.settings = scvdf.DictMultivalue()
+    self.inputs = EncodableDict('inputs')
+    self.settings = EncodableDict()
 
   def make_input (self, cluster):
     cipt = ControllerInput(cluster)
@@ -243,17 +280,11 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     lop.append( ('id', str(self.index)) )
     lop.append( ('mode', str(self.mode)) )
 
-    kv_inputs = []
     if self.inputs:
-      for inpitem in self.inputs.items():
-        (k,v) = inpitem
-        subkv = v.encode()
-        kv_inputs.append( (k,subkv) )
-    lop.append( ('inputs', kv_inputs) )
+      lop.append( self.inputs.encode() )
 
     if self.settings:
-      kv_settings = dict2lop(self.settings)
-      lop.append( ('settings', kv_settings) )
+      lop.append( self.settings.encode() )
 
     whole = ('group', lop)
     return whole
@@ -290,7 +321,8 @@ class GroupSourceBinding (object):
     if self.modeshift:
       rhs.append("modeshift")
     encoding = ' '.join(rhs)
-    return ( str(self.groupid), encoding )
+    whole = ( str(self.groupid), encoding )
+    return whole
 
 
 class Preset (object):
@@ -311,9 +343,8 @@ class Preset (object):
     lop.append( ('name', str(self.name)) )
 
     kv_gsb = []
-    if self.gsb:
-      for elt in self.gsb:
-        kv_gsb.append(elt.encode())
+    for elt in self.gsb:
+      kv_gsb.append(elt.encode())
     lop.append( ('group_source_bindings', kv_gsb) )
 
     whole = ('preset', lop)
@@ -349,8 +380,8 @@ class Preset (object):
 
 class Mapping (object):
   """Encapsulates controller mapping (toplevel)"""
-  def __init__ (self):
-    self.version = 3
+  def __init__ (self, version=3):
+    self.version = version
     self.revision = 0
     self.title = "Unnamed"
     self.description = "Unnamed configuration"
@@ -366,7 +397,7 @@ class Mapping (object):
     # List of Presets
     self.presets = []
     # Miscellaneous settings
-    self.settings = scvdf.DictMultivalue()
+    self.settings = EncodableDict()
 
   def make_group (self, mode, index=None):
     groupid = index
@@ -398,7 +429,9 @@ class Mapping (object):
     lop.append( ('creator', str(self.creator)) )
     lop.append( ('controller_type', str(self.controller_type)) )
     lop.append( ('Timestamp', str(self.timestamp)) )
-    # TODO: nested encoding.
+
+    # TODO: action sets
+    # TODO: action layers
 
     for grp in self.groups:
       lop.append( grp.encode() )
@@ -406,10 +439,25 @@ class Mapping (object):
     for preset in self.presets:
       lop.append( preset.encode() )
 
-    kv_settings = [ (k,str(v)) for k,v in self.settings.items() ]
-    lop.append( ('settings', kv_settings) )
+    if self.settings:
+      lop.append( self.settings.encode() )
 
-    toplevel = [ ('controller_mappings', lop) ]
-    return toplevel
+    whole = ('controller_mappings', lop)
+    return whole
 
+
+class ControllerConfig (object):
+  def __init__ (self):
+    self.mappings = []
+
+  def make_mapping (self, version=3):
+    mapping = Mapping(version)
+    self.mappings.append(mapping)
+    return mapping
+
+  def encode (self):
+    lop = []
+    for m in self.mappings:
+      lop.append( m.encode() )
+    return lop
 
