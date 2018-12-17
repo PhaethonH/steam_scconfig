@@ -8,7 +8,7 @@ from scvdf import Tokenizer, StreamTokenizer, StringTokenizer, TokenizeState
 class TestVdfTokenizer (unittest.TestCase):
   def setUp (self):
     TokenizeState.DEBUG = False
-#    self.buffer = False
+    self.buffer = False
 
   def prepare (self, test_string):
 #    try:
@@ -98,6 +98,11 @@ class TestVdfTokenizer (unittest.TestCase):
     self.assertEqual(res[0], Tokenizer.TOK_COMMENT)
     self.assertGreater(len(res[1]), 0)
 
+    self.prepare("a/not-comment")
+    res = self.tokenizer.next_token()
+    self.assertEqual(res[0], Tokenizer.TOK_UNQUOTED)
+    self.assertEqual(res[1], "a/not-comment")
+
   def test_unquoted_into_comment (self):
     self.prepare("foo//bar")
     res = self.tokenizer.next_token()
@@ -142,6 +147,14 @@ baz""")
         (Tokenizer.TOK_DENEST, "}"),
         (Tokenizer.TOK_UNQUOTED, "bar")
         ])
+
+  def test_semicomment (self):
+    self.prepare("""foo "alpha, aleph/a"
+""")
+    res = self.tokenizer.next_token()
+    self.assertEqual(res, (Tokenizer.TOK_UNQUOTED, "foo"))
+    res = self.tokenizer.next_token()
+    self.assertEqual(res, (Tokenizer.TOK_QUOTED, "alpha, aleph/a"))
 
 
 class TestVdfReader (unittest.TestCase):
@@ -195,6 +208,19 @@ class TestVdfReader (unittest.TestCase):
     src = r'''}'''
     res = scvdf.loads(src)
     self.assertEqual( res, None )
+
+  def test_empty_value (self):
+    src = r'''"foo" { }'''
+    res = scvdf.loads(src)
+    self.assertEqual(res, [ ("foo", []) ])
+
+    src = r'''"foo" {}'''
+    res = scvdf.loads(src)
+    self.assertEqual(res, [ ("foo", []) ])
+
+    src = r'''foo{}'''
+    res = scvdf.loads(src)
+    self.assertEqual(res, [ ("foo", []) ])
 
   def test_load_1 (self):
     fname = '../examples/defaults1_0.vdf'
@@ -329,8 +355,11 @@ if __name__ == "__main__":
   #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted'])
   #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted_into_comment'])
   #unittest.main(defaultTest=['TestVdfTokenizer.test_quoted_esc'])
+  #unittest.main(defaultTest=['TestVdfTokenizer.test_comments'])
+  #unittest.main(defaultTest=['TestVdfTokenizer.test_semicomment'])
   #unittest.main(defaultTest=['TestVdfReader.test_parse1sub'])
   #unittest.main(defaultTest=['TestVdfReader.test_dictmultivalue'])
+  #unittest.main(defaultTest=['TestVdfReader.test_empty_value'])
   #unittest.main(defaultTest=['TestVdfWriter.test_load_save_1'])
   unittest.main()
 

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import sys
-
 # VDF parser, rewritten for use in externally configuring Steam Controller.
 #
 # pip-installable library "vdf" left much to be desired for this use.
@@ -68,6 +66,8 @@ Token types:
   TOK_NEST = 'NEST'
   TOK_DENEST = 'DENEST'    # De-nest - end of nested k/v pairs.
   TOK_COMMENT = 'COMMENT'
+
+  DEBUG = False
 
   def __init__ (self):
     self.ch = None      # Currently examined character.
@@ -143,6 +143,8 @@ token = tokenizer.next_token()
       return None   # not ready.
     retval = self.pending[0]
     self.pending = self.pending[1:]
+    if self.DEBUG:
+      print("yield token {!r}".format(retval))
     return retval
 
 
@@ -266,7 +268,6 @@ class TokenizeQuoted (TokenizeState):
     if is_eos(ch): return TokenizeFinish(self.context.COMMIT())
     if is_dquote(ch): return TokenizeBegin(self.context.COMMIT())
     if is_escape(ch): return TokenizeEscaped(self.context.NOP())
-    if is_comment0(ch): return TokenizeSemicomment(self.context.NOP())
     self.context.LIT()
     return self
 
@@ -413,7 +414,7 @@ Takes advantage of the typical behavior of appending to list-of-pairs.
 
 
 # Convert stream of tokens into object (list of 2-tuples).
-def _parse (tokenizer, interim=None, depth=0, storetype=list):
+def _reparse (tokenizer, interim=None, depth=0, storetype=list):
   # First token: accept scalar || end of k/v pairs.
   k = None
   token = tokenizer.next_token()
@@ -446,7 +447,7 @@ def _parse (tokenizer, interim=None, depth=0, storetype=list):
       # unpaired key
       raise RuntimeError("Unpaired key")
     elif toktype == Tokenizer.TOK_NEST:
-      v = _parse(tokenizer, None, depth+1, storetype)
+      v = _reparse(tokenizer, None, depth+1, storetype)
     else:
       token = tokenizer.next_token()
 
@@ -460,7 +461,61 @@ def _parse (tokenizer, interim=None, depth=0, storetype=list):
     interim[k] = v
 
   # tail recursion.
-  return _parse(tokenizer, interim, depth, storetype)
+  return _reparse(tokenizer, interim, depth, storetype)
+
+
+def _parse (tokenizer, interim=None, depth=0, storetype=list):
+  halt = False
+  if interim is None:
+    interim = []
+
+  while not halt:
+    # First token: accept scalar || end of k/v pairs.
+    k = None
+    token = tokenizer.next_token()
+    while k is None:
+      if not token:  # end of stream.
+        return interim  # whatever has been built so far.
+      (toktype,tokval) = token
+      if toktype in (Tokenizer.TOK_UNQUOTED, Tokenizer.TOK_QUOTED):
+        k = tokval
+      elif toktype == Tokenizer.TOK_DENEST:
+        if depth > 0:
+          return interim
+        else:
+          return None   # error in nesting depth
+      elif toktype == Tokenizer.TOK_END_OF_STREAM:
+        return interim
+      else:
+        token = tokenizer.next_token()
+
+    # Second: accept either a scalar, nested k/v pairs
+    v = None
+    token = tokenizer.next_token()
+    while v is None:
+      if not token:  # end of stream || unpaired key.
+        raise RuntimeError("Unpaired key")
+      (toktype,tokval) = token
+      if toktype in (Tokenizer.TOK_QUOTED, Tokenizer.TOK_UNQUOTED):
+        v = tokval
+        break
+      elif toktype in (Tokenizer.TOK_DENEST, Tokenizer.TOK_END_OF_STREAM):
+        # unpaired key
+        raise RuntimeError("Unpaired key")
+      elif toktype == Tokenizer.TOK_NEST:
+        v = _parse(tokenizer, None, depth+1, storetype)
+        break
+      else:
+        token = tokenizer.next_token()
+
+    # TODO: interpret directives here.
+
+    if not interim:
+      interim = storetype()
+    try:
+      interim.append((k,v))
+    except AttributeError as e:
+      interim[k] = v
 
 
 
@@ -536,4 +591,11 @@ def dump (store, f):
   parts = _reprint(iterlop, [])
   for p in parts:
     f.write(p)
+
+
+
+if __name__ == "__main__":
+  import sys, pprint
+  pyobj = load(sys.stdin, list)
+  pprint.pprint(pyobj)
 
