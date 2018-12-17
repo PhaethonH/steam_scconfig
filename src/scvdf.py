@@ -400,6 +400,19 @@ Takes advantage of the typical behavior of appending to list-of-pairs.
       super(DictMultivalue,self).__setitem__(k,v)
       self.keyorder.append(k)
 
+  def __iter__ (self):
+    for k in self.keyorder:
+      yield k
+    return
+
+  def keys (self):
+    return self.keyorder
+
+  def values (self):
+    for k in self.keyorder:
+      yield self[k]
+    return
+
   def items (self):
     """Iterate dict's (key,value) pairs."""
     for k in self.keyorder:
@@ -411,6 +424,26 @@ Takes advantage of the typical behavior of appending to list-of-pairs.
         yield (k, direct)
     return
 
+  def get_all (self, k, defaultval):
+    """Ensure get() is in list form."""
+    if k in self.multiset:
+      return self[k]
+    elif k in self:
+      return [ self[k] ]
+    else:
+      return defaultval
+
+  def update_pairs (self, pairs):
+    for pair in pairs:
+      (k,v) = pair
+      if isinstance(v,list):
+        subkv = DictMultivalue()
+        subkv.update_pairs(v)
+        #dict.__setitem__(self, k, subkv)
+        self[k] = subkv
+      else:
+        self[k] = v
+    return self
 
 
 def _parse (tokenizer, interim=None, depth=0, storetype=list):
