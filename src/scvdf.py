@@ -26,18 +26,10 @@ def is_nestclose (ch): return (ch == '}')
 def is_comment0 (ch): return (ch == '/')
 def is_comment1 (ch): return (ch == '/')
 def is_decomment0 (ch): return (ch == '\n') or (ch == '\r')
-def is_directive (ch): return (ch == '#')
-def is_eol (ch): return (ch == '\n') or (ch == '\r')
 def is_eos (ch): return (ch == '') or (ch == '\0') or (ch is None)
 def is_any (ch): return True
 def is_none (ch): return False
 
-
-
-class Token (object):
-  def __init__ (self, toktype, tokval):
-    self.toktype = toktype
-    self.tokval = tokval
 
 
 
@@ -323,7 +315,7 @@ class TokenizeComment (TokenizeState):
   TOKTYPE=Tokenizer.TOK_COMMENT
   def feed (self, ch):
     if is_eos(ch): return TokenizeFinish(self.context.COMMIT())
-    if is_eol(ch): return TokenizeBegin(self.context.COMMIT())
+    if is_decomment0(ch): return TokenizeBegin(self.context.COMMIT())
     self.context.LIT()
     return self
 
@@ -347,7 +339,40 @@ class Parser (object):
     pass
 
 
-def _reparse (tokenizer, interim=None, depth=0):
+
+class DictMultivalue (dict):
+  """Allow multiple values per dictionary entry."""
+  def __init__ (self, *args, **kwargs):
+    super(dict,self).__init__(*args, **kwargs)
+    self.multiset = set()
+
+  def append (self, pair):
+    """List sense, assume element is 2-tuple of (key,value).
+Takes advantage of the typical behavior of appending to list-of-pairs.
+"""
+    (k,v) = pair
+    self.__setitem__(k,v)
+
+  def __setitem__ (self, k, v):
+    if self.__contains__(k):
+      # Setting existing key.
+      temp = self.__getitem__(k)
+      if k in self.multiset:
+        # Append to existing multivalue.
+        temp.append(v)
+        super(DictMultivalue,self).__setitem__(k, temp)
+      else:
+        # Turn into multivalue.
+        self.multiset.add(k)
+        super(DictMultivalue,self).__setitem__(k, [temp, v])
+    else:
+      # New dict key.
+      super(DictMultivalue,self).__setitem__(k,v)
+
+
+
+# Convert stream of tokens into object (list of 2-tuples).
+def _parse (tokenizer, interim=None, depth=0, storetype=list):
   # First token: accept scalar || end of k/v pairs.
   k = None
   token = tokenizer.next_token()
@@ -380,28 +405,31 @@ def _reparse (tokenizer, interim=None, depth=0):
       # unpaired key
       raise RuntimeError("Unpaired key")
     elif toktype == Tokenizer.TOK_NEST:
-      v = _reparse(tokenizer, None, depth+1)
+      v = _parse(tokenizer, None, depth+1, storetype)
     else:
       token = tokenizer.next_token()
 
   # TODO: interpret directives here.
 
   if not interim:
-    interim = []
-  interim.append((k,v))
+    interim = storetype()
+  try:
+    interim.append((k,v))
+  except AttributeError as e:
+    interim[k] = v
 
   # tail recursion.
-  return _reparse(tokenizer, interim, depth)
+  return _parse(tokenizer, interim, depth, storetype)
 
 
 
-def load (srcstream):
+def load (srcstream, storetype=list):
   tokenizer = StreamTokenizer(srcstream)
-  return _reparse(tokenizer, [])
+  return _parse(tokenizer, storetype(), storetype=storetype)
 
-def loads (srcstream):
+def loads (srcstream, storetype=list):
   tokenizer = StringTokenizer(srcstream)
-  return _reparse(tokenizer, [])
+  return _parse(tokenizer, storetype(), storetype=storetype)
 
 
 

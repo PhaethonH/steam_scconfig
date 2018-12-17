@@ -207,6 +207,51 @@ class TestVdfReader (unittest.TestCase):
     self.assertIsNot(res, None)
     self.assertNotEqual(res, [])
 
+  def test_dictmultivalue (self):
+    d = scvdf.DictMultivalue()
+    d['a'] = 1
+    d['a'] = 2
+    d['a'] = 3
+    self.assertEqual(d, {"a":[1,2,3]})
+
+  def test_load_othertype (self):
+    src = r'''
+"foo" "bar"
+'''
+    res = scvdf.loads(src, dict)
+    self.assertEqual(res, {"foo": "bar"})
+
+    src = r'''
+"group" "1"
+"group" "2"
+'''
+    res = scvdf.loads(src, dict)
+    self.assertEqual(res, {"group": "2"})
+
+    src = r'''
+"group" "1"
+"group" "2"
+"group" "3"
+'''
+    res = scvdf.loads(src, scvdf.DictMultivalue)
+    self.assertEqual(res, {"group": [ "1", "2", "3" ] })
+
+    src = r'''
+"example"
+{
+  "group" { "id" "0" }
+  "group"
+  {
+    "id" "1" }
+  "group"
+  {
+    "id" "2"
+  }
+}
+'''
+    res = scvdf.loads(src, scvdf.DictMultivalue)
+    self.assertEqual(res, {"example": { "group": [ {"id":'0'}, {"id":'1'}, {"id":'2'}]}})
+
 
 class TestVdfWriter (unittest.TestCase):
   # Interfield separator to expect.
@@ -278,6 +323,7 @@ if __name__ == "__main__":
   #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted'])
   #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted_into_comment'])
   #unittest.main(defaultTest=['TestVdfTokenizer.test_quoted_esc'])
-  #unittest.main(defaultTest=['TestVdfParser.test_parse1sub'])
+  #unittest.main(defaultTest=['TestVdfReader.test_parse1sub'])
+  #unittest.main(defaultTest=['TestVdfReader.test_dictmultivalue'])
   unittest.main()
 
