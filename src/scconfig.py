@@ -2,6 +2,8 @@
 
 # Configurator module for Steam Valve Controller
 
+import scvdf
+
 class BindingBase (object):
   """One binding instance in a list of many, as part of Activate"""
   def __init__ (self, evtype, evdetails, label=None):
@@ -20,6 +22,11 @@ class BindingBase (object):
       label = ", {}".format(self.label)
     retval = "{}{}{}".format(front, tail, label)
     return retval
+
+class BindingEmpty (BindingBase):
+  """alias for Binding_Host('empty_binding')"""
+  def __init__ (self):
+    pass
 
 class Binding_Keystroke (BindingBase):
   def __init__ (self, keycode, label=None):
@@ -54,9 +61,21 @@ class Binding_Gamepad (BindingBase):
     "RJx": "RSTICK_LEFT", "LJX": "RSTICK_RIGHT", "LJy": "RSTICK_UP", "LJY": "RSTICK_DOWN",
     }
   def __init__ (self, keycode, label=None):
-    if keycode in self.TRANSLATION:
-      vdfliteral = self.TRANSLATION[keycode]
-      BindingBase.__init__(self, "xinput_button", vdfliteral, label)
+    caps_keycode = keycode.upper()
+    vdfliteral = None
+
+    valuelist = self.TRANSLATION.values()
+    if (caps_keycode in valuelist) or (keycode in valuelist):
+      vdfliteral = keycode
+
+    # Try mapping.
+    if vdfliteral is None:
+      vdfliteral = self.TRANSLATION.get(keycode, None)
+      if vdfliteral is None:
+        vdfliteral = self.TRANSLATION.get(caps_keycode, None)
+
+    if vdfliteral is not None:
+      BindingBase.__init__(self, "xinput_button", [vdfliteral], label)
     else:
       raise KeyError("Unknown xpad keysym '{}'.".format(keycode))
 
@@ -114,6 +133,30 @@ M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ig
 
 
 
+def decode_binding (binding):
+  retval = None
+  parts = binding.split(' ', 1)
+#  print("parts={!r}".format(parts))
+  if parts[0] == 'xinput_button':
+#    if ',' in parts[1]:
+#      more = parts[1].split(', ',1)
+#      keysym, label = more
+#    else:
+#      keysym, label = parts[1], None
+    keysym, label = parts[1], None
+    retval = Binding_Gamepad(keysym, label)
+  elif parts[0] == 'key_press':
+    pass
+  return retval
+
+
+def dict2lop (kv_dict):
+  lop = []
+  for k,v in kv_dict.items():
+    lop.append( (k,str(v)) )
+  return lop
+
+
 
 class Activator (object):
   """Activator element within a list of activators.
@@ -138,13 +181,24 @@ Responses include:
   def __init__ (self, signal):
     self.signal = signal
     self.bindings = []
+    self.settings = scvdf.DictMultivalue()
+  def add_binding_obj (self, binding_obj):
+    self.bindings.append(binding_obj)
+    return binding_obj
+  def add_binding_str (self, binding_str):
+    bindinfo = decode_binding(binding_str)
+    return self.add_binding_obj(bindinfo)
   def encode (self):
     lop = []
 
     kv_bindings = []
-    if self.bindings:
-      pass
+    for binding in self.bindings:
+      entry = ('binding', str(binding))
+      kv_bindings.append(entry)
     lop.append( ('bindings', kv_bindings) )
+
+    if self.settings:
+      lop.append( ('settings', dict2lop(self.settings)) )
 
     whole = ( (str(self.signal),lop) )
     return whole
@@ -176,7 +230,8 @@ Notable example include the four cardinal points of a d-pad to form not just a d
   def __init__ (self):
     self.index = 0
     self.mode = ""
-    self.inputs = {}
+    self.inputs = scvdf.DictMultivalue()
+    self.settings = scvdf.DictMultivalue()
 
   def make_input (self, cluster):
     cipt = ControllerInput(cluster)
@@ -196,7 +251,12 @@ Notable example include the four cardinal points of a d-pad to form not just a d
         kv_inputs.append( (k,subkv) )
     lop.append( ('inputs', kv_inputs) )
 
-    return lop
+    if self.settings:
+      kv_settings = dict2lop(self.settings)
+      lop.append( ('settings', kv_settings) )
+
+    whole = ('group', lop)
+    return whole
 
 
 class ActionLayer (object):
@@ -256,7 +316,8 @@ class Preset (object):
         kv_gsb.append(elt.encode())
     lop.append( ('group_source_bindings', kv_gsb) )
 
-    return lop
+    whole = ('preset', lop)
+    return whole
 
 
 #class Settings (object):
@@ -305,11 +366,13 @@ class Mapping (object):
     # List of Presets
     self.presets = []
     # Miscellaneous settings
-    self.settings = {}
+    self.settings = scvdf.DictMultivalue()
 
   def make_group (self, mode, index=None):
-    # TODO: auto-index
-    groupid = 0
+    groupid = index
+    if groupid is None:
+      # TODO: auto-index
+      groupid = -1
     group = Group()
     group.index = groupid
     group.mode = mode
@@ -337,27 +400,16 @@ class Mapping (object):
     lop.append( ('Timestamp', str(self.timestamp)) )
     # TODO: nested encoding.
 
-    if self.groups:
-      for grp in self.groups:
-        lop.append( ('group', grp.encode()) )
-    else:
-      lop.append( ('group', []) )
+    for grp in self.groups:
+      lop.append( grp.encode() )
 
-    kv_presets = []
-    if self.presets:
-      for preset in self.presets:
-        lop.append( ('preset', preset.encode()) )
-    else:
-      lop.append( ('preset', []) )
+    for preset in self.presets:
+      lop.append( preset.encode() )
 
-    kv_settings = []
-    if self.settings:
-      for elt in self.settings.items():
-        (k,v) = elt
-        kv_settings.append( (k,str(v)) )
+    kv_settings = [ (k,str(v)) for k,v in self.settings.items() ]
     lop.append( ('settings', kv_settings) )
 
-    toplevel = [ ('controller_mapping', lop) ]
+    toplevel = [ ('controller_mappings', lop) ]
     return toplevel
 
 
