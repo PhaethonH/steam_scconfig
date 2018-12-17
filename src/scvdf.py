@@ -10,32 +10,27 @@ import sys
 # Any of the value may be a nested VDF list-of-tuples:
 #   [ (nesting_key, [ ( keyA, valueA ), ( keyB, valueB ), ... ] ), ( second_key, second_value ), ... ]
 
-# Character type predicates
-def is_whitespace (ch):
-  return ch and (ch in " \r\n\t")
-def is_dquote (ch):
-  return (ch == '"')
-def is_escape (ch):
-  return (ch == '\\')
-def is_nestopen (ch):
-  return (ch == '{')
-def is_nestclose (ch):
-  return (ch == '}')
-def is_comment0 (ch):
-  return (ch == '/')
-def is_comment1 (ch):
-  return (ch == '/')
-def is_decomment0 (ch):
-  return (ch == '\n') or (ch == '\r')
-def is_directive (ch):
-  return (ch == '#')
-def is_eol (ch):
-  return (ch == '\n') or (ch == '\r')
-def is_eos (ch):
-  return (ch == '') or (ch == '\0') or (ch is None)
-def is_any (ch):
-  return True
 
+
+
+#############
+# Tokenizer #
+#############
+
+# Character type predicates
+def is_whitespace (ch): return ch and (ch in " \r\n\t")
+def is_dquote (ch): return (ch == '"')
+def is_escape (ch): return (ch == '\\')
+def is_nestopen (ch): return (ch == '{')
+def is_nestclose (ch): return (ch == '}')
+def is_comment0 (ch): return (ch == '/')
+def is_comment1 (ch): return (ch == '/')
+def is_decomment0 (ch): return (ch == '\n') or (ch == '\r')
+def is_directive (ch): return (ch == '#')
+def is_eol (ch): return (ch == '\n') or (ch == '\r')
+def is_eos (ch): return (ch == '') or (ch == '\0') or (ch is None)
+def is_any (ch): return True
+def is_none (ch): return False
 
 
 
