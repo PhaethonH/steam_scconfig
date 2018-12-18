@@ -548,11 +548,39 @@ class ControllerInput (object):
     return kv
 
 
+# TODO: base class GroupBase.
+# TODO: derived class for each Mode variant.
+# TODO: change Group into factory class/namespace.
+
 class Group (object):
   """A group of controls.
 Multiple controller elements combine together into groups that act as a unit to form a higher-order input type.
 Notable example include the four cardinal points of a d-pad to form not just a d-pad, but also pie menu control.
 """
+  MODES = {
+    "pen": "absolute_mouse",
+    "touchpad": "absolute_mouse",
+    "absolute": "absolute_mouse",
+    "dpad": "dpad",
+    "4buttons": "four_buttons",
+    "button_quad": "four_buttons",
+    "button_diamond": "four_buttons",
+    "diamond": "four_buttons",
+    "face_buttons": "four_buttons",
+    "camera": "joystick_camera",
+    "mousejs": "joystick_mouse",
+    "joystick": "joystick_move",
+    "force_joystick": "mouse_joystick",
+    "fake_joystick": "mouse_joystick",
+    "region": "mouse_region",
+    "radial": "radial_menu",
+    "scroll_wheel": "scrollwheel",
+    "one_button": "single_button",
+    "switches": "switches",
+    "menu": "touch_menu",
+    "touchmenu": "touch_menu",
+    "trigger": "trigger",
+  }
   def __init__ (self, index=None, py_mode=None, py_inputs=None, settings=None, **kwargs):
     if index is None:
       if 'id' in kwargs:
@@ -563,9 +591,10 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     if py_mode is None:
       if 'mode' in kwargs:
         py_mode = kwargs['mode']
+    py_mode = BindingBase._filter_enum(self.MODES, py_mode)
 
     self.index = index
-    # TODO: filter 'mode'.
+    # TODO: py_mode == None  =>  remove Group.
     self.mode = py_mode
     self.inputs = EncodableDict('inputs')
     self.settings = EncodableDict('settings')
