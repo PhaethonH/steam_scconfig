@@ -254,8 +254,8 @@ class TestScconfigEncoding (unittest.TestCase):
     fulldump_pair = scvdf.dumps(lop)
     fulldump_kv = scvdf.dumps(kv)
     self.assertEqual(fulldump_pair, fulldump_kv)
-    fulldump = fulldump_kv
-    #print(fulldump)
+    fulldump = fulldump_kv.encode("utf-8")
+    #print(fulldump_kv)
     hasher = hashlib.new("md5")
     hasher.update(fulldump)
     self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
@@ -268,21 +268,25 @@ class TestScconfigEncoding (unittest.TestCase):
     kv = config.encode_kv()
     fulldump_kv = scvdf.dumps(kv)
     #print(fulldump_kv)
+    fulldump = fulldump_kv.encode("utf-8")
     hasher = hashlib.new("md5")
-    hasher.update(fulldump_kv)
+    hasher.update(fulldump)
     self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
 
   def test_loading1 (self):
     f = open("../examples/com³-wip3_0.vdf", "rt")
     pydict = scvdf.load(f, scvdf.DictMultivalue)
+    f.close()
     config = scconfig.ControllerConfig.decode_kv(pydict)
     kv = config.encode_kv()
     fulldump_kv = scvdf.dumps(kv)
-    print(fulldump_kv)
+    #print(fulldump_kv)
+    fulldump = fulldump_kv.encode("utf-8")
     hasher = hashlib.new("md5")
-    hasher.update(fulldump_kv)
+    hasher.update(fulldump)
 
 
 if __name__ == "__main__":
+  #unittest.main(defaultTest=['TestScconfigEncoding.test_dumping0'])
   unittest.main()
 

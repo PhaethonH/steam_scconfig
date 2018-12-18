@@ -135,18 +135,18 @@ M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ig
 
 def decode_binding (binding):
   retval = None
-  parts = binding.split(' ', 1)
+  #print("BINDING = %r" % (binding,))
+  fragments = binding.split(',')
+  payload = fragments[0]
+  label = fragments[1] if len(fragments) > 1 else None
+  cmd, *args = payload.split(' ')
 #  print("parts={!r}".format(parts))
-  if parts[0] == 'xinput_button':
-#    if ',' in parts[1]:
-#      more = parts[1].split(', ',1)
-#      keysym, label = more
-#    else:
-#      keysym, label = parts[1], None
-    keysym, label = parts[1], None
+  if cmd == 'xinput_button':
+    keysym = args[0]
     retval = Binding_Gamepad(keysym, label)
-  elif parts[0] == 'key_press':
-    pass
+  elif cmd == 'key_press':
+    keysym = args[0]
+    retval = Binding_Keystroke(keysym)
   return retval
 
 
@@ -194,8 +194,10 @@ class EncodableDict (object):
       except AttributeError as e:
         kv[k] = str(v)
     return kv
-  def __nonzero__ (self):
+  def __bool__ (self):
     return bool(self.valid_keys)
+  def __nonzero__ (self):
+    return len(self.valid_keys) > 0
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
