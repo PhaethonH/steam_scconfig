@@ -2,6 +2,8 @@
 
 # Configurator module for Steam Valve Controller
 
+# Uses SCVDF for reading and writing VDF files.
+
 import scvdf
 
 
@@ -368,7 +370,9 @@ class Binding_Overlay (BindingBase):
 class Binding_Modeshift (BindingBase):
   # TODO: filter inpsrc
   ACCEPTABLE = [
-    "dpad", "button_diamond", "left_trigger", "right_trigger",
+    "left_trackpad", "right_trackpad",
+    "left_trigger", "right_trigger",
+    "dpad", "button_diamond",
     "joystick", "right_joystick"
     ]
   def __init__ (self, input_source, group_id, label=None):
@@ -477,7 +481,7 @@ Responses include:
   def __init__ (self, signal, py_bindings=None, **kwargs):
     self.signal = signal
     self.bindings = []
-    self.settings = EncodableDict()
+    self.settings = EncodableDict('settings')
 
     if py_bindings:
       # expect list of pyobject.
@@ -864,7 +868,7 @@ class Mapping (object):
     # List of Presets
     self.presets = []
     # Miscellaneous settings
-    self.settings = EncodableDict()
+    self.settings = EncodableDict('settings')
 
     if 'actions' in kwargs:
       for obj_name, obj_kv in kwargs['actions'].items():
