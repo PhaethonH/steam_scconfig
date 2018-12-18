@@ -435,7 +435,7 @@ class EncodableDict (object):
     return len(self.valid_keys) > 0
 
   @staticmethod
-  def __restore__ (kv, parentkey=None):
+  def restore (kv, parentkey=None):
     retval = EncodableDict()
     for k,v in kv.items():
       retval[k] = v
@@ -509,7 +509,7 @@ Responses include:
       kv['settings'] = self.settings.encode_kv()
     return kv
   @staticmethod
-  def __restore__ (kv, parentkey=None):
+  def restore (kv, parentkey=None):
     return Activator(parentkey)
 
 
@@ -549,7 +549,7 @@ class ControllerInput (object):
     kv['activators'] = kv_activators
     return kv
   @staticmethod
-  def __restore__ (kv, parentkey=None):
+  def restore (kv, parentkey=None):
     return ControllerInput(parentkey, **kv)
 
 
@@ -620,7 +620,7 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     return kv
 
   @staticmethod
-  def __restore__ (kv, parentkey=None):
+  def restore (kv, parentkey=None):
     return Group(parentkey, **kv)
 
 
@@ -679,7 +679,7 @@ Action Layer, consists of one or more  ...
     Overlay.__init__(self, 1, index, py_title, py_legacy, py_parent, **kwargs)
 
   @staticmethod
-  def __restore__ (kv, parentkey=None):
+  def restore (kv, parentkey=None):
     return ActionLayer(parentkey, **kv)
 
 
@@ -689,7 +689,7 @@ class ActionSet (Overlay):
     Overlay.__init__(self, 0, index, py_title, py_legacy, py_parent=None, **kwargs)
 
   @staticmethod
-  def __restore__ (kv, parentkey=None):
+  def restore (kv, parentkey=None):
     return ActionSet(parentkey, **kv)
 
 
@@ -784,7 +784,7 @@ class Preset (object):
     return kv
 
   @staticmethod
-  def __restore__ (kv, parentkey=None):
+  def restore (kv, parentkey=None):
     return Preset(parentkey, **kv)
 
 
@@ -995,7 +995,7 @@ class Mapping (object):
     return kv
 
   @staticmethod
-  def __restore__ (kv, parentkey=None):
+  def restore (kv, parentkey=None):
     return Mapping(parentkey, **kv)
 
 
@@ -1030,6 +1030,6 @@ class ControllerConfig (object):
     return kv
 
   @staticmethod
-  def __restore__ (kv, parentkey=None):
+  def restore (kv, parentkey=None):
     return ControllerConfig(parentkey, **kv)
 
