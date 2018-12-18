@@ -435,7 +435,7 @@ class EncodableDict (object):
     return len(self.valid_keys) > 0
 
   @staticmethod
-  def decode_kv (kv, parentkey=None):
+  def __restore__ (kv, parentkey=None):
     retval = EncodableDict()
     for k,v in kv.items():
       retval[k] = v
@@ -509,9 +509,8 @@ Responses include:
       kv['settings'] = self.settings.encode_kv()
     return kv
   @staticmethod
-  def decode_kv (kv, parentkey=None):
-    retval = Activator(parentkey)
-    return retval
+  def __restore__ (kv, parentkey=None):
+    return Activator(parentkey)
 
 
 class ControllerInput (object):
@@ -550,9 +549,8 @@ class ControllerInput (object):
     kv['activators'] = kv_activators
     return kv
   @staticmethod
-  def decode_kv (kv, parentkey=None):
-    retval = ControllerInput(parentkey, **kv)
-    return retval
+  def __restore__ (kv, parentkey=None):
+    return ControllerInput(parentkey, **kv)
 
 
 class Group (object):
@@ -622,9 +620,8 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     return kv
 
   @staticmethod
-  def decode_kv (kv, parentkey=None):
-    retval = Group(**kv)
-    return retval
+  def __restore__ (kv, parentkey=None):
+    return Group(parentkey, **kv)
 
 
 class Overlay (object):
@@ -682,9 +679,8 @@ Action Layer, consists of one or more  ...
     Overlay.__init__(self, 1, index, py_title, py_legacy, py_parent, **kwargs)
 
   @staticmethod
-  def decode_kv (kv, parentkey=None):
-    retval = ActionLayer(parentkey, **kv)
-    return retval
+  def __restore__ (kv, parentkey=None):
+    return ActionLayer(parentkey, **kv)
 
 
 class ActionSet (Overlay):
@@ -693,9 +689,8 @@ class ActionSet (Overlay):
     Overlay.__init__(self, 0, index, py_title, py_legacy, py_parent=None, **kwargs)
 
   @staticmethod
-  def decode_kv (kv, parentkey=None):
-    retval = ActionSet(parentkey, **kv)
-    return retval
+  def __restore__ (kv, parentkey=None):
+    return ActionSet(parentkey, **kv)
 
 
 class GroupSourceBinding (object):
@@ -733,7 +728,7 @@ class GroupSourceBinding (object):
 
 
 class Preset (object):
-  def __init__ (self, py_name=None, index=None, py_gsb=None, **kwargs):
+  def __init__ (self, index=None, py_name=None, py_gsb=None, **kwargs):
     if index is None:
       index = int(kwargs.get('id', 0))
     if py_name is None:
@@ -789,14 +784,14 @@ class Preset (object):
     return kv
 
   @staticmethod
-  def decode_kv (kv, parentkey=None):
-    retval = Preset(**kv)
-    return retval
+  def __restore__ (kv, parentkey=None):
+    return Preset(parentkey, **kv)
 
 
 class Mapping (object):
   """Encapsulates controller mapping (toplevel)"""
-  def __init__ (self, version=None, revision=None, title=None, description=None, creator=None, controller_type=None, Timestamp=None):
+  def __init__ (self, index=None, version=None, revision=None, title=None, description=None, creator=None, controller_type=None, Timestamp=None):
+    self.index = index
     if version is None: version = 3
     if revision is None: revision = 1
     if title is None: title = "Unnamed"
@@ -903,7 +898,7 @@ class Mapping (object):
       if not 'name' in kwargs:
         # TODO: derive from autosequence.
         py_name = py_name
-    preset = Preset(py_name, presetid, **kwargs)
+    preset = Preset(presetid, py_name, **kwargs)
     self.presets.append(preset)
     return preset
 
@@ -1000,17 +995,8 @@ class Mapping (object):
     return kv
 
   @staticmethod
-  def _decode_overlays_kv (overlay_list, kv, variant):
-    for obj_name in kv:
-      obj_kv = kv[obj_name]
-      obj = variant.decode_kv(obj_kv, obj_name)
-      overlay_list.append(obj)
-    return overlay_list
-
-  @staticmethod
-  def decode_kv (kv, parentkey=None):
-    retval = Mapping(**kv)
-    return retval
+  def __restore__ (kv, parentkey=None):
+    return Mapping(parentkey, **kv)
 
 
 class ControllerConfig (object):
@@ -1044,7 +1030,6 @@ class ControllerConfig (object):
     return kv
 
   @staticmethod
-  def decode_kv (kv, parentkey=None):
-    retval = ControllerConfig(parentkey, **kv)
-    return retval
+  def __restore__ (kv, parentkey=None):
+    return ControllerConfig(parentkey, **kv)
 

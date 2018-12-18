@@ -283,7 +283,7 @@ class TestScconfigEncoding (unittest.TestCase):
   def test_loading0 (self):
     kv = scvdf.DictMultivalue()
     kv.update_pairs(PRESET_DEFAULTS1)
-    config = scconfig.ControllerConfig.decode_kv(kv)
+    config = scconfig.ControllerConfig.__restore__(kv)
 
     self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc")
 
@@ -291,7 +291,7 @@ class TestScconfigEncoding (unittest.TestCase):
     f = open("../examples/com³-wip3_0.vdf", "rt")
     pydict = scvdf.load(f, scvdf.DictMultivalue)
     f.close()
-    config = scconfig.ControllerConfig.decode_kv(pydict)
+    config = scconfig.ControllerConfig.__restore__(pydict)
 
     self.hash_and_dump(config, "01dc2f4e9b6c8f86e2d1678c2763540d")
 
