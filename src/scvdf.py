@@ -527,7 +527,7 @@ def _toLOS (iterlop, accumulator, indent=""):
 
     # Encode key part of pair.
     if not _stringlike(k):
-      raise RuntimeError("Only strings may be key")
+      raise RuntimeError("Only strings may be key (rejected {!r})".format(k))
     accumulator.append(indent)
     accumulator.append('"{}"'.format(k))
 

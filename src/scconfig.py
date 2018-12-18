@@ -29,16 +29,21 @@ class BindingBase (object):
       return None
     lower_check = initval.lower()
     upper_check = initval.upper()
-    vl = enum_mapping.values()
+    try:
+      vl = enum_mapping.values()
+    except AttributeError as e:
+      vl = enum_mapping
     if (initval in vl) or (lower_check in vl) or (upper_check in vl):
       # Already in final form.
       return initval
+    # Subject to mapping.
     if initval in enum_mapping:
       return enum_mapping[initval]
     if lower_check in enum_mapping:
       return enum_mapping[lower_check]
     if upper_check in enum_mapping:
       return enum_mapping[upper_check]
+    # Not accepted.
     return None
   @staticmethod
   def _mangle_vdfliteral (s):
@@ -239,7 +244,6 @@ class Binding_Overlay (BindingBase):
     "hold": "hold_layer",
 #    "empty": "empty_binding",
 # TODO: change action set
-# TODO: hold layer
   }
   def __init__ (self, actionspec, layer_id, set_id, unk=0, label=None):
     vdfliteral = self._filter_enum(self.ACTIONS, actionspec)
@@ -269,9 +273,14 @@ class Binding_Overlay (BindingBase):
 
 class Binding_Modeshift (BindingBase):
   # TODO: filter inpsrc
+  ACCEPTABLE = [
+    "dpad", "button_diamond", "left_trigger", "right_trigger",
+    "joystick", "right_joystick"
+    ]
   def __init__ (self, input_source, group_id, label=None):
-    BindingBase.__init__(self, 'mode_shift', [ input_source, str(group_id) ], label)
-    self.inpsrc = input_source
+    vdfliteral = self._filter_enum(self.ACCEPTABLE, input_source)
+    BindingBase.__init__(self, 'mode_shift', [ vdfliteral, str(group_id) ], label)
+    self.inpsrc = vdfliteral
     self.group_id = group_id
 
   @staticmethod
@@ -506,6 +515,7 @@ class ControllerInput (object):
       retval.activators.append(act)
     return retval
 
+
 class Group (object):
   """A group of controls.
 Multiple controller elements combine together into groups that act as a unit to form a higher-order input type.
@@ -563,16 +573,60 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     return retval
 
 
-class ActionLayer (object):
+class Overlay (object):
+  """base for ActionSet and ActionLayer.
+tier=0 => ActionSet (set_layer=0)
+tier=1 => ActionLayer (set_layer=1)
+
+N.B. tier / set_layer
+Apparently, 'set' and 'layer' in 'set_layer' are both nouns are referring to
+"(Is) Action Set" and "(Is) Action Layer", and not verb/noun to mean assigning
+a layer value.
+That is, 'set_layer' can be read as "is this a Set or a Layer?"
+The name "tier" is used to (a) avoid the multiple meanings available for these words, and (b) avoid presuming there will only ever be two values.
+The idea is that "tier 0" establishes the maximum coverage of actions (i.e. the foundation), and "tier 1" extends or overlays tier 0 (stacks on top of).
+"""
+  def __init__ (self, title, tier=0, legacy=True, index=None, parent=None):
+    self.index = index
+    self.title = title
+    self.tier = tier
+    self.legacy = legacy
+    self.parent_name = parent
+
+  def encode_kv (self):
+    kv = scvdf.DictMultivalue()
+    kv['title'] = str(self.title)
+    kv['legacy_set'] = str(int(bool(self.legacy)))
+    if self.tier == 1:
+      kv['set_layer'] = "1"
+    if self.parent_name:
+      kv['parent_set_name'] = self.parent_name
+    return kv
+
+
+class ActionLayer (Overlay):
   """tuple_key='action_layer'
 Action Layer, consists of one or more  ...
 """
-  pass
+  # Change legacy default to False when native (non-legacy) binds become more prevalent.
+  def __init__ (self, title, legacy=True, parent_name=None, index=None):
+    Overlay.__init__(self, title, 1, legacy, index=index, parent=parent_name)
+
+  @staticmethod
+  def decode_kv (kv, parentkey=None):
+    retval = ActionLayer(kv['title'], bool(kv.get('legacy_set',None)), kv.get("parent_set_name", None), index=parentkey)
+    return retval
 
 
-class ActionSet (object):
+class ActionSet (Overlay):
   """An 'Action Set', consists of one or more Actions Layers."""
-  pass
+  def __init__ (self, title, legacy=True, parent_name=None, index=None):
+    Overlay.__init__(self, title, 0, legacy, index=index, parent=parent_name)
+
+  @staticmethod
+  def decode_kv (kv, parentkey=None):
+    retval = ActionSet(kv['title'], bool(kv.get('legacy_set',None)), index=parentkey)
+    return retval
 
 
 class GroupSourceBinding (object):
@@ -723,6 +777,15 @@ class Mapping (object):
     whole = ('controller_mappings', lop)
     return whole
 
+  def encode_overlays (self, overlay_store, gensym=0):
+    """Helper function to encode the overlays: Action Set, Action Layer."""
+    kv = scvdf.DictMultivalue()
+    for obj in overlay_store:
+      pair_name = obj.index
+      pair_val = obj.encode_kv()
+      kv[pair_name] = pair_val
+    return kv
+
   def encode_kv (self):
     """Encode object to list of pairs (scvdf)."""
     kv = scvdf.DictMultivalue()
@@ -734,8 +797,35 @@ class Mapping (object):
     kv['controller_type'] = str(self.controller_type)
     kv['Timestamp'] = str(self.timestamp)
 
-    # TODO: action sets
-    # TODO: action layers
+    # Alright, this gets weird.
+## 'internal' refers to internal to Steam Client and therefore not available for direct inspection;
+## 'name' refers to the VDF keys of the form "Preset_*" underneath the 'actions' and 'action_layers' keys, associated with an action set/layer;
+## 'title' is differentiated as the user-supplied and/or shown text in the Steam Client associated with the Action Set or Action Layer;
+## 'set' and 'ActionSet' are shorthand for Action Set (members of 'actions' field);
+## 'layer' and 'ActionLayer' are shorthand for Action Layer (members of 'action_layers' field);
+## 'overlay' is an umbrella term referring to Action Set and Action Layer.
+#
+# ActionSet and ActionLayer appear to be the same internal object, and differ by the 'set_layer' field.
+# All overlays appear to be internally stored in a shared/common list or pool, since "Preset_*" names increment monotonically from one section into the other.
+# The "Preset_*" names also have a suspiciously precise string length, and are not saved across revisions (changes to config from within Steam Client).
+# The action layer commands refer to action layers by id number (2) instead of name ("Preset_*") nor title ("New Action Layer").
+# The above behavior led to a bug where creating Action Layer binds, then adding a new Action Set, causes all the Action Layer binds to refer to the wrong layer -- off by one (and more for each additional Action Set created).
+# Thus, it appears the "Preset_*" names are acting like a very-large-base number correlating to the (internal) id of the action/layer.
+# Order seems to enforced by lexicographical sort of the names.
+#
+# Contrast to 'groups':
+# The instances of Group ('groups') are written to the VDF separately for each instance, and differentiated by a nested "id" key/value, thereby leading to multiple instances of the "groups" key but with different associated values.
+# The instances of Action set/layers are each given unique names and made the value of that name in 'actions' or 'action_layers'.
+#
+# Consequeces to iteration:
+# * 'groups': either keep sorted by nested "id" key, or brute-force finding instance with the desired "id" key.
+#  * 'actions', 'action_layers': The overlays are in no particular order (as per nature of mapping type), but may be iterated in the proper sequence by sorting their names.
+
+    if self.actions:
+      kv['actions'] = self.encode_overlays(self.actions)
+
+    if self.layers:
+      kv['action_layers'] = self.encode_overlays(self.layers)
 
     for grp in self.groups:
       kv['group'] = grp.encode_kv()
@@ -757,6 +847,16 @@ class Mapping (object):
     retval.creator = kv['creator']
     retval.controller_type = kv['controller_type']
     retval.timestamp = kv['Timestamp']
+    if 'actions' in kv:
+      for act_name in kv['actions']:
+        act_kv = kv['actions'][act_name]
+        actset = ActionSet.decode_kv(act_kv, act_name)
+        retval.actions.append(actset)
+    if 'action_layers' in kv:
+      for lyr_name in kv['action_layers']:
+        lyr_kv = kv['action_layers'][lyr_name]
+        layer = ActionLayer.decode_kv(lyr_kv, lyr_name)
+        retval.layers.append(layer)
     for grp_kv in kv.get_all('group', []):
       grp = Group.decode_kv(grp_kv, 'group')
       retval.groups.append(grp)
