@@ -508,9 +508,6 @@ Responses include:
     if self.settings:
       kv['settings'] = self.settings.encode_kv()
     return kv
-  @staticmethod
-  def restore (kv, parentkey=None):
-    return Activator(parentkey)
 
 
 class ControllerInput (object):
@@ -548,9 +545,6 @@ class ControllerInput (object):
         kv_activators[signal] = activator.encode_kv()
     kv['activators'] = kv_activators
     return kv
-  @staticmethod
-  def restore (kv, parentkey=None):
-    return ControllerInput(parentkey, **kv)
 
 
 class Group (object):
@@ -619,10 +613,6 @@ Notable example include the four cardinal points of a d-pad to form not just a d
 
     return kv
 
-  @staticmethod
-  def restore (kv, parentkey=None):
-    return Group(parentkey, **kv)
-
 
 class Overlay (object):
   """base for ActionSet and ActionLayer.
@@ -678,19 +668,11 @@ Action Layer, consists of one or more  ...
   def __init__ (self, index=None, py_title=None, py_legacy=None, py_parent=None, **kwargs):
     Overlay.__init__(self, 1, index, py_title, py_legacy, py_parent, **kwargs)
 
-  @staticmethod
-  def restore (kv, parentkey=None):
-    return ActionLayer(parentkey, **kv)
-
 
 class ActionSet (Overlay):
   """An 'Action Set', consists of one or more Actions Layers."""
   def __init__ (self, index=None, py_title=None, py_legacy=None, **kwargs):
     Overlay.__init__(self, 0, index, py_title, py_legacy, py_parent=None, **kwargs)
-
-  @staticmethod
-  def restore (kv, parentkey=None):
-    return ActionSet(parentkey, **kv)
 
 
 class GroupSourceBinding (object):
@@ -782,10 +764,6 @@ class Preset (object):
     kv['group_source_bindings'] = kv_gsb
 
     return kv
-
-  @staticmethod
-  def restore (kv, parentkey=None):
-    return Preset(parentkey, **kv)
 
 
 class Mapping (object):
@@ -993,10 +971,6 @@ class Mapping (object):
       kv['settings'] = self.settings.encode_kv()
 
     return kv
-
-  @staticmethod
-  def restore (kv, parentkey=None):
-    return Mapping(parentkey, **kv)
 
 
 class ControllerConfig (object):
