@@ -718,14 +718,23 @@ class Preset (object):
 
 class Mapping (object):
   """Encapsulates controller mapping (toplevel)"""
-  def __init__ (self, version=3):
+  def __init__ (self, version=None, revision=None, title=None, description=None, creator=None, controller_type=None, Timestamp=None):
+    if version is None: version = 3
+    if revision is None: revision = 1
+    if title is None: title = "Unnamed"
+    if description is None: description = "Unnamed configuration"
+    if creator is None: creator = "Anonymous"
+    if controller_type is None: controller_type = "controller_steamcontroller_gordon"
+    if Timestamp is None:
+      # TODO: determine timestamp
+      Timestamp = 0
     self.version = version
-    self.revision = 0
-    self.title = "Unnamed"
-    self.description = "Unnamed configuration"
-    self.creator = 0
-    self.controller_type = "controller_ps3"
-    self.timestamp = "0"
+    self.revision = revision
+    self.title = title
+    self.description = description
+    self.creator = creator
+    self.controller_type = controller_type
+    self.timestamp = Timestamp
     # List of Action Sets
     self.actions = []
     # List of Action Layers
@@ -777,7 +786,7 @@ class Mapping (object):
     whole = ('controller_mappings', lop)
     return whole
 
-  def encode_overlays (self, overlay_store, gensym=0):
+  def _encode_overlays (self, overlay_store, gensym=0):
     """Helper function to encode the overlays: Action Set, Action Layer."""
     kv = scvdf.DictMultivalue()
     for obj in overlay_store:
@@ -813,19 +822,19 @@ class Mapping (object):
 # Thus, it appears the "Preset_*" names are acting like a very-large-base number correlating to the (internal) id of the action/layer.
 # Order seems to enforced by lexicographical sort of the names.
 #
-# Contrast to 'groups':
-# The instances of Group ('groups') are written to the VDF separately for each instance, and differentiated by a nested "id" key/value, thereby leading to multiple instances of the "groups" key but with different associated values.
+# Contrast to 'group':
+# The instances of Group ('group') are written to the VDF separately for each instance, and differentiated by a nested "id" key/value, thereby leading to multiple instances of the "groups" key but with different associated values.
 # The instances of Action set/layers are each given unique names and made the value of that name in 'actions' or 'action_layers'.
 #
 # Consequeces to iteration:
-# * 'groups': either keep sorted by nested "id" key, or brute-force finding instance with the desired "id" key.
+# * 'group': either keep sorted by nested "id" key, or brute-force finding instance with the desired "id" key.
 #  * 'actions', 'action_layers': The overlays are in no particular order (as per nature of mapping type), but may be iterated in the proper sequence by sorting their names.
 
     if self.actions:
-      kv['actions'] = self.encode_overlays(self.actions)
+      kv['actions'] = self._encode_overlays(self.actions)
 
     if self.layers:
-      kv['action_layers'] = self.encode_overlays(self.layers)
+      kv['action_layers'] = self._encode_overlays(self.layers)
 
     for grp in self.groups:
       kv['group'] = grp.encode_kv()
@@ -839,30 +848,34 @@ class Mapping (object):
     return kv
 
   @staticmethod
+  def _decode_overlays_kv (overlay_list, kv, variant):
+    for obj_name in kv:
+      obj_kv = kv[obj_name]
+      obj = variant.decode_kv(obj_kv, obj_name)
+      overlay_list.append(obj)
+    return overlay_list
+
+  @staticmethod
   def decode_kv (kv, parentkey=None):
-    retval = Mapping(int(kv['version']))
-    retval.revision = int(kv['revision'])
-    retval.title = kv['title']
-    retval.description = kv['description']
-    retval.creator = kv['creator']
-    retval.controller_type = kv['controller_type']
-    retval.timestamp = kv['Timestamp']
+    retval = Mapping(int(kv['version']) if ('version' in kv) else None,
+              int(kv.get('revision', 0)),
+              kv.get('title', None),
+              kv.get('description', None),
+              kv.get('creator', None),
+              kv.get('controller_type', None),
+              kv.get('Timestamp', None))
     if 'actions' in kv:
-      for act_name in kv['actions']:
-        act_kv = kv['actions'][act_name]
-        actset = ActionSet.decode_kv(act_kv, act_name)
-        retval.actions.append(actset)
+      Mapping._decode_overlays_kv(retval.actions, kv['actions'], ActionSet)
     if 'action_layers' in kv:
-      for lyr_name in kv['action_layers']:
-        lyr_kv = kv['action_layers'][lyr_name]
-        layer = ActionLayer.decode_kv(lyr_kv, lyr_name)
-        retval.layers.append(layer)
-    for grp_kv in kv.get_all('group', []):
-      grp = Group.decode_kv(grp_kv, 'group')
-      retval.groups.append(grp)
-    for preset_kv in kv.get_all('preset',[]):
-      preset = Preset.decode_kv(preset_kv, 'preset')
-      retval.presets.append(preset)
+      Mapping._decode_overlays_kv(retval.layers, kv['action_layers'], ActionLayer)
+    if 'group' in kv:
+      for grp_kv in kv.get_all('group', []):
+        grp = Group.decode_kv(grp_kv, 'group')
+        retval.groups.append(grp)
+    if 'preset' in kv:
+      for preset_kv in kv.get_all('preset',[]):
+        preset = Preset.decode_kv(preset_kv, 'preset')
+        retval.presets.append(preset)
     if 'settings' in kv:
       retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
     return retval
