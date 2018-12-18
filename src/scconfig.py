@@ -41,6 +41,11 @@ class BindingBase (object):
       return enum_mapping[upper_check]
     return None
   @staticmethod
+  def mangle_vdfliteral (s):
+    """mangle binding, to embed warning messages in vdf/Steam Client."""
+    retval = s.replace('"', "'").replace("//", "/").replace(",", ";")
+    return retval
+  @staticmethod
   def parse (binding):
     """Parse 'binding' string into a parsed tuple form:
 ( cmd:list, label:str )
@@ -58,6 +63,7 @@ cmd elements are delimited by space.
     args = phrase0.split(' ')
     retval = ( args , label )
     return retval
+
 
 class Binding_Empty (BindingBase):
   """alias for Binding_Host('empty_binding')"""
@@ -98,12 +104,15 @@ class Binding_MouseSwitch (BindingBase):
     "u": "SCROLL_UP", "d": "SCROLL_DOWN",
     }
   def __init__ (self, evdetails, label=None):
-    if evdetails in self.TRANSLATE_BUTTON:
-      vdfliteral = self.TRANSLATE_BUTTON[evdetails]
-      BindingBase.__init__(self, "mouse_button", vdfliteral, self.label)
-    elif evdetails in self.TRANSLATE_WHEEL:
-      vdfliteral = self.TRANSLATE_WHEEL[evdetails]
-      BindingBase.__init__(self, "mouse_wheel", vdfliteral, self.label)
+    major, vdfliteral = None, None
+    if vdfliteral is None:
+      vdfliteral = self.filter_enum(self.TRANSLATE_BUTTON, evdetails)
+      major = 'mouse_button' if vdfliteral else None
+    if vdfliteral is None:
+      vdfliteral = self.filter_enum(self.TRANSLATE_WHEEL, evdetails)
+      major = 'mouse_wheel' if vdfliteral else None
+    if major and vdfliteral:
+      BindingBase.__init__(self, major, vdfliteral, self.label)
     else:
       raise("Unknown mouse keysym '{}'".format(evdetails))
 
@@ -131,19 +140,6 @@ class Binding_Gamepad (BindingBase):
     }
   def __init__ (self, keycode, label=None):
     vdfliteral = self.filter_enum(self.TRANSLATION, keycode)
-#    caps_keycode = keycode.upper()
-#    vdfliteral = None
-#
-#    valuelist = self.TRANSLATION.values()
-#    if (caps_keycode in valuelist) or (keycode in valuelist):
-#      vdfliteral = keycode
-#
-#    # Try mapping.
-#    if vdfliteral is None:
-#      vdfliteral = self.TRANSLATION.get(keycode, None)
-#      if vdfliteral is None:
-#        vdfliteral = self.TRANSLATION.get(caps_keycode, None)
-#
     if vdfliteral is not None:
       BindingBase.__init__(self, "xinput_button", [vdfliteral], label)
     else:
@@ -190,20 +186,10 @@ class Binding_Host (BindingBase):
     'host_poweroff': "host_poweroff",
   }
   def __init__ (self, details, label=None):
-    valuelist = self.TRANSLATION.values()
-    vdfliteral = None
-    alt_details = details.lower()
-    # Check if already in final form.
-    if (details in valuelist) or (alt_details in valuelist):
-      vdfliteral = details
-    # Attempt mapping
+    vdfliteral = self.filter_enum(self.TRANSLATION, details)
     if vdfliteral is None:
-      vdfliteral = self.TRANSLATION.get(details, None)
-      if vdfliteral is None:
-        vdfliteral = self.TRANSLATION.get(alt_details, None)
-    # Still not found.
-    if vdfliteral is None:
-      raise ValueError("Unknown host action '{}'".format(details))
+      mangle = self.mangle_vdfliteral(details)
+      raise ValueError("Unknown host action '{}'".format(mangled))
     BindingBase.__init__(self, vdfliteral, [], label)
 
   @staticmethod
@@ -213,8 +199,7 @@ class Binding_Host (BindingBase):
     try:
       return Binding_Host(cmd, label=label)
     except:
-      pass
-    return None
+      return None
 
 
 class Binding_Light (BindingBase):
@@ -241,6 +226,7 @@ M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ig
     """Instantiate from a parsed tuple."""
     ( (cmd, *args), label) = parsed_tuple
     return None
+
 
 class Binding_Overlay (BindingBase):
   """Control overlays."""
@@ -276,7 +262,7 @@ class Binding_Overlay (BindingBase):
       if args[0] in ('empty_binding', 'empty', None):
         return Binding_Empty(label=label)
       else:
-        mangled = BindingFactory.mangle_vdfliteral(str(parsed_tuple))
+        mangled = self.mangle_vdfliteral(str(parsed_tuple))
         return Binding_Empty('UNKNOWN_CONTROLLER_ACTION({})'.format(mangled))
     return None
 
@@ -300,8 +286,7 @@ class Binding_Modeshift (BindingBase):
 class BindingFactory (object):
   @staticmethod
   def mangle_vdfliteral (s):
-    retval = s.replace('"', "'").replace("//", "/").replace(",", ";")
-    return retval
+    return BindingBase.mangle_vdfliteral(s)
   @staticmethod
   def make_empty (label=None):
     return Binding_Empty(label=label)
