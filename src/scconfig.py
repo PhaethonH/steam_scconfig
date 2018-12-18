@@ -64,9 +64,30 @@ class Binding_Empty (BindingBase):
   def __init__ (self, label=None):
     BindingBase.__init__(self, 'controller_action', ['empty_binding'], label)
 
+  @staticmethod
+  def make (parsed_tuple):
+    """Instantiate from a parsed tuple."""
+    ( (cmd, *args), label) = parsed_tuple
+    if cmd == 'controller_action' and args[0] == 'empty_binding':
+      return Binding_Empty(label=label)
+    return None
+
+
 class Binding_Keystroke (BindingBase):
   def __init__ (self, keycode, label=None):
     BindingBase.__init__(self, "key_press", [keycode], label)
+
+  @staticmethod
+  def make (parsed_tuple):
+    """Instantiate from a parsed tuple."""
+    ( (cmd, *args), label) = parsed_tuple
+    if cmd in ('key_press',):
+      try:
+        return Binding_Keystroke(args[0], label=label)
+      except:
+        pass
+    return None
+
 
 class Binding_MouseSwitch (BindingBase):
   TRANSLATE_BUTTON = {
@@ -85,6 +106,18 @@ class Binding_MouseSwitch (BindingBase):
       BindingBase.__init__(self, "mouse_wheel", vdfliteral, self.label)
     else:
       raise("Unknown mouse keysym '{}'".format(evdetails))
+
+  @staticmethod
+  def make (parsed_tuple):
+    """Instantiate from a parsed tuple."""
+    ( (cmd, *args), label) = parsed_tuple
+    if cmd in ('mouse_button', 'mouse_wheel'):
+      try:
+        return Binding_MouseSwitch(cmd, args[0], label=label)
+      except:
+        pass
+    return None
+
 
 class Binding_Gamepad (BindingBase):
   TRANSLATION = {
@@ -115,6 +148,17 @@ class Binding_Gamepad (BindingBase):
       BindingBase.__init__(self, "xinput_button", [vdfliteral], label)
     else:
       raise KeyError("Unknown xpad keysym '{}'.".format(keycode))
+
+  @staticmethod
+  def make (parsed_tuple):
+    """Instantiate from a parsed tuple."""
+    ( (cmd, *args), label) = parsed_tuple
+    if cmd == 'xinput_button':
+      try:
+        return Binding_Gamepad(args[0], label=label)
+      except:
+        pass
+    return None
 
 class Binding_Host (BindingBase):
   """Host operations."""
@@ -162,6 +206,17 @@ class Binding_Host (BindingBase):
       raise ValueError("Unknown host action '{}'".format(details))
     BindingBase.__init__(self, vdfliteral, [], label)
 
+  @staticmethod
+  def make (parsed_tuple):
+    """Instantiate from a parsed tuple."""
+    ( (cmd, *args), label) = parsed_tuple
+    try:
+      return Binding_Host(cmd, label=label)
+    except:
+      pass
+    return None
+
+
 class Binding_Light (BindingBase):
   """Set controller LED - color and/or brightness.
 
@@ -180,6 +235,12 @@ M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ig
     self.X = X
     self.L = L
     self.M = M
+
+  @staticmethod
+  def make (parsed_tuple):
+    """Instantiate from a parsed tuple."""
+    ( (cmd, *args), label) = parsed_tuple
+    return None
 
 class Binding_Overlay (BindingBase):
   """Control overlays."""
@@ -204,6 +265,21 @@ class Binding_Overlay (BindingBase):
     self.set_id = set_id
     self.unk = unk
 
+  @staticmethod
+  def make (parsed_tuple):
+    ( (cmd, *args), label ) = parsed_tuple
+    if (cmd == 'controller_action'):
+      try:
+        return Binding_Overlay(*args[:4], label=label)
+      except:
+        pass
+      if args[0] in ('empty_binding', 'empty', None):
+        return Binding_Empty(label=label)
+      else:
+        mangled = BindingFactory.mangle_vdfliteral(str(parsed_tuple))
+        return Binding_Empty('UNKNOWN_CONTROLLER_ACTION({})'.format(mangled))
+    return None
+
 
 class Binding_Modeshift (BindingBase):
   # TODO: filter inpsrc
@@ -217,14 +293,14 @@ class Binding_Modeshift (BindingBase):
     """Instantiate from a parsed tuple."""
     ( (cmd, *args), label) = parsed_tuple
     if (cmd == 'mode_shift'):
-      return Binding_Modeshift(args[0], int(args[1]), label)
+      return Binding_Modeshift(args[0], int(args[1]), label=label)
 
 
 
 class BindingFactory (object):
   @staticmethod
   def mangle_vdfliteral (s):
-    retval = s.replace('"', "'").replace("//", "/").replace(",", ":")
+    retval = s.replace('"', "'").replace("//", "/").replace(",", ";")
     return retval
   @staticmethod
   def make_empty (label=None):
@@ -264,29 +340,20 @@ class BindingFactory (object):
   @staticmethod
   def parse (binding):
     self = BindingFactory
+    parsed_tuple = BindingBase.parse(binding)
+    ATTEMPTS = [
+      Binding_Overlay,
+      Binding_Modeshift,
+      Binding_MouseSwitch,
+      Binding_Keystroke,
+      Binding_Gamepad,
+      ]
     retval = None
-    #print("BINDING = %r" % (binding,))
-    if not binding:
-      return Binding_Empty()
-    comma_parts = binding.split(',')
-    phrase0 = comma_parts[0]
-    # TODO: label is after last comma?
-    label = comma_parts[1] if len(comma_parts) > 1 else None
-    cmd, *args = phrase0.split(' ')
-#  print("parts={!r}".format(parts))
-    if cmd == 'xinput_button':
-      keysym = args[0]
-      retval = self.make_gamepad(keysym, label=label)
-    elif cmd == 'key_press':
-      keysym = args[0]
-      retval = self.make_keystroke(keysym, label=label)
-    elif cmd == 'controller_action':
-      retval = self.make_controller_action(*args, label)
-    elif cmd == 'mode_shift':
-      #return BindingFactory.make_modeshift(*args[:2], label=label)
-      pt = BindingBase.parse(binding)
-      return BindingFactory.make_modeshift(*pt[0][1:], label=pt[1])
-    else:
+    for candidate in ATTEMPTS:
+      retval = candidate.make(parsed_tuple)
+      if retval:
+        return retval
+    if not retval:
       mangled = self.mangle_vdfliteral(binding)
       retval = self.make_empty("UNKNOWN_BINDING({})".format(mangled))
     return retval
@@ -475,8 +542,8 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     lop.append( ('id', str(self.index)) )
     lop.append( ('mode', str(self.mode)) )
 
-    if self.inputs:
-      lop.append( self.inputs.encode_pair() )
+    # Always generate ['inputs']
+    lop.append( self.inputs.encode_pair() )
 
     if self.settings:
       lop.append( self.settings.encode_pair() )
@@ -489,8 +556,8 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     kv['id'] = str(self.index)
     kv['mode'] = str(self.mode)
 
-    if self.inputs:
-      kv['inputs'] = self.inputs.encode_kv()
+    # Always generate ['inputs']
+    kv['inputs'] = self.inputs.encode_kv()
 
     if self.settings:
       kv['settings'] = self.settings.encode_kv()
