@@ -6,6 +6,11 @@ import scvdf
 
 
 
+####################
+# Helper functions #
+####################
+
+
 # Helper function for iterating DictMultivalue values -- helps simplify iteration as: for x in itermulti(dictMultivalueInstance)
 def get_all (container, key, default_value):
   if key in container:
@@ -17,6 +22,83 @@ def get_all (container, key, default_value):
   else:
     return default_value
 
+
+# Convert dict type to list-of-pairs (list of 2-tuples).
+def dict2lop (kv_dict):
+  lop = []
+  for k,v in kv_dict.items():
+    lop.append( (k,str(v)) )
+  return lop
+
+
+# Helper class for commonly recurring 'settings' field, which is all-scalar.
+class EncodableDict (object):
+  def __init__ (self, index=None, copyfrom=None):
+    if index is None:
+      index = 'settings'
+    elif isinstance(index,dict):
+      # and would imply copyfrom is missing.
+      copyfrom = index
+      index = None
+    self.index = index
+    self.valid_keys = []  # also maintain order.
+    self.store = {}
+    if isinstance(copyfrom,dict):
+      for k,v in copyfrom.items():
+        self[k] = v
+  def __setitem__ (self, k, v):
+    self.valid_keys.append(k)
+    self.store[k] = v
+  def __getitem__ (self, k):
+    return self.store[k]
+  def __delitem__ (self, k):
+    del self.store[k]
+    self.valid_keys.remove(k)
+  def keys (self):
+    return self.valid_keys
+  def items (self):
+    for k in self.valid_keys:
+      v = self.store[k]
+      yield (k,v)
+    return
+  def values (self):
+    for k in self.valid_keys:
+      v = self.store[k]
+      yield v
+    return
+  def update (self, d):
+    for (k,v) in d.items():
+      self[k] = v
+  def encode_pair (self):
+    lop = []
+    for k in self.valid_keys:
+      v = self.store[k]
+      try:
+        lop.append(v.encode_pair())
+      except AttributeError as e:
+        lop.append( (k,str(v)) )
+    whole = (self.index, lop)
+    return whole
+  def encode_kv (self):
+    kv = scvdf.DictMultivalue()
+    for k in self.valid_keys:
+      v = self.store[k]
+      try:
+        kv[k] = v.encode_kv()
+      except AttributeError as e:
+        kv[k] = str(v)
+    return kv
+  def __bool__ (self):
+    return bool(self.valid_keys)
+  def __nonzero__ (self):
+    return len(self.valid_keys) > 0
+
+
+
+
+##########################
+# Substantiative objects #
+##########################
 
 
 class BindingBase (object):
@@ -368,79 +450,7 @@ class BindingFactory (object):
     return retval
 
 
-
-
-# Convert dict type to list-of-pairs (list of 2-tuples).
-def dict2lop (kv_dict):
-  lop = []
-  for k,v in kv_dict.items():
-    lop.append( (k,str(v)) )
-  return lop
-
-
-
-
-class EncodableDict (object):
-  def __init__ (self, index=None, copyfrom=None):
-    if index is None:
-      index = 'settings'
-    elif isinstance(index,dict):
-      # and would imply copyfrom is missing.
-      copyfrom = index
-      index = None
-    self.index = index
-    self.valid_keys = []  # also maintain order.
-    self.store = {}
-    if isinstance(copyfrom,dict):
-      for k,v in copyfrom.items():
-        self[k] = v
-  def __setitem__ (self, k, v):
-    self.valid_keys.append(k)
-    self.store[k] = v
-  def __getitem__ (self, k):
-    return self.store[k]
-  def __delitem__ (self, k):
-    del self.store[k]
-    self.valid_keys.remove(k)
-  def keys (self):
-    return self.valid_keys
-  def items (self):
-    for k in self.valid_keys:
-      v = self.store[k]
-      yield (k,v)
-    return
-  def values (self):
-    for k in self.valid_keys:
-      v = self.store[k]
-      yield v
-    return
-  def update (self, d):
-    for (k,v) in d.items():
-      self[k] = v
-  def encode_pair (self):
-    lop = []
-    for k in self.valid_keys:
-      v = self.store[k]
-      try:
-        lop.append(v.encode_pair())
-      except AttributeError as e:
-        lop.append( (k,str(v)) )
-    whole = (self.index, lop)
-    return whole
-  def encode_kv (self):
-    kv = scvdf.DictMultivalue()
-    for k in self.valid_keys:
-      v = self.store[k]
-      try:
-        kv[k] = v.encode_kv()
-      except AttributeError as e:
-        kv[k] = str(v)
-    return kv
-  def __bool__ (self):
-    return bool(self.valid_keys)
-  def __nonzero__ (self):
-    return len(self.valid_keys) > 0
-
+### end of Binding and Bindings related classes ###
 
 
 
@@ -1028,6 +1038,7 @@ class ControllerConfig (object):
 
 
 class ControllerConfigFactory (object):
+  """Factory class to create instances of ControllerConfig."""
   @staticmethod
   def make_from_dict (pydict, parentkey=None):
     return ControllerConfig(parentkey, **pydict)
