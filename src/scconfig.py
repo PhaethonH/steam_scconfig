@@ -152,10 +152,10 @@ class BindingBase (object):
   @staticmethod
   def _parse (binding):
     """Parse 'binding' string into a parsed tuple form:
-( cmd:list, label:str )
+( cmd:str, args:list, label:str )
 
-Tuple elements are delimited by comma+space.
-cmd elements are delimited by space.
+cmd+args are delimited from label by comma+space.
+cmd and args are delimited by space.
 """
     if not binding:
       return None
@@ -165,7 +165,7 @@ cmd elements are delimited by space.
     # TODO: is label supposed to be second phrase [1] or final phrase [-1] ?
     label = comma_parts[-1] if len(comma_parts) > 1 else None
     args = phrase0.split(' ')
-    retval = ( args , label )
+    retval = ( args[0], args[1:] , label )
     return retval
 
 
@@ -175,9 +175,8 @@ class Binding_Empty (BindingBase):
     BindingBase.__init__(self, 'controller_action', ['empty_binding'], label)
 
   @staticmethod
-  def make (parsed_tuple):
+  def _make (cmd, args, label):
     """Instantiate from a parsed tuple."""
-    ( (cmd, *args), label) = parsed_tuple
     if cmd == 'controller_action' and args[0] == 'empty_binding':
       return Binding_Empty(label=label)
     return None
@@ -188,9 +187,8 @@ class Binding_Keystroke (BindingBase):
     BindingBase.__init__(self, "key_press", [keycode], label)
 
   @staticmethod
-  def make (parsed_tuple):
+  def _make (cmd, args, label):
     """Instantiate from a parsed tuple."""
-    ( (cmd, *args), label) = parsed_tuple
     if cmd in ('key_press',):
       try:
         return Binding_Keystroke(args[0], label=label)
@@ -221,9 +219,8 @@ class Binding_MouseSwitch (BindingBase):
       raise("Unknown mouse keysym '{}'".format(evdetails))
 
   @staticmethod
-  def make (parsed_tuple):
+  def _make (cmd, args, label):
     """Instantiate from a parsed tuple."""
-    ( (cmd, *args), label) = parsed_tuple
     if cmd in ('mouse_button', 'mouse_wheel'):
       try:
         return Binding_MouseSwitch(cmd, args[0], label=label)
@@ -250,9 +247,8 @@ class Binding_Gamepad (BindingBase):
       raise KeyError("Unknown xpad keysym '{}'.".format(keycode))
 
   @staticmethod
-  def make (parsed_tuple):
+  def _make (cmd, args, label):
     """Instantiate from a parsed tuple."""
-    ( (cmd, *args), label) = parsed_tuple
     if cmd == 'xinput_button':
       try:
         return Binding_Gamepad(args[0], label=label)
@@ -297,9 +293,8 @@ class Binding_Host (BindingBase):
     BindingBase.__init__(self, vdfliteral, [], label)
 
   @staticmethod
-  def make (parsed_tuple):
+  def _make (cmd, args, label):
     """Instantiate from a parsed tuple."""
-    ( (cmd, *args), label) = parsed_tuple
     try:
       return Binding_Host(cmd, label=label)
     except:
@@ -316,7 +311,7 @@ X : unknown, 0
 L : brightness, 0..255 (off to brightest)
 M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ignore R,G,B,X,L)
 """
-  def __init__ (self, R, G, B, X, L, M, label=None):
+  def __init__ (self, mode, R, G, B, X, L, M, label=None):
     BindingBase.__init__(self, "set_led", (R,G,B,X,L,M), label)
     self.R = R
     self.G = G
@@ -326,9 +321,10 @@ M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ig
     self.M = M
 
   @staticmethod
-  def make (parsed_tuple):
+  def _make (cmd, args, label):
     """Instantiate from a parsed tuple."""
-    ( (cmd, *args), label) = parsed_tuple
+    if cmd == 'set_led':
+      return Binding_Light(*args, label=label)
     return None
 
 
@@ -355,8 +351,7 @@ class Binding_Overlay (BindingBase):
     self.unk = unk
 
   @staticmethod
-  def make (parsed_tuple):
-    ( (cmd, *args), label ) = parsed_tuple
+  def _make (cmd, args, label):
     if (cmd == 'controller_action'):
       try:
         return Binding_Overlay(*args[:4], label=label)
@@ -383,11 +378,11 @@ class Binding_Modeshift (BindingBase):
     self.group_id = group_id
 
   @staticmethod
-  def make (parsed_tuple):
+  def _make (cmd, args, label):
     """Instantiate from a parsed tuple."""
-    ( (cmd, *args), label) = parsed_tuple
     if (cmd == 'mode_shift'):
       return Binding_Modeshift(args[0], int(args[1]), label=label)
+    return None
 
 
 
@@ -408,9 +403,9 @@ class BindingFactory (object):
   def make_hostcall (hostreq, label=None):
     return Binding_Host(hostreq, label=label)
   @staticmethod
-# TODO: set_led
-  def make_light (label=None):
-    pass
+# TODO: test set_led
+  def make_light (led_mode, red, green, blue, unk, brightness, label=None):
+    return Binding_Light(red, green, blue, unk, brightness, mode, label)
   @staticmethod
   def make_overlay (subcmd, layer_id=0, set_id=0, unk=0, label=None):
     return Binding_Overlay(subcmd, layer_id, set_id, unk, label)
@@ -429,18 +424,24 @@ class BindingFactory (object):
 
   @staticmethod
   def parse (binding):
+    """Convert a binding string to a Binding object."""
     self = BindingFactory
     parsed_tuple = BindingBase._parse(binding)
+    ( cmd, args, label ) = parsed_tuple
     ATTEMPTS = [
+      # Roughly in order of most initializer arguments to least.
+      Binding_Light,
       Binding_Overlay,
       Binding_Modeshift,
       Binding_MouseSwitch,
       Binding_Keystroke,
       Binding_Gamepad,
+      Binding_Host,
+      Binding_Empty,
       ]
     retval = None
     for candidate in ATTEMPTS:
-      retval = candidate.make(parsed_tuple)
+      retval = candidate._make(cmd, args, label)
       if retval:
         return retval
     if not retval:
