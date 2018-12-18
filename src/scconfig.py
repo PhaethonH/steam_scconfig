@@ -40,6 +40,24 @@ class BindingBase (object):
     if upper_check in enum_mapping:
       return enum_mapping[upper_check]
     return None
+  @staticmethod
+  def parse (binding):
+    """Parse 'binding' string into a parsed tuple form:
+( cmd:list, label:str )
+
+Tuple elements are delimited by comma+space.
+cmd elements are delimited by space.
+"""
+    if not binding:
+      return None
+    # Not clear if more than one comma is allowed; if so, which is label?
+    comma_parts = binding.split(', ', 1)
+    phrase0 = comma_parts[0]
+    # TODO: is label supposed to be second phrase [1] or final phrase [-1] ?
+    label = comma_parts[-1] if len(comma_parts) > 1 else None
+    args = phrase0.split(' ')
+    retval = ( args , label )
+    return retval
 
 class Binding_Empty (BindingBase):
   """alias for Binding_Host('empty_binding')"""
@@ -155,13 +173,13 @@ L : brightness, 0..255 (off to brightest)
 M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ignore R,G,B,X,L)
 """
   def __init__ (self, R, G, B, X, L, M, label=None):
+    BindingBase.__init__(self, "set_led", (R,G,B,X,L,M), label)
     self.R = R
     self.G = G
     self.B = B
     self.X = X
     self.L = L
     self.M = M
-    BindingBase.__init__(self, "set_led", (R,G,B,X,L,M), label)
 
 class Binding_Overlay (BindingBase):
   """Control overlays."""
@@ -187,40 +205,93 @@ class Binding_Overlay (BindingBase):
     self.unk = unk
 
 
-def Binding_ControllerAction (*args, label=None):
-  subcmd = args[0]
-  try:
-    return Binding_Overlay(args[0], *args[1:4], label)
-  except (TypeError,ValueError) as e:
+class Binding_Modeshift (BindingBase):
+  # TODO: filter inpsrc
+  def __init__ (self, input_source, group_id, label=None):
+    BindingBase.__init__(self, 'mode_shift', [ input_source, str(group_id) ], label)
+    self.inpsrc = input_source
+    self.group_id = group_id
+
+  @staticmethod
+  def make (parsed_tuple):
+    """Instantiate from a parsed tuple."""
+    ( (cmd, *args), label) = parsed_tuple
+    if (cmd == 'mode_shift'):
+      return Binding_Modeshift(args[0], int(args[1]), label)
+
+
+
+class BindingFactory (object):
+  @staticmethod
+  def mangle_vdfliteral (s):
+    retval = s.replace('"', "'").replace("//", "/").replace(",", ":")
+    return retval
+  @staticmethod
+  def make_empty (label=None):
+    return Binding_Empty(label=label)
+  @staticmethod
+  def make_keystroke (synthsym, label=None):
+    return Binding_Keystroke(synthsym, label=label)
+  @staticmethod
+  def make_mouseswitch (synthsym, label=None):
+    return Binding_MouseSwitch(synthsym, label=label)
+  @staticmethod
+  def make_gamepad (synthsym, label=None):
+    return Binding_Gamepad(synthsym, label=label)
+  @staticmethod
+  def make_hostcall (hostreq, label=None):
+    return Binding_Host(hostreq, label=label)
+  @staticmethod
+# TODO: set_led
+  def make_light (label=None):
     pass
+  @staticmethod
+  def make_overlay (subcmd, layer_id=0, set_id=0, unk=0, label=None):
+    return Binding_Overlay(subcmd, layer_id, set_id, unk, label)
+  @staticmethod
+  def make_modeshift (inpsrc, grpid, label=None):
+    return Binding_Modeshift(inpsrc, grpid, label)
+  @staticmethod
+  def make_controller_action (*args, label=None):
+    if len(args) > 4:
+      return BindingFactory.make_overlay(*args[:4], label=label)
+    elif args[0] in [ 'empty_binding', 'empty', None ]:
+      return Binding_Empty()
+    else:
+      mangled = BindingFactory.mangle_vdfliteral(' '.join(args))
+      return Binding_Empty("UNKNOWN_CONTROLLER_ACTION({})".format(mangled))
 
-  if subcmd == 'empty_binding' or subcmd == 'empty':
-    return Binding_Empty()
-  else:
-    return Binding_Empty("UNKNOWN_CONTROLLER_ACTION")
-
-
-
-
-def decode_binding (binding):
-  retval = None
-  print("BINDING = %r" % (binding,))
-  if not binding:
-    return Binding_Empty()
-  fragments = binding.split(',')
-  payload = fragments[0]
-  label = fragments[1] if len(fragments) > 1 else None
-  cmd, *args = payload.split(' ')
+  @staticmethod
+  def parse (binding):
+    self = BindingFactory
+    retval = None
+    #print("BINDING = %r" % (binding,))
+    if not binding:
+      return Binding_Empty()
+    comma_parts = binding.split(',')
+    phrase0 = comma_parts[0]
+    # TODO: label is after last comma?
+    label = comma_parts[1] if len(comma_parts) > 1 else None
+    cmd, *args = phrase0.split(' ')
 #  print("parts={!r}".format(parts))
-  if cmd == 'xinput_button':
-    keysym = args[0]
-    retval = Binding_Gamepad(keysym, label=label)
-  elif cmd == 'key_press':
-    keysym = args[0]
-    retval = Binding_Keystroke(keysym, label=label)
-  elif cmd == 'controller_action':
-    retval = Binding_ControllerAction(*args, label=label)
-  return retval
+    if cmd == 'xinput_button':
+      keysym = args[0]
+      retval = self.make_gamepad(keysym, label=label)
+    elif cmd == 'key_press':
+      keysym = args[0]
+      retval = self.make_keystroke(keysym, label=label)
+    elif cmd == 'controller_action':
+      retval = self.make_controller_action(*args, label)
+    elif cmd == 'mode_shift':
+      #return BindingFactory.make_modeshift(*args[:2], label=label)
+      pt = BindingBase.parse(binding)
+      return BindingFactory.make_modeshift(*pt[0][1:], label=pt[1])
+    else:
+      mangled = self.mangle_vdfliteral(binding)
+      retval = self.make_empty("UNKNOWN_BINDING({})".format(mangled))
+    return retval
+
+
 
 
 def dict2lop (kv_dict):
@@ -309,7 +380,7 @@ Responses include:
     self.bindings.append(binding_obj)
     return binding_obj
   def add_binding_str (self, binding_str):
-    bindinfo = decode_binding(binding_str)
+    bindinfo = BindingFactory.parse(binding_str)
     return self.add_binding_obj(bindinfo)
   def encode_pair (self):
     lop = []
