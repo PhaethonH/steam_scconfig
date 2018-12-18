@@ -449,7 +449,7 @@ Takes advantage of the typical behavior of appending to list-of-pairs.
 def _parse (tokenizer, interim=None, depth=0, storetype=list):
   halt = False
   if interim is None:
-    interim = []
+    interim = storetype()
 
   while not halt:
     # First token: accept scalar || end of k/v pairs.

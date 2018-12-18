@@ -272,6 +272,11 @@ class TestScconfigEncoding (unittest.TestCase):
     hasher.update(fulldump_kv)
     self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
 
+  def test_loading1 (self):
+    f = open("../examples/com³-wip3_0.vdf", "rt")
+    pydict = scvdf.load(f, scvdf.DictMultivalue)
+    config = scconfig.ControllerConfig.decode_kv(pydict)
+
 
 if __name__ == "__main__":
   unittest.main()
