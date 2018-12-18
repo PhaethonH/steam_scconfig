@@ -94,6 +94,36 @@ class EncodableDict (object):
     return len(self.valid_keys) > 0
 
 
+def filter_enum (enum_mapping, initval):
+  """Helper function to handle filtering acceptable values based on internal dialect or VDF-acceptable value."""
+  if enum_mapping is None:
+    return None
+  lower_check = initval.lower()
+  upper_check = initval.upper()
+  try:
+    vl = enum_mapping.values()
+  except AttributeError as e:
+    vl = enum_mapping
+  if (initval in vl) or (lower_check in vl) or (upper_check in vl):
+    # Already in final form.
+    return initval
+  # Subject to mapping.
+  if initval in enum_mapping:
+    return enum_mapping[initval]
+  if lower_check in enum_mapping:
+    return enum_mapping[lower_check]
+  if upper_check in enum_mapping:
+    return enum_mapping[upper_check]
+  # Not accepted.
+  return None
+
+
+def mangle_vdfliteral (s):
+  """mangle binding, to embed warning messages in vdf/Steam Client."""
+  retval = s.replace('"', "'").replace("//", "/").replace(",", ";")
+  return retval
+
+
 
 
 ##########################
@@ -118,34 +148,6 @@ class BindingBase (object):
     if self.label:
       label = ", {}".format(self.label)
     retval = "{}{}{}".format(front, tail, label)
-    return retval
-  @staticmethod
-  def _filter_enum (enum_mapping, initval):
-    """Helper function to handle filtering acceptable values based on internal dialect or VDF-acceptable value."""
-    if enum_mapping is None:
-      return None
-    lower_check = initval.lower()
-    upper_check = initval.upper()
-    try:
-      vl = enum_mapping.values()
-    except AttributeError as e:
-      vl = enum_mapping
-    if (initval in vl) or (lower_check in vl) or (upper_check in vl):
-      # Already in final form.
-      return initval
-    # Subject to mapping.
-    if initval in enum_mapping:
-      return enum_mapping[initval]
-    if lower_check in enum_mapping:
-      return enum_mapping[lower_check]
-    if upper_check in enum_mapping:
-      return enum_mapping[upper_check]
-    # Not accepted.
-    return None
-  @staticmethod
-  def _mangle_vdfliteral (s):
-    """mangle binding, to embed warning messages in vdf/Steam Client."""
-    retval = s.replace('"', "'").replace("//", "/").replace(",", ";")
     return retval
   @staticmethod
   def _parse (binding):
@@ -208,10 +210,10 @@ class Binding_MouseSwitch (BindingBase):
   def __init__ (self, evdetails, label=None):
     major, vdfliteral = None, None
     if vdfliteral is None:
-      vdfliteral = self._filter_enum(self.TRANSLATE_BUTTON, evdetails)
+      vdfliteral = filter_enum(self.TRANSLATE_BUTTON, evdetails)
       major = 'mouse_button' if vdfliteral else None
     if vdfliteral is None:
-      vdfliteral = self._filter_enum(self.TRANSLATE_WHEEL, evdetails)
+      vdfliteral = filter_enum(self.TRANSLATE_WHEEL, evdetails)
       major = 'mouse_wheel' if vdfliteral else None
     if major and vdfliteral:
       BindingBase.__init__(self, major, vdfliteral, self.label)
@@ -241,7 +243,7 @@ class Binding_Gamepad (BindingBase):
     "RJx": "RSTICK_LEFT", "LJX": "RSTICK_RIGHT", "LJy": "RSTICK_UP", "LJY": "RSTICK_DOWN",
     }
   def __init__ (self, keycode, label=None):
-    vdfliteral = self._filter_enum(self.TRANSLATION, keycode)
+    vdfliteral = filter_enum(self.TRANSLATION, keycode)
     if vdfliteral is not None:
       BindingBase.__init__(self, "xinput_button", [vdfliteral], label)
     else:
@@ -288,9 +290,9 @@ class Binding_Host (BindingBase):
     'host_poweroff': "host_poweroff",
   }
   def __init__ (self, details, label=None):
-    vdfliteral = self._filter_enum(self.TRANSLATION, details)
+    vdfliteral = filter_enum(self.TRANSLATION, details)
     if vdfliteral is None:
-      mangle = self._mangle_vdfliteral(details)
+      mangle = mangle_vdfliteral(details)
       raise ValueError("Unknown host action '{}'".format(mangled))
     BindingBase.__init__(self, vdfliteral, [], label)
 
@@ -343,7 +345,7 @@ class Binding_Overlay (BindingBase):
 # TODO: change action set
   }
   def __init__ (self, actionspec, layer_id, set_id, unk=0, label=None):
-    vdfliteral = self._filter_enum(self.ACTIONS, actionspec)
+    vdfliteral = filter_enum(self.ACTIONS, actionspec)
     if vdfliteral is None:
       raise ValueError("Unknown overlay action '{}'".format(vdfliteral))
     marshal = [ vdfliteral, str(layer_id), str(set_id), str(unk) ]
@@ -363,7 +365,7 @@ class Binding_Overlay (BindingBase):
       if args[0] in ('empty_binding', 'empty', None):
         return Binding_Empty(label=label)
       else:
-        mangled = self._mangle_vdfliteral(str(parsed_tuple))
+        mangled = mangle_vdfliteral(str(parsed_tuple))
         return Binding_Empty('UNKNOWN_CONTROLLER_ACTION({})'.format(mangled))
     return None
 
@@ -375,7 +377,7 @@ class Binding_Modeshift (BindingBase):
     "joystick", "right_joystick"
     ]
   def __init__ (self, input_source, group_id, label=None):
-    vdfliteral = self._filter_enum(self.ACCEPTABLE, input_source)
+    vdfliteral = filter_enum(self.ACCEPTABLE, input_source)
     BindingBase.__init__(self, 'mode_shift', [ vdfliteral, str(group_id) ], label)
     self.inpsrc = vdfliteral
     self.group_id = group_id
@@ -390,9 +392,6 @@ class Binding_Modeshift (BindingBase):
 
 
 class BindingFactory (object):
-  @staticmethod
-  def _mangle_vdfliteral (s):
-    return BindingBase._mangle_vdfliteral(s)
   @staticmethod
   def make_empty (label=None):
     return Binding_Empty(label=label)
@@ -425,7 +424,7 @@ class BindingFactory (object):
     elif args[0] in [ 'empty_binding', 'empty', None ]:
       return Binding_Empty()
     else:
-      mangled = BindingFactory._mangle_vdfliteral(' '.join(args))
+      mangled = mangle_vdfliteral(' '.join(args))
       return Binding_Empty("UNKNOWN_CONTROLLER_ACTION({})".format(mangled))
 
   @staticmethod
@@ -445,7 +444,7 @@ class BindingFactory (object):
       if retval:
         return retval
     if not retval:
-      mangled = self._mangle_vdfliteral(binding)
+      mangled = mangle_vdfliteral(binding)
       retval = self.make_empty("UNKNOWN_BINDING({})".format(mangled))
     return retval
 
@@ -601,7 +600,7 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     if py_mode is None:
       if 'mode' in kwargs:
         py_mode = kwargs['mode']
-    py_mode = BindingBase._filter_enum(self.MODES, py_mode)
+    py_mode = filter_enum(self.MODES, py_mode)
 
     self.index = index
     # TODO: py_mode == None  =>  remove Group.
