@@ -280,7 +280,7 @@ class TestScconfigEncoding (unittest.TestCase):
     config = scconfig.ControllerConfig.decode_kv(pydict)
     kv = config.encode_kv()
     fulldump_kv = scvdf.dumps(kv)
-    #print(fulldump_kv)
+    print(fulldump_kv)
     fulldump = fulldump_kv.encode("utf-8")
     hasher = hashlib.new("md5")
     hasher.update(fulldump)

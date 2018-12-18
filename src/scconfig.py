@@ -22,15 +22,33 @@ class BindingBase (object):
       label = ", {}".format(self.label)
     retval = "{}{}{}".format(front, tail, label)
     return retval
+  @staticmethod
+  def filter_enum (enum_mapping, initval):
+    """Helper function to handle filtering acceptable values based on internal dialect or VDF-acceptable value."""
+    if enum_mapping is None:
+      return None
+    lower_check = initval.lower()
+    upper_check = initval.upper()
+    vl = enum_mapping.values()
+    if (initval in vl) or (lower_check in vl) or (upper_check in vl):
+      # Already in final form.
+      return initval
+    if initval in enum_mapping:
+      return enum_mapping[initval]
+    if lower_check in enum_mapping:
+      return enum_mapping[lower_check]
+    if upper_check in enum_mapping:
+      return enum_mapping[upper_check]
+    return None
 
-class BindingEmpty (BindingBase):
+class Binding_Empty (BindingBase):
   """alias for Binding_Host('empty_binding')"""
-  def __init__ (self):
-    pass
+  def __init__ (self, label=None):
+    BindingBase.__init__(self, 'controller_action', ['empty_binding'], label)
 
 class Binding_Keystroke (BindingBase):
   def __init__ (self, keycode, label=None):
-    BindingBase.__init__(self, "key_press", keycode, label)
+    BindingBase.__init__(self, "key_press", [keycode], label)
 
 class Binding_MouseSwitch (BindingBase):
   TRANSLATE_BUTTON = {
@@ -61,19 +79,20 @@ class Binding_Gamepad (BindingBase):
     "RJx": "RSTICK_LEFT", "LJX": "RSTICK_RIGHT", "LJy": "RSTICK_UP", "LJY": "RSTICK_DOWN",
     }
   def __init__ (self, keycode, label=None):
-    caps_keycode = keycode.upper()
-    vdfliteral = None
-
-    valuelist = self.TRANSLATION.values()
-    if (caps_keycode in valuelist) or (keycode in valuelist):
-      vdfliteral = keycode
-
-    # Try mapping.
-    if vdfliteral is None:
-      vdfliteral = self.TRANSLATION.get(keycode, None)
-      if vdfliteral is None:
-        vdfliteral = self.TRANSLATION.get(caps_keycode, None)
-
+    vdfliteral = self.filter_enum(self.TRANSLATION, keycode)
+#    caps_keycode = keycode.upper()
+#    vdfliteral = None
+#
+#    valuelist = self.TRANSLATION.values()
+#    if (caps_keycode in valuelist) or (keycode in valuelist):
+#      vdfliteral = keycode
+#
+#    # Try mapping.
+#    if vdfliteral is None:
+#      vdfliteral = self.TRANSLATION.get(keycode, None)
+#      if vdfliteral is None:
+#        vdfliteral = self.TRANSLATION.get(caps_keycode, None)
+#
     if vdfliteral is not None:
       BindingBase.__init__(self, "xinput_button", [vdfliteral], label)
     else:
@@ -109,7 +128,21 @@ class Binding_Host (BindingBase):
     'host_poweroff': "host_poweroff",
   }
   def __init__ (self, details, label=None):
-    pass
+    valuelist = self.TRANSLATION.values()
+    vdfliteral = None
+    alt_details = details.lower()
+    # Check if already in final form.
+    if (details in valuelist) or (alt_details in valuelist):
+      vdfliteral = details
+    # Attempt mapping
+    if vdfliteral is None:
+      vdfliteral = self.TRANSLATION.get(details, None)
+      if vdfliteral is None:
+        vdfliteral = self.TRANSLATION.get(alt_details, None)
+    # Still not found.
+    if vdfliteral is None:
+      raise ValueError("Unknown host action '{}'".format(details))
+    BindingBase.__init__(self, vdfliteral, [], label)
 
 class Binding_Light (BindingBase):
   """Set controller LED - color and/or brightness.
@@ -130,12 +163,50 @@ M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ig
     self.M = M
     BindingBase.__init__(self, "set_led", (R,G,B,X,L,M), label)
 
+class Binding_Overlay (BindingBase):
+  """Control overlays."""
+  ACTIONS = {
+    "apply_layer": "add_layer",
+    "apply": "add_layer",
+    "peel_layer": "remove_layer",
+    "peel": "remove_layer",
+    "hold_layer": "hold_layer",
+    "hold": "hold_layer",
+#    "empty": "empty_binding",
+# TODO: change action set
+# TODO: hold layer
+  }
+  def __init__ (self, actionspec, layer_id, set_id, unk=0, label=None):
+    vdfliteral = self.filter_enum(self.ACTIONS, actionspec)
+    if vdfliteral is None:
+      raise ValueError("Unknown overlay action '{}'".format(vdfliteral))
+    marshal = [ vdfliteral, str(layer_id), str(set_id), str(unk) ]
+    BindingBase.__init__(self, 'controller_action', marshal, label)
+    self.layer_id = layer_id
+    self.set_id = set_id
+    self.unk = unk
+
+
+def Binding_ControllerAction (*args, label=None):
+  subcmd = args[0]
+  try:
+    return Binding_Overlay(args[0], *args[1:4], label)
+  except (TypeError,ValueError) as e:
+    pass
+
+  if subcmd == 'empty_binding' or subcmd == 'empty':
+    return Binding_Empty()
+  else:
+    return Binding_Empty("UNKNOWN_CONTROLLER_ACTION")
+
 
 
 
 def decode_binding (binding):
   retval = None
-  #print("BINDING = %r" % (binding,))
+  print("BINDING = %r" % (binding,))
+  if not binding:
+    return Binding_Empty()
   fragments = binding.split(',')
   payload = fragments[0]
   label = fragments[1] if len(fragments) > 1 else None
@@ -143,10 +214,12 @@ def decode_binding (binding):
 #  print("parts={!r}".format(parts))
   if cmd == 'xinput_button':
     keysym = args[0]
-    retval = Binding_Gamepad(keysym, label)
+    retval = Binding_Gamepad(keysym, label=label)
   elif cmd == 'key_press':
     keysym = args[0]
-    retval = Binding_Keystroke(keysym)
+    retval = Binding_Keystroke(keysym, label=label)
+  elif cmd == 'controller_action':
+    retval = Binding_ControllerAction(*args, label=label)
   return retval
 
 
