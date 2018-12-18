@@ -388,26 +388,25 @@ class GroupSourceBinding (object):
     self.active = active
     self.modeshift = modeshift
 
-  def encode_pair (self):
+  def _encode (self):
     rhs = []
     rhs.append(self.grpsrc)
     if self.active:
       rhs.append("active")
+    else:
+      rhs.append("inactive")
     if self.modeshift:
       rhs.append("modeshift")
-    encoding = ' '.join(rhs)
+    retval = ' '.join(rhs)
+    return retval
+
+  def encode_pair (self):
+    encoding = self._encode()
     whole = ( str(self.groupid), encoding )
     return whole
 
   def encode_kv (self):
-    rhs = []
-    rhs.append(self.grpsrc)
-    if self.active:
-      rhs.append("active")
-    if self.modeshift:
-      rhs.append("modeshift")
-    val = ' '.join(rhs)
-    return val
+    return self._encode()
 
 
 class Preset (object):

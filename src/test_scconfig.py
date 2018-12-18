@@ -276,6 +276,11 @@ class TestScconfigEncoding (unittest.TestCase):
     f = open("../examples/com³-wip3_0.vdf", "rt")
     pydict = scvdf.load(f, scvdf.DictMultivalue)
     config = scconfig.ControllerConfig.decode_kv(pydict)
+    kv = config.encode_kv()
+    fulldump_kv = scvdf.dumps(kv)
+    print(fulldump_kv)
+    hasher = hashlib.new("md5")
+    hasher.update(fulldump_kv)
 
 
 if __name__ == "__main__":
