@@ -511,11 +511,6 @@ Responses include:
   @staticmethod
   def decode_kv (kv, parentkey=None):
     retval = Activator(parentkey)
-#    for (bind_name, bind_val) in kv['bindings'].items():
-#      if bind_name == 'binding':
-#        retval.add_binding_str(bind_val)
-#    if 'settings' in kv:
-#      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
     return retval
 
 
@@ -529,8 +524,6 @@ class ControllerInput (object):
       self.activators.extend(py_activators)
     elif 'activators' in kwargs:
       for (act_signal, act_kv) in kwargs['activators'].items():
-#        act = Activator.decode_kv(act_kv, act_signal)
-#        self.activators.append(act)
         self.make_activator(act_signal, **act_kv)
   def make_activator (self, activator_signal, **kwargs):
     activator = Activator(activator_signal, **kwargs)
@@ -559,10 +552,6 @@ class ControllerInput (object):
   @staticmethod
   def decode_kv (kv, parentkey=None):
     retval = ControllerInput(parentkey, **kv)
-#    for (act_signal,act_kv) in kv['activators'].items():
-#      act = Activator.decode_kv(act_kv, act_signal)
-#      #act.signal = act_signal
-#      retval.activators.append(act)
     return retval
 
 
@@ -634,16 +623,7 @@ Notable example include the four cardinal points of a d-pad to form not just a d
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-#    retval = Group()
-#    retval.index = int(kv['id'])
-#    retval.mode = kv['mode']
     retval = Group(**kv)
-#    for (inp_name,inp_kv) in kv['inputs'].items():
-#      inp = ControllerInput.decode_kv(inp_kv, inp_name)
-#      #inp.ideal_input = inp_name
-#      retval.inputs[inp_name] = inp
-#    if 'settings' in kv:
-#      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
     return retval
 
 
@@ -703,7 +683,6 @@ Action Layer, consists of one or more  ...
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-    #retval = ActionLayer(kv['title'], bool(kv.get('legacy_set',None)), kv.get("parent_set_name", None), index=parentkey)
     retval = ActionLayer(parentkey, **kv)
     return retval
 
@@ -715,8 +694,6 @@ class ActionSet (Overlay):
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-    #retval = ActionSet(kv['title'], bool(kv.get('legacy_set',None)), index=parentkey)
-#    retval = ActionSet(kv['title'], bool(kv.get('legacy_set',None)), index=parentkey)
     retval = ActionSet(parentkey, **kv)
     return retval
 
@@ -813,18 +790,6 @@ class Preset (object):
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-#    retval = Preset()
-#    retval.index = int(kv['id'])
-#    retval.name = kv['name']
-#    for gid in kv['group_source_bindings']:
-#      binding = kv['group_source_bindings'][gid]
-#      parts = binding.split(' ',2)
-#      groupsrc = parts[0]
-#      active = (parts[1] == 'active')
-#      modeshift = (parts[2] == 'modeshift' if len(parts) > 2 else False)
-#      gsb = GroupSourceBinding(groupsrc, active, modeshift)
-#      gsb.groupid = int(gid)
-#      retval.gsb.append(gsb)
     retval = Preset(**kv)
     return retval
 
@@ -1044,35 +1009,6 @@ class Mapping (object):
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-#    retval = Mapping(int(kv['version']) if ('version' in kv) else None,
-#              int(kv.get('revision', 0)),
-#              kv.get('title', None),
-#              kv.get('description', None),
-#              kv.get('creator', None),
-#              kv.get('controller_type', None),
-#              kv.get('Timestamp', None))
-#    if 'actions' in kv:
-##      Mapping._decode_overlays_kv(retval.actions, kv['actions'], ActionSet)
-#      for obj_name in kv['actions']:
-#        obj_kv = kv['actions'][obj_name]
-#        retval.make_action_set(obj_name, **obj_kv)
-#    if 'action_layers' in kv:
-##      Mapping._decode_overlays_kv(retval.layers, kv['action_layers'], ActionLayer)
-#      for obj_name in kv['action_layers']:
-#        obj_kv = kv['action_layers'][obj_name]
-#        retval.make_action_layer(obj_name, **obj_kv)
-#    if 'group' in kv:
-#      for grp_kv in kv.get_all('group', []):
-##        grp = Group.decode_kv(grp_kv, 'group')
-##        retval.groups.append(grp)
-#        retval.make_group(**grp_kv)
-#    if 'preset' in kv:
-#      for preset_kv in kv.get_all('preset',[]):
-##        preset = Preset.decode_kv(preset_kv, 'preset')
-##        retval.presets.append(preset)
-#        retval.make_preset(**preset_kv)
-#    if 'settings' in kv:
-#      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
     retval = Mapping(**kv)
     return retval
 
@@ -1109,10 +1045,6 @@ class ControllerConfig (object):
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-#    retval = ControllerConfig()
-#    for valmap in kv.get_all('controller_mappings', []):
-#      mapping = Mapping.decode_kv(valmap, 'controller_mappings')
-#      retval.mappings.append(mapping)
     retval = ControllerConfig(parentkey, **kv)
     return retval
 
