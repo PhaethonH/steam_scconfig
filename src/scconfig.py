@@ -4,6 +4,21 @@
 
 import scvdf
 
+
+
+# Helper function for iterating DictMultivalue values -- helps simplify iteration as: for x in itermulti(dictMultivalueInstance)
+def get_all (container, key, default_value):
+  if key in container:
+    val = container[key]
+    if not isinstance(val, list):
+      return [ val ]
+    else:
+      return iter(val)
+  else:
+    return default_value
+
+
+
 class BindingBase (object):
   """One binding instance in a list of many, as part of Activate"""
   def __init__ (self, evtype, evdetails, label=None):
@@ -380,6 +395,21 @@ class EncodableDict (object):
   def __delitem__ (self, k):
     del self.store[k]
     self.valid_keys.remove(k)
+  def keys (self):
+    return self.valid_keys
+  def items (self):
+    for k in self.valid_keys:
+      v = self.store[k]
+      yield (k,v)
+    return
+  def values (self):
+    for k in self.valid_keys:
+      v = self.store[k]
+      yield v
+    return
+  def update (self, d):
+    for (k,v) in d.items():
+      self[k] = v
   def encode_pair (self):
     lop = []
     for k in self.valid_keys:
@@ -433,10 +463,22 @@ Responses include:
   change action sets
   set controller lights
 """
-  def __init__ (self, signal):
+  def __init__ (self, signal, py_bindings=None, **kwargs):
     self.signal = signal
     self.bindings = []
     self.settings = EncodableDict()
+
+    if py_bindings:
+      # expect list of pyobject.
+      self.bindings.extend(py_bindings)
+    elif 'bindings' in kwargs:
+      for bind_name, bind_val in kwargs['bindings'].items():
+        if bind_name == "binding":
+          self.add_binding_str(bind_val)
+
+    if 'settings' in kwargs:
+      self.settings.update(kwargs['settings'])
+
   def add_binding_obj (self, binding_obj):
     self.bindings.append(binding_obj)
     return binding_obj
@@ -469,21 +511,29 @@ Responses include:
   @staticmethod
   def decode_kv (kv, parentkey=None):
     retval = Activator(parentkey)
-    for (bind_name, bind_val) in kv['bindings'].items():
-      if bind_name == 'binding':
-        retval.add_binding_str(bind_val)
-    if 'settings' in kv:
-      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
+#    for (bind_name, bind_val) in kv['bindings'].items():
+#      if bind_name == 'binding':
+#        retval.add_binding_str(bind_val)
+#    if 'settings' in kv:
+#      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
     return retval
 
 
 class ControllerInput (object):
   """An input description within a group."""
-  def __init__ (self, input_element):
+  def __init__ (self, input_element, py_activators=None, **kwargs):
     self.ideal_input = input_element
     self.activators = []
-  def make_activator (self, activator_signal):
-    activator = Activator(activator_signal)
+    if py_activators:
+      # expect list of pyobject
+      self.activators.extend(py_activators)
+    elif 'activators' in kwargs:
+      for (act_signal, act_kv) in kwargs['activators'].items():
+#        act = Activator.decode_kv(act_kv, act_signal)
+#        self.activators.append(act)
+        self.make_activator(act_signal, **act_kv)
+  def make_activator (self, activator_signal, **kwargs):
+    activator = Activator(activator_signal, **kwargs)
     self.activators.append(activator)
     return activator
   def encode_pair (self):
@@ -508,11 +558,11 @@ class ControllerInput (object):
     return kv
   @staticmethod
   def decode_kv (kv, parentkey=None):
-    retval = ControllerInput(parentkey)
-    for (act_signal,act_kv) in kv['activators'].items():
-      act = Activator.decode_kv(act_kv, act_signal)
-      #act.signal = act_signal
-      retval.activators.append(act)
+    retval = ControllerInput(parentkey, **kv)
+#    for (act_signal,act_kv) in kv['activators'].items():
+#      act = Activator.decode_kv(act_kv, act_signal)
+#      #act.signal = act_signal
+#      retval.activators.append(act)
     return retval
 
 
@@ -521,16 +571,39 @@ class Group (object):
 Multiple controller elements combine together into groups that act as a unit to form a higher-order input type.
 Notable example include the four cardinal points of a d-pad to form not just a d-pad, but also pie menu control.
 """
-  def __init__ (self):
-    self.index = 0
-    self.mode = ""
-    self.inputs = EncodableDict('inputs')
-    self.settings = EncodableDict()
+  def __init__ (self, index=None, py_mode=None, py_inputs=None, settings=None, **kwargs):
+    if index is None:
+      if 'id' in kwargs:
+        index = int(kwargs['id'])
+    if index is None:
+      index = 0
 
-  def make_input (self, cluster):
-    cipt = ControllerInput(cluster)
-    self.inputs[cluster] = cipt
-    return cipt
+    if py_mode is None:
+      if 'mode' in kwargs:
+        py_mode = kwargs['mode']
+
+    self.index = index
+    # TODO: filter 'mode'.
+    self.mode = py_mode
+    self.inputs = EncodableDict('inputs')
+    self.settings = EncodableDict('settings')
+
+    if py_inputs:
+      # Expect dictionary of key to pyobjects.
+      self.inputs.update(inputs)
+    elif 'inputs' in kwargs:
+      # expect dict within ControllerConfig
+      for (inp_name, inp_kv) in kwargs['inputs'].items():
+        self.make_input(inp_name, **inp_kv)
+
+    if settings:
+      # Expect dictionary of pure scalars.  This might break in future?
+      self.settings.update(settings)
+
+  def make_input (self, input_element, py_activators=None, **kwargs):
+    inp = ControllerInput(input_element, py_activators=py_activators, **kwargs)
+    self.inputs[input_element] = inp
+    return inp
 
   def encode_pair (self):
     lop = []
@@ -561,15 +634,16 @@ Notable example include the four cardinal points of a d-pad to form not just a d
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-    retval = Group()
-    retval.index = int(kv['id'])
-    retval.mode = kv['mode']
-    for (inp_name,inp_kv) in kv['inputs'].items():
-      inp = ControllerInput.decode_kv(inp_kv, inp_name)
-      #inp.ideal_input = inp_name
-      retval.inputs[inp_name] = inp
-    if 'settings' in kv:
-      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
+#    retval = Group()
+#    retval.index = int(kv['id'])
+#    retval.mode = kv['mode']
+    retval = Group(**kv)
+#    for (inp_name,inp_kv) in kv['inputs'].items():
+#      inp = ControllerInput.decode_kv(inp_kv, inp_name)
+#      #inp.ideal_input = inp_name
+#      retval.inputs[inp_name] = inp
+#    if 'settings' in kv:
+#      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
     return retval
 
 
@@ -585,13 +659,28 @@ a layer value.
 That is, 'set_layer' can be read as "is this a Set or a Layer?"
 The name "tier" is used to (a) avoid the multiple meanings available for these words, and (b) avoid presuming there will only ever be two values.
 The idea is that "tier 0" establishes the maximum coverage of actions (i.e. the foundation), and "tier 1" extends or overlays tier 0 (stacks on top of).
+
+The term "legacy" refers to emulating events of keyboard, mouse, or gamepad.
+The contrast is "native" or "In-Game Actions" (IGA), as per Steam Controller API documentation.
+The native actions bypass the entire notion of physical devices (keyboard, mouse, etc.), but require deliberate support by the application/game developer.
 """
-  def __init__ (self, title, tier=0, legacy=True, index=None, parent=None):
+  DEFAULT_LEGACY = True
+  def __init__ (self, tier, index, py_title=None, py_legacy=None, py_parent=None, **kwargs):
+    if py_title is None:
+      py_title = kwargs.get("title", "")
+    if py_legacy is None:
+      if 'legacy_set' in kwargs:
+        py_legacy = bool(int(kwargs["legacy_set"]))
+      else:
+        py_legacy = self.DEFAULT_LEGACY
+    if py_parent is None:
+      py_parent = kwargs.get("parent_set_name", None)
+
     self.index = index
-    self.title = title
+    self.title = py_title
     self.tier = tier
-    self.legacy = legacy
-    self.parent_name = parent
+    self.legacy = py_legacy
+    self.parent_set_name = py_parent
 
   def encode_kv (self):
     kv = scvdf.DictMultivalue()
@@ -599,8 +688,8 @@ The idea is that "tier 0" establishes the maximum coverage of actions (i.e. the 
     kv['legacy_set'] = str(int(bool(self.legacy)))
     if self.tier == 1:
       kv['set_layer'] = "1"
-    if self.parent_name:
-      kv['parent_set_name'] = self.parent_name
+    if self.parent_set_name:
+      kv['parent_set_name'] = self.parent_set_name
     return kv
 
 
@@ -609,33 +698,38 @@ class ActionLayer (Overlay):
 Action Layer, consists of one or more  ...
 """
   # Change legacy default to False when native (non-legacy) binds become more prevalent.
-  def __init__ (self, title, legacy=True, parent_name=None, index=None):
-    Overlay.__init__(self, title, 1, legacy, index=index, parent=parent_name)
+  def __init__ (self, index=None, py_title=None, py_legacy=None, py_parent=None, **kwargs):
+    Overlay.__init__(self, 1, index, py_title, py_legacy, py_parent, **kwargs)
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-    retval = ActionLayer(kv['title'], bool(kv.get('legacy_set',None)), kv.get("parent_set_name", None), index=parentkey)
+    #retval = ActionLayer(kv['title'], bool(kv.get('legacy_set',None)), kv.get("parent_set_name", None), index=parentkey)
+    retval = ActionLayer(parentkey, **kv)
     return retval
 
 
 class ActionSet (Overlay):
   """An 'Action Set', consists of one or more Actions Layers."""
-  def __init__ (self, title, legacy=True, parent_name=None, index=None):
-    Overlay.__init__(self, title, 0, legacy, index=index, parent=parent_name)
+  def __init__ (self, index=None, py_title=None, py_legacy=None, **kwargs):
+    Overlay.__init__(self, 0, index, py_title, py_legacy, py_parent=None, **kwargs)
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-    retval = ActionSet(kv['title'], bool(kv.get('legacy_set',None)), index=parentkey)
+    #retval = ActionSet(kv['title'], bool(kv.get('legacy_set',None)), index=parentkey)
+#    retval = ActionSet(kv['title'], bool(kv.get('legacy_set',None)), index=parentkey)
+    retval = ActionSet(parentkey, **kv)
     return retval
 
 
 class GroupSourceBinding (object):
-  VALID_GROUPS = [
+  VALID_SOURCES = [
     "switch", "dpad", "button_diamond", "left_trigger", "right_trigger",
     "joystick", "right_joystick"
     ]
-  def __init__ (self, groupsrc, active=True, modeshift=False):
-    self.groupid = 0
+  def __init__ (self, groupid, groupsrc, active=True, modeshift=False):
+    if groupid is None:
+      groupid = 0
+    self.groupid = groupid
     self.grpsrc = groupsrc
     self.active = active
     self.modeshift = modeshift
@@ -662,14 +756,32 @@ class GroupSourceBinding (object):
 
 
 class Preset (object):
-  def __init__ (self):
-    self.index = 0
-    self.name = ""
+  def __init__ (self, py_name=None, index=None, py_gsb=None, **kwargs):
+    if index is None:
+      index = int(kwargs.get('id', 0))
+    if py_name is None:
+      py_name = kwargs.get('name', "")
+
+    self.index = index
+    self.name = py_name
     self.gsb = []
 
+    if py_gsb:
+      # expect list of pyobject.
+      self.gsb.extend(py_gsb)
+    elif 'group_source_bindings' in kwargs:
+      d = kwargs['group_source_bindings']
+      for (gsb_key, gsb_value) in d.items():
+        self.add_gsb(gsb_key, gsb_value)
+
   def add_gsb (self, groupid, groupsrc, active=True, modeshift=False):
-    gsb = GroupSourceBinding(groupsrc, active, modeshift)
-    gsb.groupid = groupid
+    if ' ' in groupsrc:
+      # assume not parsed.
+      phrases = groupsrc.split(' ')
+      groupsrc = phrases[0]
+      active = (phrases[1] == 'active')
+      modeshift = (phrases[2] == 'modeshift') if len(phrases)>2 else False
+    gsb = GroupSourceBinding(groupid, groupsrc, active, modeshift)
     self.gsb.append(gsb)
     return gsb
 
@@ -701,18 +813,19 @@ class Preset (object):
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-    retval = Preset()
-    retval.index = int(kv['id'])
-    retval.name = kv['name']
-    for gid in kv['group_source_bindings']:
-      binding = kv['group_source_bindings'][gid]
-      parts = binding.split(' ',2)
-      groupsrc = parts[0]
-      active = (parts[1] == 'active')
-      modeshift = (parts[2] == 'modeshift' if len(parts) > 2 else False)
-      gsb = GroupSourceBinding(groupsrc, active, modeshift)
-      gsb.groupid = int(gid)
-      retval.gsb.append(gsb)
+#    retval = Preset()
+#    retval.index = int(kv['id'])
+#    retval.name = kv['name']
+#    for gid in kv['group_source_bindings']:
+#      binding = kv['group_source_bindings'][gid]
+#      parts = binding.split(' ',2)
+#      groupsrc = parts[0]
+#      active = (parts[1] == 'active')
+#      modeshift = (parts[2] == 'modeshift' if len(parts) > 2 else False)
+#      gsb = GroupSourceBinding(groupsrc, active, modeshift)
+#      gsb.groupid = int(gid)
+#      retval.gsb.append(gsb)
+    retval = Preset(**kv)
     return retval
 
 
@@ -735,6 +848,35 @@ class Mapping (object):
     self.creator = creator
     self.controller_type = controller_type
     self.timestamp = Timestamp
+
+  def __init__ (self, py_version=None, py_revision=None, py_title=None, py_description=None, py_creator=None, py_controller_type=None, py_timestamp=None, **kwargs):
+    if py_version is None:
+      py_version = int(kwargs.get("version", 3))
+    if py_revision is None:
+      py_revision = int(kwargs.get("revision", 1))
+    if py_title is None:
+      py_title = kwargs.get("title", "Unnamed")
+    if py_description is None:
+      py_description = kwargs.get("description", "Unnamed configuration")
+    if py_creator is None:
+      py_creator = kwargs.get("creator", "(Auto-Generator)")
+    if py_controller_type is None:
+      py_controller_type = kwargs.get("controller_type", "controller_steamcontroller_gordon")
+    if py_timestamp is None:
+      py_timestamp = kwargs.get("Timestamp", None)
+      if py_timestamp is None:
+        # TODO: determine current timestamp
+        py_timestamp = -1
+      else:
+        py_timestamp = int(py_timestamp)
+
+    self.version = py_version
+    self.revision = py_revision
+    self.title = py_title
+    self.description = py_description
+    self.creator = py_creator
+    self.controller_type = py_controller_type
+    self.timestamp = py_timestamp
     # List of Action Sets
     self.actions = []
     # List of Action Layers
@@ -746,25 +888,70 @@ class Mapping (object):
     # Miscellaneous settings
     self.settings = EncodableDict()
 
-  def make_group (self, mode, index=None):
+    if 'actions' in kwargs:
+      for obj_name, obj_kv in kwargs['actions'].items():
+        self.make_action_set(obj_name, **obj_kv)
+
+    if 'action_layers' in kwargs:
+      for obj_name, obj_kv in kwargs['action_layers'].items():
+        self.make_action_layer(obj_name, **obj_kv)
+
+    if 'group' in kwargs:
+      for grp_kv in get_all(kwargs, 'group', []):
+        self.make_group(**grp_kv)
+
+    if 'preset' in kwargs:
+      for preset_kv in get_all(kwargs, 'preset', []):
+        self.make_preset(**preset_kv)
+
+    if 'settings' in kwargs:
+      self.settings.update(kwargs['settings'])
+
+  def make_group (self, py_mode=None, index=None, **kwargs):
     groupid = index
+    if 'id' in kwargs:
+      groupid = int(kwargs['id'])
     if groupid is None:
       # TODO: auto-index
       groupid = -1
-    group = Group()
-    group.index = groupid
-    group.mode = mode
+    group = Group(groupid, py_mode, **kwargs)
+#    group.index = groupid
+#    group.mode = mode
     self.groups.append(group)
     return group
 
-  def make_preset (self, name, index=None):
+  def make_preset (self, py_name=None, index=None, **kwargs):
     # TODO: determine unique presetid by scanning.
-    presetid = 0
-    preset = Preset()
-    preset.index = presetid
-    preset.name = name
+#    presetid = 0
+#    preset = Preset()
+#    preset.index = presetid
+#    preset.name = name
+#    self.presets.append(preset)
+    presetid = index
+    if presetid is None:
+      if 'id' in kwargs:
+        presetid = int(kwargs['id'])
+      else:
+        # TODO: determine unique preset's id by scanning.
+        pass
+    if py_name is None:
+      if not 'name' in kwargs:
+        # TODO: derive from autosequence.
+        py_name = py_name
+    preset = Preset(py_name, presetid, **kwargs)
     self.presets.append(preset)
     return preset
+
+
+  def make_action_set (self, index=None, py_title=None, py_legacy=None, **kwargs):
+    actset = ActionSet(index, py_title, py_legacy, **kwargs)
+    self.actions.append(actset)
+    return actset
+
+  def make_action_layer (self, index=None, py_title=None, py_legacy=None, py_parent=None, **kwargs):
+    layer = ActionLayer(index, py_title, py_legacy, py_parent, **kwargs)
+    self.layers.append(layer)
+    return layer
 
   def encode_pair (self):
     lop = []
@@ -857,36 +1044,55 @@ class Mapping (object):
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-    retval = Mapping(int(kv['version']) if ('version' in kv) else None,
-              int(kv.get('revision', 0)),
-              kv.get('title', None),
-              kv.get('description', None),
-              kv.get('creator', None),
-              kv.get('controller_type', None),
-              kv.get('Timestamp', None))
-    if 'actions' in kv:
-      Mapping._decode_overlays_kv(retval.actions, kv['actions'], ActionSet)
-    if 'action_layers' in kv:
-      Mapping._decode_overlays_kv(retval.layers, kv['action_layers'], ActionLayer)
-    if 'group' in kv:
-      for grp_kv in kv.get_all('group', []):
-        grp = Group.decode_kv(grp_kv, 'group')
-        retval.groups.append(grp)
-    if 'preset' in kv:
-      for preset_kv in kv.get_all('preset',[]):
-        preset = Preset.decode_kv(preset_kv, 'preset')
-        retval.presets.append(preset)
-    if 'settings' in kv:
-      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
+#    retval = Mapping(int(kv['version']) if ('version' in kv) else None,
+#              int(kv.get('revision', 0)),
+#              kv.get('title', None),
+#              kv.get('description', None),
+#              kv.get('creator', None),
+#              kv.get('controller_type', None),
+#              kv.get('Timestamp', None))
+#    if 'actions' in kv:
+##      Mapping._decode_overlays_kv(retval.actions, kv['actions'], ActionSet)
+#      for obj_name in kv['actions']:
+#        obj_kv = kv['actions'][obj_name]
+#        retval.make_action_set(obj_name, **obj_kv)
+#    if 'action_layers' in kv:
+##      Mapping._decode_overlays_kv(retval.layers, kv['action_layers'], ActionLayer)
+#      for obj_name in kv['action_layers']:
+#        obj_kv = kv['action_layers'][obj_name]
+#        retval.make_action_layer(obj_name, **obj_kv)
+#    if 'group' in kv:
+#      for grp_kv in kv.get_all('group', []):
+##        grp = Group.decode_kv(grp_kv, 'group')
+##        retval.groups.append(grp)
+#        retval.make_group(**grp_kv)
+#    if 'preset' in kv:
+#      for preset_kv in kv.get_all('preset',[]):
+##        preset = Preset.decode_kv(preset_kv, 'preset')
+##        retval.presets.append(preset)
+#        retval.make_preset(**preset_kv)
+#    if 'settings' in kv:
+#      retval.settings = EncodableDict.decode_kv(kv['settings'], 'settings')
+    retval = Mapping(**kv)
     return retval
 
 
 class ControllerConfig (object):
-  def __init__ (self):
+  def __init__ (self, index=None, py_mappings=None, **kwargs):
+    self.index = index
     self.mappings = []
+    if py_mappings:
+      # List of pyobjects.
+      self.mappings.extend(py_mappings)
+    elif 'controller_mappings' in kwargs:
+      conmaps = kwargs['controller_mappings']
+      if not isinstance(conmaps, list):
+        conmaps = [ conmaps ]
+      for cm_kv in conmaps:
+        self.make_mapping(**cm_kv)
 
-  def make_mapping (self, version=3):
-    mapping = Mapping(version)
+  def make_mapping (self, py_version=3, **kwargs):
+    mapping = Mapping(py_version, **kwargs)
     self.mappings.append(mapping)
     return mapping
 
@@ -903,9 +1109,10 @@ class ControllerConfig (object):
 
   @staticmethod
   def decode_kv (kv, parentkey=None):
-    retval = ControllerConfig()
-    for valmap in kv.get_all('controller_mappings', []):
-      mapping = Mapping.decode_kv(valmap, 'controller_mappings')
-      retval.mappings.append(mapping)
+#    retval = ControllerConfig()
+#    for valmap in kv.get_all('controller_mappings', []):
+#      mapping = Mapping.decode_kv(valmap, 'controller_mappings')
+#      retval.mappings.append(mapping)
+    retval = ControllerConfig(parentkey, **kv)
     return retval
 

@@ -372,7 +372,7 @@ d['a'] = None              # { "a": [ ['A', 'A', 'A'], 100, None ] }
 
 """
   def __init__ (self, *args, **kwargs):
-    super(dict,self).__init__(*args, **kwargs)
+    dict.__init__(self, *args, **kwargs)
     self.multiset = set()
     self.keyorder = []
 
