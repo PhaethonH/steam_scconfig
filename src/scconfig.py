@@ -1007,6 +1007,9 @@ class Mapping (object):
 
 
 class ControllerConfig (object):
+  """Toplevel object represeting a controller configuration.
+See ControllerConfigFactory for instantiating from a dict or DictMultivalue.
+"""
   def __init__ (self, index=None, py_mappings=None, **kwargs):
     self.index = index
     self.mappings = []
@@ -1036,6 +1039,13 @@ class ControllerConfig (object):
       kv['controller_mappings'] = m.encode_kv()
     return kv
 
+
+
+
+##############################################
+# Factory class                              #
+# Instantiate ControllerConfig from a dict.  #
+##############################################
 
 class ControllerConfigFactory (object):
   """Factory class to create instances of ControllerConfig."""

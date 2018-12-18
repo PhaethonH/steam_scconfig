@@ -370,6 +370,8 @@ d['a'] = ['A','A', 'A']    # { "a": ['A', 'A', 'A'] }
 d['a'] = 100               # { "a": [ ['A', 'A', 'A'], 100 ] }
 d['a'] = None              # { "a": [ ['A', 'A', 'A'], 100, None ] }
 
+Notably, VDF does not support a native list encoding, therefore a python list cannot be directly translated to VDF.
+Therefore, a python list as a value indicates special handling.
 """
   def __init__ (self, *args, **kwargs):
     dict.__init__(self, *args, **kwargs)
