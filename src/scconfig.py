@@ -846,7 +846,7 @@ class Mapping (object):
     if 'settings' in kwargs:
       self.settings.update(kwargs['settings'])
 
-  def make_group (self, py_mode=None, index=None, **kwargs):
+  def make_group (self, index=None, py_mode=None, **kwargs):
     groupid = index
     if 'id' in kwargs:
       groupid = int(kwargs['id'])
@@ -857,7 +857,7 @@ class Mapping (object):
     self.groups.append(group)
     return group
 
-  def make_preset (self, py_name=None, index=None, **kwargs):
+  def make_preset (self, index=None, py_name=None, **kwargs):
     # TODO: determine unique presetid by scanning.
     presetid = index
     if presetid is None:

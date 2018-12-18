@@ -183,7 +183,7 @@ class TestScconfigEncoding (unittest.TestCase):
     mapping.settings['left_trackpad_mode'] = 0
     mapping.settings['right_trackpad_mode'] = 0
 
-    group0 = mapping.make_group("four_buttons", 0)
+    group0 = mapping.make_group(0, "four_buttons")
     inp = group0.make_input("button_a")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button A")
@@ -197,7 +197,7 @@ class TestScconfigEncoding (unittest.TestCase):
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button Y")
 
-    group1 = mapping.make_group("dpad", 1)
+    group1 = mapping.make_group(1, "dpad")
     inp = group1.make_input("dpad_north")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str('xinput_button dpad_up')
@@ -212,33 +212,33 @@ class TestScconfigEncoding (unittest.TestCase):
     activator.add_binding_str('xinput_button dpad_left')
     group1.settings['deadzone'] = 5000
 
-    group2 = mapping.make_group("joystick_camera", 2)
+    group2 = mapping.make_group(2, "joystick_camera")
     inp = group2.make_input("click")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button JOYSTICK_RIGHT")
     activator.settings['haptic_intensity'] = 1
 
-    group3 = mapping.make_group("joystick_move", 3)
+    group3 = mapping.make_group(3, "joystick_move")
     inp = group3.make_input("click")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button JOYSTICK_LEFT")
     activator.settings['haptic_intensity'] = 2
 
-    group4 = mapping.make_group("trigger", 4)
+    group4 = mapping.make_group(4, "trigger")
     inp = group4.make_input("click")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button TRIGGER_LEFT")
     activator.settings['haptic_intensity'] = 2
     group4.settings['output_trigger'] = 1
 
-    group5 = mapping.make_group("trigger", 5)
+    group5 = mapping.make_group(5, "trigger")
     inp = group5.make_input("click")
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button TRIGGER_RIGHT")
     activator.settings['haptic_intensity'] = 2
     group5.settings['output_trigger'] = 2
 
-    group6 = mapping.make_group("switches", 6)
+    group6 = mapping.make_group(6, "switches")
     inp = group6.make_input('button_escape')
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button start")
@@ -258,7 +258,7 @@ class TestScconfigEncoding (unittest.TestCase):
     activator = inp.make_activator("Full_Press")
     activator.add_binding_str("xinput_button x")
 
-    preset0 = mapping.make_preset("Default", 0)
+    preset0 = mapping.make_preset(0, "Default")
     preset0.add_gsb(6, 'switch', True, False)
     preset0.add_gsb(0, 'button_diamond', True, False)
     preset0.add_gsb(1, 'left_trackpad', True, False)
@@ -278,7 +278,7 @@ class TestScconfigEncoding (unittest.TestCase):
 #    hasher = hashlib.new("md5")
 #    hasher.update(fulldump)
 #    self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
-    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc", None)
+    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc")
 
   def test_loading0 (self):
     kv = scvdf.DictMultivalue()
