@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# encoding=utf-8
 
 import sys, unittest
 
@@ -233,8 +234,8 @@ class TestVdfReader (unittest.TestCase):
     self.assertIsNot(res, None)
     self.assertNotEqual(res, [])
 
-  def test_dictmultivalue (self):
-    d = scvdf.DictMultivalue()
+  def test_multivalue (self):
+    d = scvdf.SCVDFDict()
     d['a'] = 1
     d['a'] = 2
     d['a'] = 3
@@ -259,7 +260,7 @@ class TestVdfReader (unittest.TestCase):
 "group" "2"
 "group" "3"
 '''
-    res = scvdf.loads(src, scvdf.DictMultivalue)
+    res = scvdf.loads(src, scvdf.SCVDFDict)
     self.assertEqual(res, {"group": [ "1", "2", "3" ] })
 
     src = r'''
@@ -277,12 +278,44 @@ class TestVdfReader (unittest.TestCase):
   }
 }
 '''
-    res = scvdf.loads(src, scvdf.DictMultivalue)
+    res = scvdf.loads(src, scvdf.SCVDFDict)
     self.assertEqual(res, {"example": { "group": [ {"id":'0',"first":"1"}, {"id":'1'}, {"id":'2'}]}})
     example = res['example']
     items = [ x for x in example.items() ]
     #print("items = {!r}".format(items))
     self.assertEqual(len(items), 3)
+
+  def test_multipath (self):
+    src = r'''
+"example"
+{
+  "group" { "id" "0"
+  "first" "1"
+  }
+  "group"
+  {
+    "id" "1" }
+  "group"
+  {
+    "id" "2"
+  }
+}
+'''
+    res = scvdf.loads(src, scvdf.SCVDFDict)
+    self.assertEqual(res, {"example": { "group": [ {"id":'0',"first":"1"}, {"id":'1'}, {"id":'2'}]}})
+    example = res['example']
+    items = [ x for x in example.items() ]
+    #print("items = {!r}".format(items))
+    self.assertEqual(len(items), 3)
+
+    group = example['group',]   # all groups
+    self.assertEqual(len(group), 3)
+    group = example['group',0]   # first of group
+    self.assertEqual(group, { "id": '0', "first": "1" })
+    group = example['group',1]   # second of group
+    self.assertEqual(group, { "id": '1' })
+    group = example['group',2]   # third of group
+    self.assertEqual(group, { "id": '2' })
 
 
 class TestVdfWriter (unittest.TestCase):
@@ -331,7 +364,7 @@ class TestVdfWriter (unittest.TestCase):
     f = open(fname, 'rt')
     literal = f.read()
     f.close()
-    res = scvdf.loads(literal, scvdf.DictMultivalue)
+    res = scvdf.loads(literal, scvdf.SCVDFDict)
     out = scvdf.dumps(res)
     self.assertEqual(literal, out)
 
@@ -353,7 +386,7 @@ class TestVdfWriter (unittest.TestCase):
     f = open(fname, 'rt')
     literal = f.read()
     f.close()
-    res = scvdf.loads(literal, scvdf.DictMultivalue)
+    res = scvdf.loads(literal, scvdf.SCVDFDict)
     out = scvdf.dumps(res)
     self.assertEqual(literal, out)
 
@@ -380,7 +413,7 @@ if __name__ == "__main__":
   #unittest.main(defaultTest=['TestVdfTokenizer.test_comments'])
   #unittest.main(defaultTest=['TestVdfTokenizer.test_semicomment'])
   #unittest.main(defaultTest=['TestVdfReader.test_parse1sub'])
-  #unittest.main(defaultTest=['TestVdfReader.test_dictmultivalue'])
+  #unittest.main(defaultTest=['TestVdfReader.test_multivalue'])
   #unittest.main(defaultTest=['TestVdfReader.test_empty_value'])
   #unittest.main(defaultTest=['TestVdfWriter.test_load_save_1'])
   unittest.main()

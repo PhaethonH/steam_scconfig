@@ -4,24 +4,176 @@
 #
 # pip-installable library "vdf" left much to be desired for this use.
 
-# Yields (converts to) a list of (k,v) 2-tuples.
-#   [ (first_key, first_value), (second_key, second_value), ... ]
-# Any of the value may be a nested VDF list-of-tuples:
-#   [ (nesting_key, [ ( keyA, valueA ), ( keyB, valueB ), ... ] ), ( second_key, second_value ), ... ]
 
-# DictMultivalue maps keys to list of values, for assigning to same key multiple times.
-# If the key was assigned only once, the value is the original assigned value (in the same sense as the built-in dict)
-# If the key was already assigned before, the looked up value becomes a list of each subsequent values assigned to the key.
-# e.g. d=DictMultivalue()
-# d['a'] = 1     # { "a": 1 }
-# d['a'] = 2     # { "a": [1,2] }
-# d['a'] = 3     # { "a": [1,2,3] }
-# del d['a']     # {}
-# d['a'] = ['A','A', 'A']    # { "a": ['A', 'A', 'A'] }
-# d['a'] = 100               # { "a": [ ['A', 'A', 'A'], 100 ] }
-# d['a'] = None              # { "a": [ ['A', 'A', 'A'], 100, None ] }
+######################
+# VDF data structure #
+######################
+
+# SCVDFDict maps keys to list of values, allowing to assign to same the key multiple times.
 #
-# N.B. VDF does not support a native list type.
+# Access by subscript yields the last value, for compatibility with dict.
+# This last value may be None (for zero-length list, or using dict as set).
+# The method get_all() is provided for accessing the entire list.
+#
+# N.B. VDF does not support a native list type, so the list type is used as a flag to trigger special handling.
+
+class SCVDFDict (dict):
+  r"""SteamController VDF
+Allow multiple values per dictionary entry.
+
+example evolution:
+>>> d = SCVDFDict()             # {}
+>>> d['a'] = 1                  # { "a": [1] }
+>>> d['a'] = 2                  # { "a": [1,2] }
+>>> d['a']                      # 2
+>>> d['a'] = 3                  # { "a": [1,2,3] }
+>>> d['a']                      # 3
+>>> del d['a']                  # {}
+>>> d['a']                      ## KeyError
+>>> d['a'] = ['A','A', 'A']     # { "a": ['A', 'A', 'A'] }
+>>> d['a'] = 100                # { "a": [ ['A', 'A', 'A'], 100 ] }
+>>> d['a'] = None               # { "a": [ ['A', 'A', 'A'], 100, None ] }
+>>> d['a']                      # None
+
+Accessing by subscript yields the last value for compatibility with dict.
+This last value may be None (for zero-length list).
+The method get_all() is provided for accessing the entire list:
+>>> d.get_all('a')              # [ ['A', 'A', 'A'], 100, None ]
+>>> d.get_all('none')           # KeyError
+>>> d.get_all('none',[])        # []           # by extension of dict.get()
+
+Specific multivalue can be accessed with tuple of (key,position).
+>>> d['a',0]                    # ['A', 'A','A']
+>>> d['a',1]                    # 100
+>>> d['a',2]                    # None
+>>> d['a',3]                    ## IndexError
+>>> d['a',]                     # [ ['A', 'A', 'A'], 100, None ]    # all
+>>> d['b',]                     ## KeyError
+>>> d['b',0]                    ## KeyError
+
+Notably, VDF does not support a native list encoding, therefore a python list cannot be directly translated to VDF.
+Therefore, a python list as a value indicates special handling.
+
+
+VDF is the Valve KeyValue file format as used in many of their software, and Steam Client in particular.
+There is nothing particularly special about VDF used by Steam Controller, but the name SCVDF was chosen to avoid conflicts with existing libraries.
+"""
+  def __init__ (self, *args, **kwargs):
+    dict.__init__(self, *args, **kwargs)
+    self.multiset = set()
+    self.keyorder = []
+
+  def append (self, pair):
+    """List sense, assume element is 2-tuple of (key,value)."""
+    (k,v) = pair
+    self[k] = v
+
+  def __getitem__ (self, k):
+    """Also supports tuple as keys in the form (dict_key, position:int)
+1-tuple returns multivalue as list (same as get_all()), e.g. ("key0",).
+"""
+    if isinstance(k, tuple):
+      primary = k[0]
+      vl = self.get_all(primary)
+      if len(k) == 1:
+        return vl         # all instances in key.
+      elif len(k) == 2:
+        position = k[1]
+        return vl[position]   # particular position in values.
+      else:
+        raise KeyError(k.__repr__())
+    else:
+      vl = super(SCVDFDict,self).__getitem__(k)
+      if k in self.multiset:
+        return v[-1]
+      else:
+        return vl
+
+  def __setitem__ (self, k, v):
+    if self.__contains__(k):
+      # Assigning to existing key.
+      if k in self.multiset:
+        # Already in list form.
+        temp = super(SCVDFDict,self).__getitem__(k)
+        temp.append(v)
+      else:
+        # Convert to list form.
+        temp = [ super(SCVDFDict,self).__getitem__(k), v ]
+        self.multiset.add(k)
+    else:
+      # New dict key; singular value.
+      temp = v
+      self.keyorder.append(k)
+    super(SCVDFDict,self).__setitem__(k, temp)
+
+  def __delitem__ (self, k):
+    if k in self.multiset:
+      self.multiset.remove(k)
+    if k in self.keyorder:
+      self.remove(k)
+    super(SCVDFDict,self).__delitem__(k)
+
+  def __iter__ (self):
+    for k in self.keyorder:
+      yield k
+    return
+
+  def keys (self):
+    return self.keyorder
+
+  def values (self):
+    for k in self.keyorder:
+      yield self[k]
+    return
+
+  def items (self):
+    # Return all pair-wise key/value as (key,value) pairs.
+    for k in self.keyorder:
+      vl = super(SCVDFDict,self).__getitem__(k)
+      if k in self.multiset:
+        for v in vl:
+          yield (k,v)
+      else:
+        yield (k,vl)
+    return
+
+  def get (self, k, *args):
+    try:
+      return self[k]
+    except KeyError:
+      if len(args) > 0:
+        return args[0]
+      raise
+
+  def get_all (self, k, *args):
+    """Ensure get() is in list form."""
+    try:
+      if k in self.multiset:
+        return super(SCVDFDict,self).__getitem__(k)  # entire list.
+      else:
+        return [ super(SCVDFDict,self).__getitem__(k) ]  # listify.
+    except KeyError:
+      if len(args) > 0:
+        return args[0]
+      raise
+
+  def update_pairs (self, pairs):
+    """Update from list of pairs."""
+    for pair in pairs:
+      (k,v) = pair
+      if isinstance(v,list):
+        # Recursively convert list-of-pairs into SCVDFDict.
+        subkv = SCVDFDict()
+        subkv.update_pairs(v)
+        self[k] = subkv
+      else:
+        self[k] = v
+    return self
+
+  def __repr__ (self):
+    return super(SCVDFDict,self).__repr__()
+
+
 
 
 
@@ -354,98 +506,6 @@ class Parser (object):
   def parse (self, srcstream):
     pass
 
-
-
-class DictMultivalue (dict):
-  """Allow multiple values per dictionary entry.
-
-
-example evolution:
-d = DictMultivalue()       # {}
-d['a'] = 1                 # { "a": 1 }
-d['a'] = 2                 # { "a": [1,2] }
-d['a'] = 3                 # { "a": [1,2,3] }
-del d['a']                 # {}
-d['a'] = ['A','A', 'A']    # { "a": ['A', 'A', 'A'] }
-d['a'] = 100               # { "a": [ ['A', 'A', 'A'], 100 ] }
-d['a'] = None              # { "a": [ ['A', 'A', 'A'], 100, None ] }
-
-Notably, VDF does not support a native list encoding, therefore a python list cannot be directly translated to VDF.
-Therefore, a python list as a value indicates special handling.
-"""
-  def __init__ (self, *args, **kwargs):
-    dict.__init__(self, *args, **kwargs)
-    self.multiset = set()
-    self.keyorder = []
-
-  def append (self, pair):
-    """List sense, assume element is 2-tuple of (key,value).
-Takes advantage of the typical behavior of appending to list-of-pairs.
-"""
-    (k,v) = pair
-    self.__setitem__(k,v)
-
-  def __setitem__ (self, k, v):
-    if self.__contains__(k):
-      # Setting existing key.
-      temp = self.__getitem__(k)
-      if k in self.multiset:
-        # Append to existing multivalue.
-        temp.append(v)
-        super(DictMultivalue,self).__setitem__(k, temp)
-      else:
-        # Turn into multivalue.
-        self.multiset.add(k)
-        super(DictMultivalue,self).__setitem__(k, [temp, v])
-    else:
-      # New dict key.
-      super(DictMultivalue,self).__setitem__(k,v)
-      self.keyorder.append(k)
-
-  def __iter__ (self):
-    for k in self.keyorder:
-      yield k
-    return
-
-  def keys (self):
-    return self.keyorder
-
-  def values (self):
-    for k in self.keyorder:
-      yield self[k]
-    return
-
-  def items (self):
-    """Iterate dict's (key,value) pairs."""
-    for k in self.keyorder:
-      direct = self.__getitem__(k)
-      if k in self.multiset:
-        for mv in direct:
-          yield (k, mv)
-      else:
-        yield (k, direct)
-    return
-
-  def get_all (self, k, defaultval):
-    """Ensure get() is in list form."""
-    if k in self.multiset:
-      return self[k]
-    elif k in self:
-      return [ self[k] ]
-    else:
-      return defaultval
-
-  def update_pairs (self, pairs):
-    for pair in pairs:
-      (k,v) = pair
-      if isinstance(v,list):
-        subkv = DictMultivalue()
-        subkv.update_pairs(v)
-        #dict.__setitem__(self, k, subkv)
-        self[k] = subkv
-      else:
-        self[k] = v
-    return self
 
 
 def _parse (tokenizer, interim=None, depth=0, storetype=list):

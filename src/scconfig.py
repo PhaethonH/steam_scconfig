@@ -11,7 +11,7 @@ import scvdf
 ####################
 
 
-# Helper function for iterating DictMultivalue values -- helps simplify iteration as: for x in itermulti(dictMultivalueInstance)
+# Helper function for iterating SCVDFDict values -- helps simplify iteration as: for x in itermulti(dictMultivalueInstance)
 def get_all (container, key, default_value):
   if key in container:
     val = container[key]
@@ -80,7 +80,7 @@ class EncodableDict (object):
     whole = (self.index, lop)
     return whole
   def encode_kv (self):
-    kv = scvdf.DictMultivalue()
+    kv = scvdf.SCVDFDict()
     for k in self.valid_keys:
       v = self.store[k]
       try:
@@ -511,8 +511,8 @@ Responses include:
     whole = ( (str(self.signal),lop) )
     return whole
   def encode_kv (self):
-    kv = scvdf.DictMultivalue()
-    kv_bindings = scvdf.DictMultivalue()
+    kv = scvdf.SCVDFDict()
+    kv_bindings = scvdf.SCVDFDict()
     for binding in self.bindings:
       kv_bindings['binding'] = str(binding)
     kv['bindings'] = kv_bindings
@@ -547,8 +547,8 @@ class ControllerInput (object):
     whole = ( self.ideal_input, lop )
     return whole
   def encode_kv (self):
-    kv = scvdf.DictMultivalue()
-    kv_activators = scvdf.DictMultivalue()
+    kv = scvdf.SCVDFDict()
+    kv_activators = scvdf.SCVDFDict()
     if self.activators:
       for activator in self.activators:
         #kv_activators.append( activator.encode_pair() )
@@ -641,7 +641,7 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     return whole
 
   def encode_kv (self):
-    kv = scvdf.DictMultivalue()
+    kv = scvdf.SCVDFDict()
     kv['id'] = str(self.index)
     kv['mode'] = str(self.mode)
 
@@ -690,7 +690,7 @@ The native actions bypass the entire notion of physical devices (keyboard, mouse
     self.parent_set_name = py_parent
 
   def encode_kv (self):
-    kv = scvdf.DictMultivalue()
+    kv = scvdf.SCVDFDict()
     kv['title'] = str(self.title)
     kv['legacy_set'] = str(int(bool(self.legacy)))
     if self.tier == 1:
@@ -793,11 +793,11 @@ class Preset (object):
     return whole
 
   def encode_kv (self):
-    kv = scvdf.DictMultivalue()
+    kv = scvdf.SCVDFDict()
     kv['id'] = str(self.index)
     kv['name'] = str(self.name)
 
-    kv_gsb = scvdf.DictMultivalue()
+    kv_gsb = scvdf.SCVDFDict()
     for elt in self.gsb:
       gid = str(elt.groupid)
       kv_gsb[gid] = elt.encode_kv()
@@ -946,7 +946,7 @@ class Mapping (object):
 
   def _encode_overlays (self, overlay_store, gensym=0):
     """Helper function to encode the overlays: Action Set, Action Layer."""
-    kv = scvdf.DictMultivalue()
+    kv = scvdf.SCVDFDict()
     for obj in overlay_store:
       pair_name = obj.index
       pair_val = obj.encode_kv()
@@ -955,7 +955,7 @@ class Mapping (object):
 
   def encode_kv (self):
     """Encode object to list of pairs (scvdf)."""
-    kv = scvdf.DictMultivalue()
+    kv = scvdf.SCVDFDict()
     kv['version'] = str(self.version)
     kv['revision'] = str(self.revision)
     kv['title'] = str(self.title)
@@ -1008,7 +1008,7 @@ class Mapping (object):
 
 class ControllerConfig (object):
   """Toplevel object represeting a controller configuration.
-See ControllerConfigFactory for instantiating from a dict or DictMultivalue.
+See ControllerConfigFactory for instantiating from a dict or SCVDFDict.
 """
   def __init__ (self, index=None, py_mappings=None, **kwargs):
     self.index = index
@@ -1034,7 +1034,7 @@ See ControllerConfigFactory for instantiating from a dict or DictMultivalue.
       lop.append( m.encode_pair() )
     return lop
   def encode_kv (self):
-    kv = scvdf.DictMultivalue()
+    kv = scvdf.SCVDFDict()
     for m in self.mappings:
       kv['controller_mappings'] = m.encode_kv()
     return kv
