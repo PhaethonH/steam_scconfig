@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # coding=utf-8
 
-import unittest, hashlib
+import unittest, hashlib, sys
 import scconfig, scvdf
 try:
   from StringIO import StringIO
@@ -148,6 +148,25 @@ PRESET_DEFAULTS1 = [('controller_mappings',
 
 
 class TestScconfigEncoding (unittest.TestCase):
+  def hash_and_dump (self, configobj, cksum, f=None):
+    kvs = configobj.encode_kv()
+    fulldump_kvs = scvdf.dumps(kvs)
+    #print(fulldump_kvs)
+    fulldump_hashable = fulldump_kvs.encode("utf-8")
+    hasher = hashlib.new("md5")
+    hasher.update(fulldump_hashable)
+    if f:
+      do_close = False
+      try:
+        f.write
+      except AttributeError as e:
+        f = open(f, "wt")
+        do_close = True
+      f.write(fulldump_kvs)
+      if do_close:
+        f.close()
+    self.assertEqual(hasher.hexdigest(), cksum)
+
   def test_dumping0 (self):
     self.buffer = True
     config = scconfig.ControllerConfig()
@@ -248,42 +267,33 @@ class TestScconfigEncoding (unittest.TestCase):
     preset0.add_gsb(4, 'left_trigger', True, False)
     preset0.add_gsb(5, 'right_trigger', True, False)
 
-    lop = config.encode_pair()
-    kv = config.encode_kv()
-
-    fulldump_pair = scvdf.dumps(lop)
-    fulldump_kv = scvdf.dumps(kv)
-    self.assertEqual(fulldump_pair, fulldump_kv)
-    fulldump = fulldump_kv.encode("utf-8")
-    #print(fulldump_kv)
-    hasher = hashlib.new("md5")
-    hasher.update(fulldump)
-    self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
+#    lop = config.encode_pair()
+#    kv = config.encode_kv()
+#
+#    fulldump_pair = scvdf.dumps(lop)
+#    fulldump_kv = scvdf.dumps(kv)
+#    self.assertEqual(fulldump_pair, fulldump_kv)
+#    fulldump = fulldump_kv.encode("utf-8")
+#    #print(fulldump_kv)
+#    hasher = hashlib.new("md5")
+#    hasher.update(fulldump)
+#    self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
+    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc", None)
 
   def test_loading0 (self):
     kv = scvdf.DictMultivalue()
     kv.update_pairs(PRESET_DEFAULTS1)
     config = scconfig.ControllerConfig.decode_kv(kv)
 
-    kv = config.encode_kv()
-    fulldump_kv = scvdf.dumps(kv)
-    #print(fulldump_kv)
-    fulldump = fulldump_kv.encode("utf-8")
-    hasher = hashlib.new("md5")
-    hasher.update(fulldump)
-    self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
+    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc")
 
   def test_loading1 (self):
     f = open("../examples/com³-wip3_0.vdf", "rt")
     pydict = scvdf.load(f, scvdf.DictMultivalue)
     f.close()
     config = scconfig.ControllerConfig.decode_kv(pydict)
-    kv = config.encode_kv()
-    fulldump_kv = scvdf.dumps(kv)
-    print(fulldump_kv)
-    fulldump = fulldump_kv.encode("utf-8")
-    hasher = hashlib.new("md5")
-    hasher.update(fulldump)
+
+    self.hash_and_dump(config, "01dc2f4e9b6c8f86e2d1678c2763540d")
 
 
 if __name__ == "__main__":
