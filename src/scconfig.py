@@ -370,6 +370,7 @@ class BindingFactory (object):
 
 
 
+# Convert dict type to list-of-pairs (list of 2-tuples).
 def dict2lop (kv_dict):
   lop = []
   for k,v in kv_dict.items():
@@ -380,13 +381,19 @@ def dict2lop (kv_dict):
 
 
 class EncodableDict (object):
-  def __init__ (self, whole_key=None):
-    if whole_key is None:
-      self.whole_key = 'settings'
-    else:
-      self.whole_key = whole_key
+  def __init__ (self, index=None, copyfrom=None):
+    if index is None:
+      index = 'settings'
+    elif isinstance(index,dict):
+      # and would imply copyfrom is missing.
+      copyfrom = index
+      index = None
+    self.index = index
     self.valid_keys = []  # also maintain order.
     self.store = {}
+    if isinstance(copyfrom,dict):
+      for k,v in copyfrom.items():
+        self[k] = v
   def __setitem__ (self, k, v):
     self.valid_keys.append(k)
     self.store[k] = v
@@ -418,7 +425,7 @@ class EncodableDict (object):
         lop.append(v.encode_pair())
       except AttributeError as e:
         lop.append( (k,str(v)) )
-    whole = (self.whole_key, lop)
+    whole = (self.index, lop)
     return whole
   def encode_kv (self):
     kv = scvdf.DictMultivalue()
@@ -434,12 +441,6 @@ class EncodableDict (object):
   def __nonzero__ (self):
     return len(self.valid_keys) > 0
 
-  @staticmethod
-  def restore (kv, parentkey=None):
-    retval = EncodableDict()
-    for k,v in kv.items():
-      retval[k] = v
-    return retval
 
 
 
@@ -853,18 +854,11 @@ class Mapping (object):
       # TODO: auto-index
       groupid = -1
     group = Group(groupid, py_mode, **kwargs)
-#    group.index = groupid
-#    group.mode = mode
     self.groups.append(group)
     return group
 
   def make_preset (self, py_name=None, index=None, **kwargs):
     # TODO: determine unique presetid by scanning.
-#    presetid = 0
-#    preset = Preset()
-#    preset.index = presetid
-#    preset.name = name
-#    self.presets.append(preset)
     presetid = index
     if presetid is None:
       if 'id' in kwargs:
@@ -1003,7 +997,9 @@ class ControllerConfig (object):
       kv['controller_mappings'] = m.encode_kv()
     return kv
 
+
+class ControllerConfigFactory (object):
   @staticmethod
-  def restore (kv, parentkey=None):
-    return ControllerConfig(parentkey, **kv)
+  def make_from_dict (pydict, parentkey=None):
+    return ControllerConfig(parentkey, **pydict)
 
