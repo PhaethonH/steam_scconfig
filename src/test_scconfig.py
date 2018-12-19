@@ -185,6 +185,9 @@ class TestScvdfComponents (unittest.TestCase):
     self.assertEqual(b.iconinfo.bg, "#232323")
     self.assertEqual(b.iconinfo.fg, "#E4E4E4")
 
+  def test_group (self):
+    g = scconfig.GroupDpad()
+
 
 
 class TestScconfigEncoding (unittest.TestCase):

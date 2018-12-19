@@ -38,7 +38,7 @@ def dict2lop (kv_dict):
 class EncodableDict (object):
   def __init__ (self, index=None, copyfrom=None):
     if index is None:
-      index = 'settings'
+      index = VSC_SETTINGS
     elif isinstance(index,dict):
       # and would imply copyfrom is missing.
       copyfrom = index
@@ -144,6 +144,9 @@ VSC_MODE_SHIFT = "mode_shift"   # with underscore, in bindings{}
 VSC_MODESHIFT = "modeshift"     # without underscore, in preset{}
 VSC_ACTIVE = "active"
 VSC_INACTIVE = "inactive"
+
+VSC_SETTINGS = "settings"
+VSC_INPUTS = "inputs"
 
 
 
@@ -367,7 +370,8 @@ class Evgen_Modeshift (EvgenBase):
     "left_trackpad", "right_trackpad",
     "left_trigger", "right_trigger",
     "dpad", "button_diamond",
-    "joystick", "right_joystick"
+    "joystick", "right_joystick",
+    "gyro"
     ]
   def __init__ (self, input_source, group_id):
     vdfliteral = filter_enum(self.ACCEPTABLE, input_source)
@@ -523,7 +527,7 @@ Responses include:
   def __init__ (self, signal, py_bindings=None, **kwargs):
     self.signal = signal
     self.bindings = []
-    self.settings = EncodableDict('settings')
+    self.settings = EncodableDict(VSC_SETTINGS)
 
     if py_bindings:
       # expect list of pyobject.
@@ -533,8 +537,8 @@ Responses include:
         if bind_name == "binding":
           self.add_binding_str(bind_val)
 
-    if 'settings' in kwargs:
-      self.settings.update(kwargs['settings'])
+    if VSC_SETTINGS in kwargs:
+      self.settings.update(kwargs[VSC_SETTINGS])
 
   def add_binding_obj (self, binding_obj):
     self.bindings.append(binding_obj)
@@ -564,7 +568,7 @@ Responses include:
       kv_bindings['binding'] = str(binding)
     kv['bindings'] = kv_bindings
     if self.settings:
-      kv['settings'] = self.settings.encode_kv()
+      kv[VSC_SETTINGS] = self.settings.encode_kv()
     return kv
 
 
@@ -609,6 +613,587 @@ class ControllerInput (object):
 # TODO: derived class for each Mode variant.
 # TODO: change Group into factory class/namespace.
 
+class GroupBase (object):
+  """Base class for input groups: joystick, dpad, triggers, etc."""
+
+  class SETTINGS:
+    """namespace for settings keys."""
+# starting with dpad
+    REQUIRES_CLICK = "requires_click"
+    LAYOUT = "layout"
+    DEADZONE = "deadzone"
+    EDGE_BINDING_RADIUS = "edge_binding_radius"
+    EDGE_BINDING_INVERT = "edge_binding_invert"
+    ANALOG_EMULATION_PERIOD = "analog_emulation_period"
+    ANALOG_EMULATION_DUTY_CYCLE = "analog_emulation_duty_cycle"
+    OVERLAP_REGION = "overlap_region"
+    GYRO_BUTTON_INVERT = "gyro_button_invert"
+    HAPTIC_INTENSITY_OVERRIDE = "haptic_intensity_override"
+    GYRO_NEUTRAL = "gyro_neutral"
+    GYRO_BUTTON = "gyro_button"
+
+# four-buttons
+    BUTTON_SIZE = "button_size"
+    BUTTON_DIST = "button_dist"
+
+# joystick-camera
+    CURVE_EXPONENT = "curve_exponent"
+    SWIPE_DURATION = "swipe_duration"
+    HAPTIC_INTENSITY = "haptic_intensity"
+    OUTPUT_JOYSTICK = "output_joystick"
+    SENSITIVITY_VERT_SCALE = "sensitivity_vert_scale"
+    ANTI_DEADZONE = "anti_deadzone"
+    ANTI_DEADZONE_BUFFER = "anti_deadzone_buffer"
+    INVERT_X = "invert_x"
+    INVERT_Y = "invert_y"
+    JOYSTICK_SMOOTHING = "joystick_smoothing"
+    GYRO_AXIS = "gyro_axis"
+
+# joystick-mouse
+    CUSTOM_CURVE_EXPONENT = "custom_curve_exponent"
+    DEADZONE_INNER_RADIUS = "deadzone_inner_radius"
+    DEADZONE_OUTER_RADIUS = "deadzone_outer_radius"
+    DEADZONE_SHAPE = "deadzone_shape"
+    SENSITIVITY = "sensitivity"
+    SENSITIVITY_HORIZ_SCALE = "sensitivity_horiz_scale"
+
+# joystick-move
+    GYRO_LOCK_EXTENTS = "gyro_lock_extents"
+    GYRO_BUTTON_INVERT = "gyro_button_invert"
+    OUTPUT_AXIS = "output_axis"
+
+# mouse-joystick
+    DOUBLETAP_BEEP = "doubletap_beep"
+    TRACKBALL = "trackball"
+    ROTATION = "rotation"
+    FRICTION = "friction"
+    FRICTION_VERT_SCALE = "friction_vert_scale"
+    SENSITIVITY_VERT_SCALE = "sensitivity_vert_scale"
+    MOUSE_MOVE_THRESHOLD = "mouse_move_threshold"
+    EDGE_SPIN_VELOCITY = "edge_spin_velocity"
+    EDGE_SPIN_RADIUS = "edge_spin_radius"
+    DOUBLETAP_MAX_DURATION = "doubetap_max_duration"  # [sic]
+    DOUBETAP_MAX_DURATION = DOUBLETAP_MAX_DURATION
+    MOUSE_DAMPENING_TRIGGER = "mouse_dampening_trigger"
+    MOUSE_TRIGGER_CLAMP_AMOUNT = "mouse_trigger_clamp_amount"
+    MOUSEJOYSTICK_DEADZONE_X = "mousejoystick_deadzone_x"
+    MOUSEJOYSTICK_DEADZONE_Y = "mousejoystick_deadzone_y"
+    MOUSEJOYSTICK_PRECISION = "mousejoystick_precision"
+    GYRO_SENSITIVITY_SCALE = "gyro_sensitivity_scale"
+
+# mouse-region
+    SCALE = "scale"
+    POSITION_X = "position_x"
+    POSITION_Y = "position_y"
+    TELEPORT_STOP = "teleport_stop"
+
+# radial-menu
+    TOUCHMENU_BUTTON_FIRE_TYPE = "touchmenu_button_fire_type"
+    TOUCH_MENU_OPACITY = "touch_menu_opacity"
+    TOUCH_MENU_POSITION_X = "touch_menu_position_x"
+    TOUCH_MENU_POSITION_Y = "touch_menu_position_y"
+    TOUCH_MENU_SCALE = "touch_menu_scale"
+    TOUCH_MENU_SHOW_LABELS = "touch_menu_show_labels"
+
+# scrollwheel
+    SCROLL_ANGLE = "scroll_angle"
+    SCROLL_TYPE = "scroll_type"
+    SCROLL_INVERT = "scroll_invert"
+    SCROLL_WRAP = "scroll_wrap"
+    SCROLL_FRICTION = "scroll_friction"
+
+# touch-menu
+    TOUCH_MENU_BUTTON_COUNT = "touch_menu_button_count"
+
+# trigger
+    ADAPTIVE_THRESHOLD = "adaptive_threshold"
+    OUTPUT_TRIGGER = "output_trigger"
+
+# absolute-mouse
+    ACCELERATION = "acceleration"
+    MOUSE_SMOOTHING = "mouse_smoothing"
+
+  class Acceleration:
+    """Values for 'acceleration'."""
+    OFF = 0
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+
+  class CurveExponent:
+    """Values for 'curve_exponent'."""
+    LINEAR = 0
+    AGGRESIVE = 1
+    RELAXED = 2
+    WIDE = 3
+    EXTRA_WIDE = 4
+    CUSTOM = 5
+
+  class DeadzoneShape:
+    CROSS = 0
+    CIRCLE = 1
+    SQUARE = 2
+
+  class Friction:
+    """Values for 'friction'."""
+    OFF = 0
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    DEFAULT = MEDIUM
+
+  class GyroButton:
+    """Values for 'gyro_button'."""
+    ALWAYS = None   # actually, key itself should be missing.
+    RIGHT_PAD_TOUCH = 1
+    LEFT_PAD_TOUCH = 2
+    RIGHT_PAD_CLICK = 3
+    LEFT_PAD_CLICK = 4
+    RIGHT_BUMPER = 5
+    LEFT_BUMPER = 6
+    RIGHT_GRIP = 7
+    LEFT_GRIP = 8
+    RIGHT_TRIGGER_FULL = 9
+    LEFT_TRIGGER_FULL = 10
+    RIGHT_TRIGGER_SOFT = 11
+    LEFT_TRIGGER_SOFT = 12
+    A = 13
+    B = 14
+    X = 15
+    Y = 16
+    LEFT_STICK_CLICK = 17
+
+  class HapticIntensity:
+    """Values for 'haptic_intensity'."""
+    OFF = 0
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+
+  class MouseDampeningTrigger:
+    """Values for 'mouse_dampening_trigger'."""
+    NO = 0
+    RIGHT_TRIGGER_SOFT_PULL = 1
+    LEFT_TRIGGER_SOFT_PULL = 2
+    BOTH_TRIGGER_SOFT_PULL = 3
+    RIGHT_TRIGGER_FULL_PULL = 4
+    LEFT_TRIGGER_FULL_PULL = 5
+    BOTH_TRIGGER_FULL_PULL = 6
+
+  class SwipeDuration:
+    """Values for 'swipe_duration'."""
+    OFF = 0
+    LOW = 1
+    MEDIUM = 2
+    HIGH =3
+
+  class OutputAxis:
+    """Values for 'output_joystick'."""
+    HORIZONTAL = 0
+    VERTICAL = 1
+    BOTH = 2
+
+  class OutputTrigger:
+    """Values for 'output_trigger'."""
+    NO_ANALOG = 0
+    LEFT_TRIGGER = 1
+    RIGHT_TRIGGER = 2
+
+  class TouchmenuButtonFireType:
+    """Values for 'touchmenu_button_fire_type'."""
+    BUTTON_CLICK = 0
+    BUTTON_RELEASE = 1
+    TOUCH_RELEASE_MODESHIFT_END = 2
+    TOUCH_RELEASE = TOUCH_RELEASE_MODESHIFT_END
+    MODESHIFT_END = TOUCH_RELEASE_MODESHIFT_END
+    ALWAYS = 3
+
+  # Constraints on settings values.
+  # Tuples indicate an integer range, such that tuple[0] <= value <= tuple[1]
+  # List specifies the set of acceptable values
+  # class-object contains acceptable values: class.__dict__.values()
+  # primitive type to indicate the allowable value type
+  _Settings = {}
+
+  def __init__ (self, py_mode=None, index=None, py_inputs=None, py_settings=None, **kwargs):
+    if index is None:
+      if 'id' in kwargs:
+        index = int(kwargs['id'])
+    if index is None:
+      index = 0
+
+#    if py_mode is None:
+#      if 'mode' in kwargs:
+#        py_mode = kwargs['mode']
+#    py_mode = filter_enum(self.MODES, py_mode)
+
+    self.index = index
+    self.mode = py_mode
+    self.inputs = EncodableDict(VSC_INPUTS)
+    self.settings = EncodableDict(VSC_SETTINGS)
+
+    if py_inputs:
+      # Expect dictionary of key to pyobjects.
+      self.inputs.update(inputs)
+    elif VSC_INPUTS in kwargs:
+      # expect dict within ControllerConfig
+      for (inp_name, inp_kv) in kwargs[VSC_INPUTS].items():
+        self.make_input(inp_name, **inp_kv)
+
+    if py_settings:
+      # Expect dictionary of pure scalars.  This might break in future?
+      self.settings.update(settings)
+    elif VSC_SETTINGS in kwargs:
+      self.settings.update(kwargs[VSC_SETTINGS])
+
+  def make_input (self, input_element, py_activators=None, **kwargs):
+    '''Factory for 'input' node.'''
+    inp = ControllerInput(input_element, py_activators=py_activators, **kwargs)
+    self.inputs[input_element] = inp
+    return inp
+
+
+class AbsoluteMouse (GroupBase):
+  CLICK = "click"
+  DOUBLETAP = "doubletap"
+  TOUCH = "toucH"
+  INPUTS = set([
+    CLICK, DOUBLETAP, TOUCH
+    ])
+
+  class Friction:
+    """Values for 'friction."""
+    OFF = 0    # no inertia -- do not spin at all
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    NONE = 4   # no-friction -- spin forever
+
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.SENSITIVITY: (1, 1000),
+    S.TRACKBALL: bool,
+    S.DOUBLETAP_BEEP: bool,
+    S.INVERT_X: bool,
+    S.INVERT_Y: bool,
+    S.HAPTIC_INTENSITY: GroupBase.HapticIntensity,
+    S.ROTATION: (-30, 30),
+    S.FRICTION: Friction,
+    S.FRICTION_VERT_SCALE: (0, 200),
+    S.SENSITIVITY_VERT_SCALE: (0, 200),
+    S.ACCELERATION: GroupBase.Acceleration,
+    S.MOUSE_MOVE_THRESHOLD: (0, 40),
+    S.MOUSE_SMOOTHING: (0, 40),
+    S.EDGE_SPIN_VELOCITY: (0, 1000),
+    S.EDGE_SPIN_RADIUS: (0, 32767),
+    S.DOUBLETAP_MAX_DURATION: (20, 500),
+    S.MOUSE_DAMPENING_TRIGGER: GroupBase.MouseDampeningTrigger,
+    S.MOUSE_TRIGGER_CLAMP_AMOUNT: (0, 100),
+    S.GYRO_AXIS: [ 0, 1 ],
+    S.GYRO_BUTTON: GroupBase.GyroButton,
+    S.GYRO_BUTTON_INVERT: [ 1, 2 ],  # invert, toggle
+    S.DEADZONE_OUTER_RADIUS: (0, 32000),
+    }
+
+
+class GroupDpad (GroupBase):
+  DPAD_NORTH = 'dpad_north'
+  DPAD_WEST = 'dpad_west'
+  DPAD_EAST = 'dpad_east'
+  DPAD_SOUTH = 'dpad_south'
+  DPAD_CLICK = 'dpad_click'
+  DPAD_EDGE = 'dpad_edge'
+  INPUTS = set([
+    DPAD_NORTH, DPAD_WEST, DPAD_EAST, DPAD_SOUTH, DPAD_CLICK, DPAD_EDGE
+    ])
+
+  class Layout:
+    FOUR_WAY = 0,
+    EIGHT_WAY = 1,
+    ANALOG_EMULATION = 2,
+    CROSS_GATE = 3
+
+  S = GroupBase.SETTINGS
+  GyroButton = GroupBase.GyroButton
+  HapticIntensityOverride = GroupBase.HapticIntensity
+  _Settings = {
+    S.REQUIRES_CLICK: bool,
+    S.LAYOUT: Layout,
+    S.DEADZONE: (0, 32767),
+    S.EDGE_BINDING_RADIUS: (10000, 32000),
+    S.EDGE_BINDING_INVERT: bool,
+    S.ANALOG_EMULATION_PERIOD: (1, 500),
+    S.OVERLAP_REGION: (2000, 16000),
+    S.GYRO_BUTTON_INVERT: bool,
+    S.GYRO_BUTTON: GyroButton,
+    S.HAPTIC_INTENSITY_OVERRIDE: HapticIntensityOverride,
+    S.GYRO_NEUTRAL: (0, 32767),
+    }
+
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'dpad', index, py_inputs, py_settings, **kwargs)
+
+class GroupFourButtons (GroupBase):
+  BUTTON_A = 'down'
+  BUTTON_B = 'right'
+  BUTTON_X = 'left'
+  BUTTON_Y = 'right'
+  INPUTS = set([
+    BUTTON_A, BUTTON_B, BUTTON_X, BUTTON_Y
+    ])
+
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.REQUIRES_CLICK: bool,
+    S.BUTTON_SIZE: (1, 32767),
+    S.BUTTON_DIST: (1, 32767),
+    }
+
+class GroupJoystickCamera (GroupBase):
+  CurveExponent = GroupBase.CurveExponent
+  SwipeDuration = GroupBase.SwipeDuration
+  HapticIntensity = GroupBase.HapticIntensity
+  GyroButton = GroupBase.GyroButton
+  class OutputJoystick:
+    MATCHED_SIDE = 0
+    OPPOSITE_SITE = 1
+    RELATIVE_MOUSE = 2
+
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.CURVE_EXPONENT: CurveExponent,
+    S.SWIPE_DURATION: SwipeDuration,
+    S.HAPTIC_INTENSITY: HapticIntensity,
+    S.OUTPUT_JOYSTICK: OutputJoystick,
+    S.SENSITIVITY_VERT_SCALE: (25, 175),
+    S.ANTI_DEADZONE: (0, 32767),
+    S.ANTI_DEADZONE_BUFFER: (0, 32767),
+    S.INVERT_X: bool,
+    S.INVERT_Y: bool,
+    S.JOYSTICK_SMOOTHING: bool,
+    S.SENSITIVITY: (10, 1000),
+    S.GYRO_BUTTON: GyroButton,
+    S.GYRO_NEUTRAL: (0, 32767),
+  }
+
+class GroupJoystickMouse (GroupBase):
+  CLICK = "click"
+  EDGE = "edge"
+  INPUTS = set([ CLICK, EDGE ])
+
+  CurveExponent = GroupBase.CurveExponent
+  class OutputJoystick:
+    MATCHED_SIDE = 0
+    OPPOSITE_SIDE = 1
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.CURVE_EXPONENT: CurveExponent,
+    S.CUSTOM_CURVE_EXPONENT: int,   # TODO: research range
+    S.EDGE_BINDING_RADIUS: (0, 32767),
+    S.EDGE_BINDING_INVERT: bool,
+    S.ANTI_DEADZONE: (0, 32767),
+    S.ANTI_DEADZONE_BUFFER: (0, 32767),
+    S.OUTPUT_JOYSTICK: OutputJoystick,
+  }
+
+class GroupJoystickMove (GroupBase):
+  CurveExponent = GroupBase.CurveExponent
+  DeadzoneShape = GroupBase.DeadzoneShape
+  GyroButton = GroupBase.GyroButton
+  HapticIntensity = GroupBase.HapticIntensity
+  OutputAxis = GroupBase.OutputAxis
+  class OutputJoystick:
+    LEFT_JOYSTICK = 0
+    RIGHT_JOYSTICK = 1
+    RELATIVE_JOYSTICK = 2
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.CURVE_EXPONENT: CurveExponent,
+    S.CUSTOM_CURVE_EXPONENT: (25, 375),
+    S.EDGE_BINDING_RADIUS: (0, 32767),
+    S.EDGE_BINDING_INVERT: bool,
+    S.OUTPUT_JOYSTICK: OutputJoystick,
+    S.ANTI_DEADZONE: (0, 32767),
+    S.ANTI_DEADZONE_BUFFER: (0, 32767),
+    S.HAPTIC_INTENSITY: HapticIntensity,
+    S.DEADZONE_INNER_RADIUS: (0, 32000),
+    S.DEADZONE_OUTER_RADIUS: (0, 32000),
+    S.OUTPUT_AXIS: OutputAxis,
+    S.GYRO_LOCK_EXTENTS: bool,
+    S.INVERT_X: bool,
+    S.INVERT_Y: bool,
+    S.SENSITIVITY: (1, 100),
+    S.SENSITIVITY_VERT_SCALE: (1,100),
+    S.SENSITIVITY_HORIZ_SCALE: (1,100),
+    S.GYRO_NEUTRAL: (0, 32767),
+    S.GYRO_BUTTON: GyroButton,
+    S.GYRO_BUTTON_INVERT: bool,
+    S.GYRO_LOCK_EXTENTS: bool,
+  }
+
+class GroupMouseJoystick (GroupBase):
+  Friction = GroupBase.Friction
+  GyroButton = GroupBase.GyroButton
+  MouseDampeningTrigger = GroupBase.MouseDampeningTrigger
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.TRACKBALL: bool,
+    S.DOUBLETAP_BEEP: bool,
+    S.INVERT_X: bool,
+    S.INVERT_Y: bool,
+    S.HAPTIC_INTENSITY: bool,
+    S.ROTATION: (-30, 30),
+    S.FRICTION: Friction,
+    S.SENSITIVITY_VERT_SCALE: (0, 200),
+    S.MOUSE_MOVE_THRESHOLD: (0, 40),
+    S.EDGE_SPIN_VELOCITY: (0, 1000),
+    S.EDGE_SPIN_RADIUS: (0, 32767),
+    S.DOUBLETAP_MAX_DURATION: (20, 500),
+    S.MOUSE_DAMPENING_TRIGGER: MouseDampeningTrigger,
+    S.MOUSE_TRIGGER_CLAMP_AMOUNT: int,  # TODO: research limits
+    S.MOUSEJOYSTICK_DEADZONE_X: (0, 32767),
+    S.MOUSEJOYSTICK_DEADZONE_Y: (0, 32767),
+    S.MOUSEJOYSTICK_PRECISION: (1, 100),
+    S.CUSTOM_CURVE_EXPONENT: (100, 300),
+    S.GYRO_BUTTON: GyroButton,
+    S.GYRO_BUTTON_INVERT: [ 1, 2 ],
+    S.GYRO_AXIS: [ 0, 1],  # TODO: research enum
+    S.GYRO_SENSITIVITY_SCALE: int, # TODO: research limits
+  }
+
+class GroupMouseRegion (GroupBase):
+  CLICK = "click"
+  EDGE = "edge"
+  TOUCH = "touch"
+  INPUTS = set([ CLICK, EDGE, TOUCH ])
+
+  HapticIntensity = GroupBase.HapticIntensity
+  MouseDampeningTrigger = GroupBase.MouseDampeningTrigger
+  class OutputJoystick: # TODO: clarify later.
+    LEFT = 0
+    RIGHT = 1
+    MOUSE = 2
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.EDGE_BINDING_RADIUS: (1, 32767),
+    S.EDGE_BINDING_INVERT: bool,
+    S.HAPTIC_INTENSITY: HapticIntensity,
+    S.OUTPUT_JOYSTICK: OutputJoystick,
+    S.SCALE: (1, 100),
+    S.POSITION_X: (0, 100),
+    S.POSITION_Y: (0, 100),
+    S.SENSITIVITY_VERT_SCALE: (0, 200),
+    S.SENSITIVITY_HORIZ_SCALE: (0, 200),
+    S.TELEPORT_STOP: bool,
+    S.MOUSE_DAMPENING_TRIGGER: MouseDampeningTrigger,
+    S.MOUSE_TRIGGER_CLAMP_AMOUNT: (100, 8000),
+  }
+
+class GroupRadialMenu (GroupBase):
+  CLICK = "click"
+  # touch_menu_button_%d  0..15
+  INPUTS = set([ CLICK, ])
+
+  TouchmenuButtonFireType = GroupBase.TouchmenuButtonFireType
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.TOUCHMENU_BUTTON_FIRE_TYPE: TouchmenuButtonFireType,
+    S.TOUCH_MENU_OPACITY: (40, 100),
+    S.TOUCH_MENU_POSITION_X: (0, 100),
+    S.TOUCH_MENU_POSITION_Y: (0, 100),
+    S.TOUCH_MENU_SCALE: (50, 150),
+    S.TOUCH_MENU_SHOW_LABELS: bool,
+  }
+
+class GroupScrollwheel (GroupBase):
+  CLICK = "click"
+  SCROLL_CLOCKWISE = "scroll_clockwise"
+  SCROLL_COUNTERCLOCKWISE = "scroll_counterclockwise"
+  # scroll_wheel_list_%d  0..9
+  INPUTS = set([ CLICK, SCROLL_CLOCKWISE, SCROLL_COUNTERCLOCKWISE ])
+
+  Friction = GroupBase.Friction
+  HapticIntensity = GroupBase.HapticIntensity
+  class ScrollType:
+    CIRCULAR = 0
+    HORIZONTAL = 1
+    VERTICAL = 1
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.SCROLL_ANGLE: (1, 180),
+    S.HAPTIC_INTENSITY: HapticIntensity,
+    S.SCROLL_TYPE: ScrollType,
+    S.SCROLL_INVERT: bool,
+    S.SCROLL_WRAP: bool,
+    S.SCROLL_FRICTION: Friction,
+  }
+
+class GroupSingleButton (GroupBase):
+  CLICK = "click"
+  TOUCH = "touch"
+  INPUTS = set([ CLICK, TOUCH ])
+
+class GroupSwitches (GroupBase):
+  BUTTON_ESCAPE = "button_escape"
+  BUTTON_MENU = "button_menu"
+  LEFT_BUMPER = "left_bumper"
+  RIGHT_BUMPER = "right_bumper"
+  BUTTON_BACK_LEFT = "button_back_left"
+  BUTTON_BACK_RIGHT = "button_back_right"
+  RIGHT_TRIGGER_MODESHIFT = "right_trigger_modeshift"
+  RIGHT_TRIGGER_THRESHOLD_MODESHIFT = "right_trigger_threshold_modeshift"
+  LEFT_TRIGGER_MODESHIFT = "left_trigger_modeshift"
+  LEFT_TRIGGER_THRESHOLD_MODESHIFT = "left_trigger_threshold_modeshift"
+  LEFT_CLICK_MODESHIFT = "left_click_modeshift"
+  RIGHT_CLICK_MODESHIFT = "right_click_modeshift"
+  LEFT_STICK_CLICK_MODESHIFT = "left_stick_click_modeshift"
+  BUTTON_A_MODESHIFT = "button_a_modeshift"
+  BUTTON_B_MODESHIFT = "button_b_modeshift"
+  BUTTON_X_MODESHIFT = "button_x_modeshift"
+  BUTTON_Y_MODESHIFT = "button_y_modeshift"
+
+class GroupTouchMenu (GroupBase):
+  # touch_menu_button_%d  0..15
+  TouchmenuButtonFireType = GroupBase.TouchmenuButtonFireType
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.TOUCH_MENU_BUTTON_COUNT: [ 2, 4, 7, 9, 12, 13, 16 ], 
+    S.TOUCH_MENU_OPACITY: bool,
+    S.TOUCH_MENU_POSITION_X: (0, 100),
+    S.TOUCH_MENU_POSITION_Y: (0, 100),
+    S.TOUCH_MENU_SCALE: (50, 150),
+    S.TOUCH_MENU_SHOW_LABELS: bool,
+    S.TOUCHMENU_BUTTON_FIRE_TYPE: TouchmenuButtonFireType,
+    }
+
+class GroupTrigger (GroupBase):
+  CLICK = "click"
+  EDGE = "edge"
+  INPUTS = set([ CLICK, EDGE ])
+
+  class AdaptiveThreshold:
+    SIMPLE_THRESHOLD = 0
+    HAIR_TRIGGER = 1
+    HIP_FIRE_AGGRESSIVE = 2
+    HIP_FIRE_NORMAL = 3
+    HIP_FIRE_RELAXED = 4
+    HIP_FIRE_EXCLUSIVE = 5
+  CurveExponent = GroupBase.CurveExponent
+  OutputTrigger = GroupBase.OutputTrigger
+  S = GroupBase.SETTINGS
+  _Settings = {
+    S.OUTPUT_TRIGGER: OutputTrigger,
+    S.DEADZONE_OUTER_RADIUS: (0, 32767),
+    S.DEADZONE_INNER_RADIUS: (0, 32767),
+    S.EDGE_BINDING_RADIUS: (0, 32767),
+    S.ADAPTIVE_THRESHOLD: AdaptiveThreshold,
+    S.CURVE_EXPONENT: CurveExponent,
+    S.CUSTOM_CURVE_EXPONENT: (25, 4000),
+  }
+
+
+
+
 class Group (object):
   """A group of controls.
 Multiple controller elements combine together into groups that act as a unit to form a higher-order input type.
@@ -638,7 +1223,7 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     "touchmenu": "touch_menu",
     "trigger": "trigger",
   }
-  def __init__ (self, index=None, py_mode=None, py_inputs=None, settings=None, **kwargs):
+  def __init__ (self, index=None, py_mode=None, py_inputs=None, py_settings=None, **kwargs):
     if index is None:
       if 'id' in kwargs:
         index = int(kwargs['id'])
@@ -653,20 +1238,22 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     self.index = index
     # TODO: py_mode == None  =>  remove Group.
     self.mode = py_mode
-    self.inputs = EncodableDict('inputs')
-    self.settings = EncodableDict('settings')
+    self.inputs = EncodableDict(VSC_INPUTS)
+    self.settings = EncodableDict(VSC_SETTINGS)
 
     if py_inputs:
       # Expect dictionary of key to pyobjects.
       self.inputs.update(inputs)
-    elif 'inputs' in kwargs:
+    elif VSC_INPUTS in kwargs:
       # expect dict within ControllerConfig
-      for (inp_name, inp_kv) in kwargs['inputs'].items():
+      for (inp_name, inp_kv) in kwargs[VSC_INPUTS].items():
         self.make_input(inp_name, **inp_kv)
 
-    if settings:
+    if py_settings:
       # Expect dictionary of pure scalars.  This might break in future?
       self.settings.update(settings)
+    elif VSC_SETTINGS in kwargs:
+      self.settings.update(kwargs[VSC_SETTINGS])
 
   def make_input (self, input_element, py_activators=None, **kwargs):
     inp = ControllerInput(input_element, py_activators=py_activators, **kwargs)
@@ -693,10 +1280,10 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     kv['mode'] = str(self.mode)
 
     # Always generate ['inputs']
-    kv['inputs'] = self.inputs.encode_kv()
+    kv[VSC_INPUTS] = self.inputs.encode_kv()
 
     if self.settings:
-      kv['settings'] = self.settings.encode_kv()
+      kv[VSC_SETTINGS] = self.settings.encode_kv()
 
     return kv
 
@@ -911,7 +1498,7 @@ class Mapping (object):
     # List of Presets
     self.presets = []
     # Miscellaneous settings
-    self.settings = EncodableDict('settings')
+    self.settings = EncodableDict(VSC_SETTINGS)
 
     if 'actions' in kwargs:
       for obj_name, obj_kv in kwargs['actions'].items():
@@ -929,8 +1516,8 @@ class Mapping (object):
       for preset_kv in get_all(kwargs, 'preset', []):
         self.make_preset(**preset_kv)
 
-    if 'settings' in kwargs:
-      self.settings.update(kwargs['settings'])
+    if VSC_SETTINGS in kwargs:
+      self.settings.update(kwargs[VSC_SETTINGS])
 
   def make_group (self, index=None, py_mode=None, **kwargs):
     groupid = index
@@ -1048,9 +1635,9 @@ class Mapping (object):
       kv['preset'] = preset.encode_kv()
 
     if self.settings:
-      kv['settings'] = self.settings.encode_kv()
+      kv[VSC_SETTINGS] = self.settings.encode_kv()
     else:
-      kv['settings'] = {}
+      kv[VSC_SETTINGS] = {}
 
     return kv
 
