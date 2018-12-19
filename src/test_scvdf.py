@@ -129,7 +129,6 @@ class TestVdfTokenizer (unittest.TestCase):
   def test_stream_unquoted (self):
     self.prepare("lorem ipsum dolor sit amet    \r\n\t")
     res = [ x for x in self.tokenizer ]
-#    print("res = {!r}".format(res))
     self.assertEqual(res, [
       (Tokenizer.TOK_UNQUOTED, "lorem"),
       (Tokenizer.TOK_UNQUOTED, "ipsum"),
@@ -163,7 +162,6 @@ class TestVdfTokenizer (unittest.TestCase):
   def test_stream_quoted (self):
     self.prepare('"alpha"  "bravo" "charlie"\t"delta"\n"\\"cheeky\\""')
     res = [ x for x in self.tokenizer ]
-#    print("res = {!r}".format(res))
     self.assertEqual(res, [
       (Tokenizer.TOK_QUOTED, "alpha"),
       (Tokenizer.TOK_QUOTED, "bravo"),
@@ -256,7 +254,6 @@ class TestVdfReader (unittest.TestCase):
   def test_parse1 (self):
     src = '''"foo" "bar"'''
     res = scvdf.loads(src)
-    #print("res = {!r}".format(res))
     self.assertEqual(res, { "foo": "bar" })
 
   def test_parse2 (self):
@@ -265,7 +262,6 @@ class TestVdfReader (unittest.TestCase):
 "quux" "\"quuux\""
 '''
     res = scvdf.loads(src)
-    #print("res = {!r}".format(res))
     self.assertEqual(res, {"foo":"bar", "quux":'"quuux"'})
 
   def test_parse1sub (self):
@@ -275,7 +271,6 @@ class TestVdfReader (unittest.TestCase):
 }
 '''
     res = scvdf.loads(src)
-    #print("res = {!r}".format(res))
     self.assertEqual( res, { "foo": { "a": "b" } } )
 
   def test_parse1sub2 (self):
@@ -286,7 +281,6 @@ class TestVdfReader (unittest.TestCase):
 }
 '''
     res = scvdf.loads(src)
-    #print("res = {!r}".format(res))
     self.assertEqual( res, { "foo": { "a": { "aa": "bb" }}} )
 
   def test_empty (self):
@@ -322,9 +316,6 @@ class TestVdfReader (unittest.TestCase):
     f = open(fname, 'rt')
     res = scvdf.load(f)
     f.close()
-#    import pprint
-#    pprint.pprint(res)
-    #print("res = {!r}".format(res))
     self.assertIsNot(res, None)
     self.assertNotEqual(res, [])
 
@@ -378,7 +369,6 @@ class TestVdfReader (unittest.TestCase):
     self.assertEqual(res, {"example": { "group": [ {"id":'0',"first":"1"}, {"id":'1'}, {"id":'2'}]}})
     example = res['example']
     items = [ x for x in example.items() ]
-    #print("items = {!r}".format(items))
     self.assertEqual(len(items), 3)
 
   def test_multipath (self):
@@ -401,7 +391,6 @@ class TestVdfReader (unittest.TestCase):
     self.assertEqual(res, {"example": { "group": [ {"id":'0',"first":"1"}, {"id":'1'}, {"id":'2'}]}})
     example = res['example']
     items = [ x for x in example.items() ]
-    #print("items = {!r}".format(items))
     self.assertEqual(len(items), 3)
 
     group = example['group',]   # all groups
@@ -469,7 +458,6 @@ class TestVdfWriter (unittest.TestCase):
       from StringIO import StringIO
     except ImportError:
       from io import StringIO
-#    OUTFNAME = "output.txt"
     g = StringIO()
     scvdf.dump(res, g)
     summer = hashlib.new("md5")
@@ -491,7 +479,6 @@ class TestVdfWriter (unittest.TestCase):
       from StringIO import StringIO
     except ImportError:
       from io import StringIO
-#    OUTFNAME = "output.txt"
     g = StringIO()
     scvdf.dump(res, g)
     summer = hashlib.new("md5")
@@ -501,15 +488,5 @@ class TestVdfWriter (unittest.TestCase):
 
 
 if __name__ == "__main__":
-  #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted'])
-  #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted_into_comment'])
-  #unittest.main(defaultTest=['TestVdfTokenizer.test_quoted_esc'])
-  #unittest.main(defaultTest=['TestVdfTokenizer.test_comments'])
-  #unittest.main(defaultTest=['TestVdfTokenizer.test_semicomment'])
-  #unittest.main(defaultTest=['TestVdfReader.test_parse1sub'])
-  #unittest.main(defaultTest=['TestVdfReader.test_multivalue'])
-  #unittest.main(defaultTest=['TestVdfReader.test_empty_value'])
-  #unittest.main(defaultTest=['TestVdfWriter.test_load_save_1'])
-  #unittest.main(defaultTest=['TestScvdfDict.test_evolution_0'])
   unittest.main()
 

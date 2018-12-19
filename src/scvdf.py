@@ -656,7 +656,9 @@ def _toLOS (iterlop, accumulator=None, indent=""):
     if _stringlike(v):
       # one-line k/v, separator then value
       accumulator.append("\t\t")
-      accumulator.append('"{}"'.format(v))
+      safer = v
+      safer = safer.replace('"', '\\"')
+      accumulator.append('"{}"'.format(safer))
     else:
       # formatting minutiae
       accumulator.extend(["\n", indent, "{", "\n"])
