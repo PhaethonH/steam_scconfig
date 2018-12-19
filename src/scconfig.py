@@ -198,12 +198,12 @@ More complex details should implement/override _get_details(), which should retu
   def _get_evdetails (self):
     return self._evdetails
   def __str__ (self):
-    if not self.evtype:
+    if not self._evtype:
       return ""
-    words = [self.evtype]
+    words = [self._evtype]
     evdetails = self._get_evdetails()
     if evdetails:
-      words.extend(self.evdetails)
+      words.extend(self._evdetails)
     retval = " ".join(words)
     return retval
   def __repr__ (self):
@@ -407,18 +407,19 @@ class Evgen_Overlay (EvgenBase):
     "peel": "remove_layer",
     "hold_layer": "hold_layer",
     "hold": "hold_layer",
+    "change": "change_preset",
 #    "empty": "empty_binding",
 # TODO: change action set
   }
-  def __init__ (self, actionspec, layer_id, set_id, unk=0):
+  def __init__ (self, actionspec, target_id, frob0, frob1):
     vdfliteral = filter_enum(self.ACTIONS, actionspec)
     if vdfliteral is None:
       raise ValueError("Unknown overlay action '{}'".format(vdfliteral))
-    marshal = [ vdfliteral, str(layer_id), str(set_id), str(unk) ]
+    marshal = [ vdfliteral, str(target_id), str(frob0), str(frob1) ]
     EvgenBase.__init__(self, 'controller_action', *marshal)
-    self.layer_id = layer_id
-    self.set_id = set_id
-    self.unk = unk
+    self.target_id = target_id
+    self.frob0 = frob0
+    self.frob1 = frob1
 
   @staticmethod
   def _make (bindinfo, label, iconinfo):
@@ -497,76 +498,6 @@ class EvgenFactory (object):
       mangled = mangle_vdfliteral(' '.join(args))
       return Evgen_Empty("UNKNOWN_CONTROLLER_ACTION({})".format(mangled))
 
-#  @staticmethod
-#  def _parse (binding):
-#    """Parse 'binding' string into a parsed tuple form:
-#( bind_info:BindInfo, label:str, icon_info:IconInfo )
-#"""
-#    if not binding:
-#      return None
-#    # comma-separated parts:
-#    # [0] = binding command; space-separated in turn
-#    #   [0] = major command
-#    #   [1:] = additional arguments, if any (could be [])
-#    # [1] = label
-#    # [2] = icon (radial menu); space-separated in turn
-#    #   [0] = image resource indicator / filename
-#    #   [1] = background color (webRGB notation; e.g. "#4488CC")
-#    #   [2] = foreground color (webRGB notation)
-#    #phrases = list( map(lambda x: x.strip(), binding.split(',')) )
-#    phrases = binding.split(', ')
-#    bindinfo = BindInfo(phrases[0])
-#    label = phrases[1] if len(phrases) > 1 else None
-#    iconinfo = IconInfo(phrases[2]) if len(phrases) > 2 else None
-#    retval = ( bindinfo, label, iconinfo )
-#    return retval
-
-  @staticmethod
-  def parse (binding):
-    """Convert a binding string to a Binding object."""
-    if not binding:
-      return None
-
-    # comma-separated parts:
-    # [0] = binding command; space-separated in turn
-    #   [0] = major command
-    #   [1:] = additional arguments, if any (could be [])
-    # [1] = label
-    # [2] = icon (radial menu); space-separated in turn
-    #   [0] = image resource indicator / filename
-    #   [1] = background color (webRGB notation; e.g. "#4488CC")
-    #   [2] = foreground color (webRGB notation)
-    #phrases = list( map(lambda x: x.strip(), binding.split(',')) )
-    phrases = binding.split(', ')
-    bindinfo = BindInfo(*(phrases[0].split()))
-    label = phrases[1] if len(phrases) > 1 else None
-    iconinfo = IconInfo(*(phrases[2].split())) if len(phrases)>2 else None
-
-    self = EvgenFactory
-    ATTEMPTS = [
-      # Roughly in order of strictest args match to least strict.
-      Evgen_Gamepad,
-      Evgen_Modeshift,
-      Evgen_MouseSwitch,
-      Evgen_Keystroke,
-      Evgen_Light,
-      Evgen_Overlay,
-      Evgen_Host,
-      Evgen_Empty,
-      ]
-    retval = None
-    evgen = None
-
-    for candidate in ATTEMPTS:
-      retval = candidate._make(bindinfo, label, iconinfo)
-      if retval:
-        return retval
-    if not retval:
-      mangled = mangle_vdfliteral(binding)
-      #retval = self.make_empty("UNKNOWN_BINDING({})".format(mangled))
-      retval = self.make_empty()
-    return retval
-
   @staticmethod
   def _parse (bindstr):
     words = bindstr.split()
@@ -628,7 +559,7 @@ class Binding (object):
     if self.iconinfo:
       while len(phrases) < 2: phrases.append('')
       phrases.append(self.iconinfo.__str__())
-    return ' '.join(phrases)
+    return ', '.join(phrases)
 
   @staticmethod
   def _parse (s):
