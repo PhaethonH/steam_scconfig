@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# coding=utf-8
+# encoding=utf-8
 
 import unittest, hashlib, sys
 import scconfig, scvdf
@@ -298,5 +298,6 @@ class TestScconfigEncoding (unittest.TestCase):
 
 if __name__ == "__main__":
   #unittest.main(defaultTest=['TestScconfigEncoding.test_dumping0'])
+  #unittest.main(defaultTest=['TestScconfigEncoding.test_loading1'])
   unittest.main()
 

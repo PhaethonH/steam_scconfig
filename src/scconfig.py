@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# encoding=utf-8
 
 # Configurator module for Steam Valve Controller
 
@@ -133,12 +134,54 @@ def mangle_vdfliteral (s):
 ##########################
 
 
+class BindInfo (object):
+  """Encapsulates 'binding command' portion of a "binding" field."""
+  def __init__ (self, cmd, *args):
+    if ' ' in cmd:
+      # split in place.
+      # TODO: parse quoted and escapes?
+      words = cmd.split(' ')
+      cmd = words[0]
+      args = words[1:]
+    self.cmd = cmd
+    self.args = args
+  @property
+  def x (self):
+    """The first argument, 'x'."""
+    return self.args[0]
+  def __str__ (self):
+    return ' '.join([self.cmd] + self.args)
+
+class IconInfo (object):
+  """Icon info, third portion of "binding" command, for radial menus."""
+  def __init__ (self, path=None, bg=None, fg=None):
+    if path and len(path)>0 and ' ' in path:
+      # split in place.
+      # TODO: parse quoted, escaped, space-in-path?
+      words = path.split(' ', 3)
+      path = words[0]
+      bg = words[1]
+      fg = words[2]
+      # ignore fourth space and after.
+    self.path = path
+    self.bg = bg
+    self.fg = fg
+  def __str__ (self):
+    return ' '.join([self.path, self.bg, self.fg])
+
+
 class BindingBase (object):
   """One binding instance in a list of many, as part of Activate"""
   def __init__ (self, evtype, evdetails, label=None):
     self.evtype = evtype
     self.evdetails = evdetails
     self.label = label
+  def __init__ (self, evtype, evdetails, label=None, iconinfo=None):
+    self.evtype = evtype
+    self.evinfo = None
+    self.evdetails = evdetails
+    self.label = label
+    self.iconinfo = iconinfo
   def __str__ (self):
     if not self.evtype:
       return ""
@@ -151,6 +194,27 @@ class BindingBase (object):
       label = ", {}".format(self.label)
     retval = "{}{}{}".format(front, tail, label)
     return retval
+  def __str__ (self):
+    if not self.evtype:
+      return ""
+
+    phrases = []
+
+    words = [self.evtype]
+    if self.evinfo:
+      words.append(self.evinfo.__str__())
+    elif self.evdetails:
+      words.extend(self.evdetails)
+    phrases.append(" ".join(words))
+
+    if self.label:
+      phrases.append(self.label)
+
+    if self.iconinfo:
+      phrases.append(self.iconinfo)
+
+    retval = ", ".join(phrases)
+    return retval
   @staticmethod
   def _parse (binding):
     """Parse 'binding' string into a parsed tuple form:
@@ -161,45 +225,81 @@ cmd and args are delimited by space.
 """
     if not binding:
       return None
-    # Not clear if more than one comma is allowed; if so, which is label?
+    # comma-separated parts:
+    # [0] = binding command; space-separated in turn
+    #   [0] = major command
+    #   [1:] = additional arguments, if any (could be [])
+    # [1] = label
+    # [2] = icon (radial menu); space-separated in turn
+    #   [0] = image resource indicator / filename
+    #   [1] = background color (webRGB notation; e.g. "#4488CC")
+    #   [2] = foreground color (webRGB notation)
     comma_parts = binding.split(', ', 1)
-    phrase0 = comma_parts[0]
+    bindinfo = comma_parts[0]
     # TODO: is label supposed to be second phrase [1] or final phrase [-1] ?
-    label = comma_parts[-1] if len(comma_parts) > 1 else None
-    args = phrase0.split(' ')
-    retval = ( args[0], args[1:] , label )
+    label = comma_parts[1] if len(comma_parts) > 1 else None
+    iconinfo = comma_parts[2] if len(comma_parts) > 2 else None
+    if iconinfo:
+      iconname, iconbg, iconfg, *iconignore = iconinfo.split(' ',3)
+    else:
+      iconname, iconbg, iconfg = None, None, None
+    args = bindinfo.split(' ')
+    retval = ( args[0], args[1:] , label, iconname, iconbg, iconfg )
+    return retval
+  @staticmethod
+  def _parse (binding):
+    """Parse 'binding' string into a parsed tuple form:
+( bind_info:BindInfo, label:str, icon_info:IconInfo )
+"""
+    if not binding:
+      return None
+    # comma-separated parts:
+    # [0] = binding command; space-separated in turn
+    #   [0] = major command
+    #   [1:] = additional arguments, if any (could be [])
+    # [1] = label
+    # [2] = icon (radial menu); space-separated in turn
+    #   [0] = image resource indicator / filename
+    #   [1] = background color (webRGB notation; e.g. "#4488CC")
+    #   [2] = foreground color (webRGB notation)
+    #phrases = list( map(lambda x: x.strip(), binding.split(',')) )
+    phrases = binding.split(', ')
+    bindinfo = BindInfo(phrases[0])
+    label = phrases[1] if len(phrases) > 1 else None
+    iconinfo = IconInfo(phrases[2]) if len(phrases) > 2 else None
+    retval = ( bindinfo, label, iconinfo )
     return retval
 
 
-class Binding_Empty (BindingBase):
-  """alias for Binding_Host('empty_binding')"""
+class Evgen_Empty (BindingBase):
+  """alias for Evgen_Host('empty_binding')"""
   def __init__ (self, label=None):
     BindingBase.__init__(self, 'controller_action', ['empty_binding'], label)
 
   @staticmethod
-  def _make (cmd, args, label):
+  def _make (bindinfo, label, iconinfo):
     """Instantiate from a parsed tuple."""
-    if cmd == 'controller_action' and args[0] == 'empty_binding':
-      return Binding_Empty(label=label)
+    if bindinfo.cmd == 'controller_action' and bindinfo.x == 'empty_binding':
+      return Evgen_Empty(label=label)
     return None
 
 
-class Binding_Keystroke (BindingBase):
+class Evgen_Keystroke (BindingBase):
   def __init__ (self, keycode, label=None):
     BindingBase.__init__(self, "key_press", [keycode], label)
 
   @staticmethod
-  def _make (cmd, args, label):
+  def _make (bindinfo, label, iconinfo):
     """Instantiate from a parsed tuple."""
-    if cmd in ('key_press',):
+    if bindinfo.cmd in ('key_press',):
       try:
-        return Binding_Keystroke(args[0], label=label)
+        return Evgen_Keystroke(bindinfo.x, label=label)
       except:
         pass
     return None
 
 
-class Binding_MouseSwitch (BindingBase):
+class Evgen_MouseSwitch (BindingBase):
   TRANSLATE_BUTTON = {
     "1": "LEFT", "2": "MIDDLE", "3": "RIGHT",
     "4": "BACK", "5": "FORWARD"
@@ -221,17 +321,17 @@ class Binding_MouseSwitch (BindingBase):
       raise("Unknown mouse keysym '{}'".format(evdetails))
 
   @staticmethod
-  def _make (cmd, args, label):
+  def _make (bindinfo, label, iconinfo):
     """Instantiate from a parsed tuple."""
-    if cmd in ('mouse_button', 'mouse_wheel'):
+    if bindinfo.cmd in ('mouse_button', 'mouse_wheel'):
       try:
-        return Binding_MouseSwitch(cmd, args[0], label=label)
+        return Evgen_MouseSwitch(bindinfo.cmd, bindinfo.x, label=label)
       except:
         pass
     return None
 
 
-class Binding_Gamepad (BindingBase):
+class Evgen_Gamepad (BindingBase):
   TRANSLATION = {
     "A": "A", "B": "B", "X": "X", "Y": "Y",
     "LB": "SHOULDER_LEFT", "RB": "SHOULDER_RIGHT",
@@ -249,16 +349,16 @@ class Binding_Gamepad (BindingBase):
       raise KeyError("Unknown xpad keysym '{}'.".format(keycode))
 
   @staticmethod
-  def _make (cmd, args, label):
+  def _make (bindinfo, label, iconinfo):
     """Instantiate from a parsed tuple."""
-    if cmd == 'xinput_button':
+    if bindinfo.cmd == 'xinput_button':
       try:
-        return Binding_Gamepad(args[0], label=label)
+        return Evgen_Gamepad(bindinfo.x, label=label)
       except:
         pass
     return None
 
-class Binding_Host (BindingBase):
+class Evgen_Host (BindingBase):
   """Host operations."""
   TRANSLATION = {
     'empty': "empty_binding",
@@ -295,15 +395,15 @@ class Binding_Host (BindingBase):
     BindingBase.__init__(self, vdfliteral, [], label)
 
   @staticmethod
-  def _make (cmd, args, label):
+  def _make (bindinfo, label, iconinfo):
     """Instantiate from a parsed tuple."""
     try:
-      return Binding_Host(cmd, label=label)
+      return Evgen_Host(bindinfo.cmd, label=label)
     except:
       return None
 
 
-class Binding_Light (BindingBase):
+class Evgen_Light (BindingBase):
   """Set controller LED - color and/or brightness.
 
 R : red value, 0..255
@@ -323,14 +423,14 @@ M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ig
     self.M = M
 
   @staticmethod
-  def _make (cmd, args, label):
+  def _make (bindinfo, label, iconinfo):
     """Instantiate from a parsed tuple."""
-    if cmd == 'set_led':
-      return Binding_Light(*args, label=label)
+    if bindinfo.cmd == 'set_led':
+      return Evgen_Light(*(bindinfo.args), label=label)
     return None
 
 
-class Binding_Overlay (BindingBase):
+class Evgen_Overlay (BindingBase):
   """Control overlays."""
   ACTIONS = {
     "apply_layer": "add_layer",
@@ -353,21 +453,21 @@ class Binding_Overlay (BindingBase):
     self.unk = unk
 
   @staticmethod
-  def _make (cmd, args, label):
-    if (cmd == 'controller_action'):
+  def _make (bindinfo, label, iconinfo):
+    if (bindinfo.cmd == 'controller_action'):
       try:
-        return Binding_Overlay(*args[:4], label=label)
+        return Evgen_Overlay(*bindinfo.args[:4], label=label)
       except:
         pass
-      if args[0] in ('empty_binding', 'empty', None):
-        return Binding_Empty(label=label)
+      if bindinfo.x in ('empty_binding', 'empty', None):
+        return Evgen_Empty(label=label)
       else:
         mangled = mangle_vdfliteral(str(parsed_tuple))
-        return Binding_Empty('UNKNOWN_CONTROLLER_ACTION({})'.format(mangled))
+        return Evgen_Empty('UNKNOWN_CONTROLLER_ACTION({})'.format(mangled))
     return None
 
 
-class Binding_Modeshift (BindingBase):
+class Evgen_Modeshift (BindingBase):
   # TODO: filter inpsrc
   ACCEPTABLE = [
     "left_trackpad", "right_trackpad",
@@ -382,10 +482,12 @@ class Binding_Modeshift (BindingBase):
     self.group_id = group_id
 
   @staticmethod
-  def _make (cmd, args, label):
+  def _make (bindinfo, label, iconinfo):
     """Instantiate from a parsed tuple."""
-    if (cmd == 'mode_shift'):
-      return Binding_Modeshift(args[0], int(args[1]), label=label)
+    if (bindinfo.cmd == 'mode_shift'):
+      inp = bindinfo.args[0]
+      gid = bindinfo.args[1]
+      return Evgen_Modeshift(inp, gid, label=label)
     return None
 
 
@@ -393,59 +495,106 @@ class Binding_Modeshift (BindingBase):
 class BindingFactory (object):
   @staticmethod
   def make_empty (label=None):
-    return Binding_Empty(label=label)
+    return Evgen_Empty(label=label)
   @staticmethod
   def make_keystroke (synthsym, label=None):
-    return Binding_Keystroke(synthsym, label=label)
+    return Evgen_Keystroke(synthsym, label=label)
   @staticmethod
   def make_mouseswitch (synthsym, label=None):
-    return Binding_MouseSwitch(synthsym, label=label)
+    return Evgen_MouseSwitch(synthsym, label=label)
   @staticmethod
   def make_gamepad (synthsym, label=None):
-    return Binding_Gamepad(synthsym, label=label)
+    return Evgen_Gamepad(synthsym, label=label)
   @staticmethod
   def make_hostcall (hostreq, label=None):
-    return Binding_Host(hostreq, label=label)
+    return Evgen_Host(hostreq, label=label)
   @staticmethod
 # TODO: test set_led
   def make_light (led_mode, red, green, blue, unk, brightness, label=None):
-    return Binding_Light(red, green, blue, unk, brightness, mode, label)
+    return Evgen_Light(red, green, blue, unk, brightness, mode, label)
   @staticmethod
   def make_overlay (subcmd, layer_id=0, set_id=0, unk=0, label=None):
-    return Binding_Overlay(subcmd, layer_id, set_id, unk, label)
+    return Evgen_Overlay(subcmd, layer_id, set_id, unk, label)
   @staticmethod
   def make_modeshift (inpsrc, grpid, label=None):
-    return Binding_Modeshift(inpsrc, grpid, label)
+    return Evgen_Modeshift(inpsrc, grpid, label)
   @staticmethod
   def make_controller_action (*args, label=None):
     if len(args) > 4:
       return BindingFactory.make_overlay(*args[:4], label=label)
     elif args[0] in [ 'empty_binding', 'empty', None ]:
-      return Binding_Empty()
+      return Evgen_Empty()
     else:
       mangled = mangle_vdfliteral(' '.join(args))
-      return Binding_Empty("UNKNOWN_CONTROLLER_ACTION({})".format(mangled))
+      return Evgen_Empty("UNKNOWN_CONTROLLER_ACTION({})".format(mangled))
+
+  @staticmethod
+  def _parse (binding):
+    """Parse 'binding' string into a parsed tuple form:
+( bind_info:BindInfo, label:str, icon_info:IconInfo )
+"""
+    if not binding:
+      return None
+    # comma-separated parts:
+    # [0] = binding command; space-separated in turn
+    #   [0] = major command
+    #   [1:] = additional arguments, if any (could be [])
+    # [1] = label
+    # [2] = icon (radial menu); space-separated in turn
+    #   [0] = image resource indicator / filename
+    #   [1] = background color (webRGB notation; e.g. "#4488CC")
+    #   [2] = foreground color (webRGB notation)
+    #phrases = list( map(lambda x: x.strip(), binding.split(',')) )
+    phrases = binding.split(', ')
+    bindinfo = BindInfo(phrases[0])
+    label = phrases[1] if len(phrases) > 1 else None
+    iconinfo = IconInfo(phrases[2]) if len(phrases) > 2 else None
+    retval = ( bindinfo, label, iconinfo )
+    return retval
 
   @staticmethod
   def parse (binding):
     """Convert a binding string to a Binding object."""
+    if not binding:
+      return None
+
+    # comma-separated parts:
+    # [0] = binding command; space-separated in turn
+    #   [0] = major command
+    #   [1:] = additional arguments, if any (could be [])
+    # [1] = label
+    # [2] = icon (radial menu); space-separated in turn
+    #   [0] = image resource indicator / filename
+    #   [1] = background color (webRGB notation; e.g. "#4488CC")
+    #   [2] = foreground color (webRGB notation)
+    #phrases = list( map(lambda x: x.strip(), binding.split(',')) )
+    phrases = binding.split(', ')
+    (cmd, *args) = phrases[0].split(' ')
+    label = phrases[1] if len(phrases) > 1 else None
+    iconname, iconbg, iconfg = None, None, None
+    if len(phrases) > 2:
+      (iconname, iconbg, iconfg, *ignore) = phrases[2].split(' ')
+
     self = BindingFactory
-    parsed_tuple = BindingBase._parse(binding)
-    ( cmd, args, label ) = parsed_tuple
     ATTEMPTS = [
       # Roughly in order of most initializer arguments to least.
-      Binding_Light,
-      Binding_Overlay,
-      Binding_Modeshift,
-      Binding_MouseSwitch,
-      Binding_Keystroke,
-      Binding_Gamepad,
-      Binding_Host,
-      Binding_Empty,
+      Evgen_Light,
+      Evgen_Overlay,
+      Evgen_Modeshift,
+      Evgen_MouseSwitch,
+      Evgen_Keystroke,
+      Evgen_Gamepad,
+      Evgen_Host,
+      Evgen_Empty,
       ]
     retval = None
+    evgen = None
+
+    bindinfo = BindInfo(cmd, *args)
+    iconinfo = IconInfo(iconname, iconbg, iconfg)
+
     for candidate in ATTEMPTS:
-      retval = candidate._make(cmd, args, label)
+      retval = candidate._make(bindinfo, label, iconinfo)
       if retval:
         return retval
     if not retval:
