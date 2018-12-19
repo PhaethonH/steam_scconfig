@@ -6,6 +6,7 @@
 # Uses SCVDF for reading and writing VDF files.
 
 import scvdf
+import types
 
 
 
@@ -35,66 +36,21 @@ def dict2lop (kv_dict):
 
 
 # Helper class for commonly recurring 'settings' field, which is all-scalar.
-class EncodableDict (object):
+class EncodableDict (scvdf.SCVDFDict):
+  """Extends SCVDFDict to support .encode_kv()"""
   def __init__ (self, index=None, copyfrom=None):
-    if index is None:
-      index = VSC_SETTINGS
-    elif isinstance(index,dict):
-      # and would imply copyfrom is missing.
-      copyfrom = index
-      index = None
-    self.index = index
-    self.valid_keys = []  # also maintain order.
-    self.store = {}
-    if isinstance(copyfrom,dict):
-      for k,v in copyfrom.items():
-        self[k] = v
-  def __setitem__ (self, k, v):
-    self.valid_keys.append(k)
-    self.store[k] = v
-  def __getitem__ (self, k):
-    return self.store[k]
-  def __delitem__ (self, k):
-    del self.store[k]
-    self.valid_keys.remove(k)
-  def keys (self):
-    return self.valid_keys
-  def items (self):
-    for k in self.valid_keys:
-      v = self.store[k]
-      yield (k,v)
-    return
-  def values (self):
-    for k in self.valid_keys:
-      v = self.store[k]
-      yield v
-    return
-  def update (self, d):
-    for (k,v) in d.items():
-      self[k] = v
-  def encode_pair (self):
-    lop = []
-    for k in self.valid_keys:
-      v = self.store[k]
-      try:
-        lop.append(v.encode_pair())
-      except AttributeError as e:
-        lop.append( (k,str(v)) )
-    whole = (self.index, lop)
-    return whole
+    if isinstance(index,dict):  # implies copyfrom currently None.
+      copyfrom, index = index, None
+    scvdf.SCVDFDict.__init__(self, copyfrom)
+    self.index = VSC_SETTINGS if (index is None) else None
   def encode_kv (self):
     kv = scvdf.SCVDFDict()
-    for k in self.valid_keys:
-      v = self.store[k]
+    for k, v in self.items():
       try:
-        kv[k] = v.encode_kv()
+        kv[k] = v.encode_kv()     # recursively encode.
       except AttributeError as e:
         kv[k] = str(v)
     return kv
-  def __bool__ (self):
-    return bool(self.valid_keys)
-  def __nonzero__ (self):
-    return len(self.valid_keys) > 0
 
 
 def filter_enum (enum_mapping, initval):
@@ -616,197 +572,210 @@ class ControllerInput (object):
 class GroupBase (object):
   """Base class for input groups: joystick, dpad, triggers, etc."""
 
-  class SETTINGS:
-    """namespace for settings keys."""
+  # VSC VDF settings keys at 'group' level.
+  SETTINGS = types.SimpleNamespace(
 # starting with dpad
-    REQUIRES_CLICK = "requires_click"
-    LAYOUT = "layout"
-    DEADZONE = "deadzone"
-    EDGE_BINDING_RADIUS = "edge_binding_radius"
-    EDGE_BINDING_INVERT = "edge_binding_invert"
-    ANALOG_EMULATION_PERIOD = "analog_emulation_period"
-    ANALOG_EMULATION_DUTY_CYCLE = "analog_emulation_duty_cycle"
-    OVERLAP_REGION = "overlap_region"
-    GYRO_BUTTON_INVERT = "gyro_button_invert"
-    HAPTIC_INTENSITY_OVERRIDE = "haptic_intensity_override"
-    GYRO_NEUTRAL = "gyro_neutral"
-    GYRO_BUTTON = "gyro_button"
+    REQUIRES_CLICK = "requires_click",
+    LAYOUT = "layout",
+    DEADZONE = "deadzone",
+    EDGE_BINDING_RADIUS = "edge_binding_radius",
+    EDGE_BINDING_INVERT = "edge_binding_invert",
+    ANALOG_EMULATION_PERIOD = "analog_emulation_period",
+    ANALOG_EMULATION_DUTY_CYCLE = "analog_emulation_duty_cycle",
+    OVERLAP_REGION = "overlap_region",
+    GYRO_BUTTON_INVERT = "gyro_button_invert",
+    HAPTIC_INTENSITY_OVERRIDE = "haptic_intensity_override",
+    GYRO_NEUTRAL = "gyro_neutral",
+    GYRO_BUTTON = "gyro_button",
 
 # four-buttons
-    BUTTON_SIZE = "button_size"
-    BUTTON_DIST = "button_dist"
+    BUTTON_SIZE = "button_size",
+    BUTTON_DIST = "button_dist",
 
 # joystick-camera
-    CURVE_EXPONENT = "curve_exponent"
-    SWIPE_DURATION = "swipe_duration"
-    HAPTIC_INTENSITY = "haptic_intensity"
-    OUTPUT_JOYSTICK = "output_joystick"
-    SENSITIVITY_VERT_SCALE = "sensitivity_vert_scale"
-    ANTI_DEADZONE = "anti_deadzone"
-    ANTI_DEADZONE_BUFFER = "anti_deadzone_buffer"
-    INVERT_X = "invert_x"
-    INVERT_Y = "invert_y"
-    JOYSTICK_SMOOTHING = "joystick_smoothing"
-    GYRO_AXIS = "gyro_axis"
+    CURVE_EXPONENT = "curve_exponent",
+    SWIPE_DURATION = "swipe_duration",
+    HAPTIC_INTENSITY = "haptic_intensity",
+    OUTPUT_JOYSTICK = "output_joystick",
+    SENSITIVITY_VERT_SCALE = "sensitivity_vert_scale",
+    ANTI_DEADZONE = "anti_deadzone",
+    ANTI_DEADZONE_BUFFER = "anti_deadzone_buffer",
+    INVERT_X = "invert_x",
+    INVERT_Y = "invert_y",
+    JOYSTICK_SMOOTHING = "joystick_smoothing",
+    GYRO_AXIS = "gyro_axis",
 
 # joystick-mouse
-    CUSTOM_CURVE_EXPONENT = "custom_curve_exponent"
-    DEADZONE_INNER_RADIUS = "deadzone_inner_radius"
-    DEADZONE_OUTER_RADIUS = "deadzone_outer_radius"
-    DEADZONE_SHAPE = "deadzone_shape"
-    SENSITIVITY = "sensitivity"
-    SENSITIVITY_HORIZ_SCALE = "sensitivity_horiz_scale"
+    CUSTOM_CURVE_EXPONENT = "custom_curve_exponent",
+    DEADZONE_INNER_RADIUS = "deadzone_inner_radius",
+    DEADZONE_OUTER_RADIUS = "deadzone_outer_radius",
+    DEADZONE_SHAPE = "deadzone_shape",
+    SENSITIVITY = "sensitivity",
+    SENSITIVITY_HORIZ_SCALE = "sensitivity_horiz_scale",
 
 # joystick-move
-    GYRO_LOCK_EXTENTS = "gyro_lock_extents"
-    GYRO_BUTTON_INVERT = "gyro_button_invert"
-    OUTPUT_AXIS = "output_axis"
+    GYRO_LOCK_EXTENTS = "gyro_lock_extents",
+    OUTPUT_AXIS = "output_axis",
 
 # mouse-joystick
-    DOUBLETAP_BEEP = "doubletap_beep"
-    TRACKBALL = "trackball"
-    ROTATION = "rotation"
-    FRICTION = "friction"
-    FRICTION_VERT_SCALE = "friction_vert_scale"
-    SENSITIVITY_VERT_SCALE = "sensitivity_vert_scale"
-    MOUSE_MOVE_THRESHOLD = "mouse_move_threshold"
-    EDGE_SPIN_VELOCITY = "edge_spin_velocity"
-    EDGE_SPIN_RADIUS = "edge_spin_radius"
-    DOUBLETAP_MAX_DURATION = "doubetap_max_duration"  # [sic]
-    DOUBETAP_MAX_DURATION = DOUBLETAP_MAX_DURATION
-    MOUSE_DAMPENING_TRIGGER = "mouse_dampening_trigger"
-    MOUSE_TRIGGER_CLAMP_AMOUNT = "mouse_trigger_clamp_amount"
-    MOUSEJOYSTICK_DEADZONE_X = "mousejoystick_deadzone_x"
-    MOUSEJOYSTICK_DEADZONE_Y = "mousejoystick_deadzone_y"
-    MOUSEJOYSTICK_PRECISION = "mousejoystick_precision"
-    GYRO_SENSITIVITY_SCALE = "gyro_sensitivity_scale"
+    DOUBLETAP_BEEP = "doubletap_beep",
+    TRACKBALL = "trackball",
+    ROTATION = "rotation",
+    FRICTION = "friction",
+    FRICTION_VERT_SCALE = "friction_vert_scale",
+    MOUSE_MOVE_THRESHOLD = "mouse_move_threshold",
+    EDGE_SPIN_VELOCITY = "edge_spin_velocity",
+    EDGE_SPIN_RADIUS = "edge_spin_radius",
+    DOUBLETAP_MAX_DURATION = "doubetap_max_duration",  # [sic]
+    MOUSE_DAMPENING_TRIGGER = "mouse_dampening_trigger",
+    MOUSE_TRIGGER_CLAMP_AMOUNT = "mouse_trigger_clamp_amount",
+    MOUSEJOYSTICK_DEADZONE_X = "mousejoystick_deadzone_x",
+    MOUSEJOYSTICK_DEADZONE_Y = "mousejoystick_deadzone_y",
+    MOUSEJOYSTICK_PRECISION = "mousejoystick_precision",
+    GYRO_SENSITIVITY_SCALE = "gyro_sensitivity_scale",
 
 # mouse-region
-    SCALE = "scale"
-    POSITION_X = "position_x"
-    POSITION_Y = "position_y"
-    TELEPORT_STOP = "teleport_stop"
+    SCALE = "scale",
+    POSITION_X = "position_x",
+    POSITION_Y = "position_y",
+    TELEPORT_STOP = "teleport_stop",
 
 # radial-menu
-    TOUCHMENU_BUTTON_FIRE_TYPE = "touchmenu_button_fire_type"
-    TOUCH_MENU_OPACITY = "touch_menu_opacity"
-    TOUCH_MENU_POSITION_X = "touch_menu_position_x"
-    TOUCH_MENU_POSITION_Y = "touch_menu_position_y"
-    TOUCH_MENU_SCALE = "touch_menu_scale"
-    TOUCH_MENU_SHOW_LABELS = "touch_menu_show_labels"
+    TOUCHMENU_BUTTON_FIRE_TYPE = "touchmenu_button_fire_type",
+    TOUCH_MENU_OPACITY = "touch_menu_opacity",
+    TOUCH_MENU_POSITION_X = "touch_menu_position_x",
+    TOUCH_MENU_POSITION_Y = "touch_menu_position_y",
+    TOUCH_MENU_SCALE = "touch_menu_scale",
+    TOUCH_MENU_SHOW_LABELS = "touch_menu_show_labels",
 
 # scrollwheel
-    SCROLL_ANGLE = "scroll_angle"
-    SCROLL_TYPE = "scroll_type"
-    SCROLL_INVERT = "scroll_invert"
-    SCROLL_WRAP = "scroll_wrap"
-    SCROLL_FRICTION = "scroll_friction"
+    SCROLL_ANGLE = "scroll_angle",
+    SCROLL_TYPE = "scroll_type",
+    SCROLL_INVERT = "scroll_invert",
+    SCROLL_WRAP = "scroll_wrap",
+    SCROLL_FRICTION = "scroll_friction",
 
 # touch-menu
-    TOUCH_MENU_BUTTON_COUNT = "touch_menu_button_count"
+    TOUCH_MENU_BUTTON_COUNT = "touch_menu_button_count",
 
 # trigger
-    ADAPTIVE_THRESHOLD = "adaptive_threshold"
-    OUTPUT_TRIGGER = "output_trigger"
+    ADAPTIVE_THRESHOLD = "adaptive_threshold",
+    OUTPUT_TRIGGER = "output_trigger",
 
 # absolute-mouse
-    ACCELERATION = "acceleration"
-    MOUSE_SMOOTHING = "mouse_smoothing"
+    ACCELERATION = "acceleration",
+    MOUSE_SMOOTHING = "mouse_smoothing",
+    )
+  SETTINGS.DOUBETAP_MAX_DURATION = SETTINGS.DOUBLETAP_MAX_DURATION  # maintain misspelling.
 
-  class Acceleration:
-    """Values for 'acceleration'."""
-    OFF = 0
-    LOW = 1
-    MEDIUM = 2
-    HIGH = 3
+  # Values for 'acceleration'.
+  Acceleration = types.SimpleNamespace(
+    OFF = 0,
+    LOW = 1,
+    MEDIUM = 2,
+    HIGH = 3,
+    )
 
-  class CurveExponent:
-    """Values for 'curve_exponent'."""
-    LINEAR = 0
-    AGGRESIVE = 1
-    RELAXED = 2
-    WIDE = 3
-    EXTRA_WIDE = 4
-    CUSTOM = 5
+  # Values for 'curve_exponent'.
+  CurveExponent = types.SimpleNamespace(
+    LINEAR = 0,
+    AGGRESIVE = 1,
+    RELAXED = 2,
+    WIDE = 3,
+    EXTRA_WIDE = 4,
+    CUSTOM = 5,
+    )
 
-  class DeadzoneShape:
-    CROSS = 0
-    CIRCLE = 1
-    SQUARE = 2
+  # Values for 'deadzone_shape'.
+  DeadzoneShape = types.SimpleNamespace(
+    CROSS = 0,
+    CIRCLE = 1,
+    SQUARE = 2,
+    )
 
-  class Friction:
-    """Values for 'friction'."""
-    OFF = 0
-    LOW = 1
-    MEDIUM = 2
-    HIGH = 3
-    DEFAULT = MEDIUM
+  # Values for 'friction'.
+  Friction = types.SimpleNamespace(
+    OFF = 0,
+    LOW = 1,
+    MEDIUM = 2,
+    HIGH = 3,
+    )
+  # aliases
+  Friction.DEFAULT = Friction.MEDIUM
 
-  class GyroButton:
-    """Values for 'gyro_button'."""
-    ALWAYS = None   # actually, key itself should be missing.
-    RIGHT_PAD_TOUCH = 1
-    LEFT_PAD_TOUCH = 2
-    RIGHT_PAD_CLICK = 3
-    LEFT_PAD_CLICK = 4
-    RIGHT_BUMPER = 5
-    LEFT_BUMPER = 6
-    RIGHT_GRIP = 7
-    LEFT_GRIP = 8
-    RIGHT_TRIGGER_FULL = 9
-    LEFT_TRIGGER_FULL = 10
-    RIGHT_TRIGGER_SOFT = 11
-    LEFT_TRIGGER_SOFT = 12
-    A = 13
-    B = 14
-    X = 15
-    Y = 16
-    LEFT_STICK_CLICK = 17
+  # values for 'gyro_button'.
+  GyroButton = types.SimpleNamespace(
+    ALWAYS = None,   # actually, key itself should be missing.
+    RIGHT_PAD_TOUCH = 1,
+    LEFT_PAD_TOUCH = 2,
+    RIGHT_PAD_CLICK = 3,
+    LEFT_PAD_CLICK = 4,
+    RIGHT_BUMPER = 5,
+    LEFT_BUMPER = 6,
+    RIGHT_GRIP = 7,
+    LEFT_GRIP = 8,
+    RIGHT_TRIGGER_FULL = 9,
+    LEFT_TRIGGER_FULL = 10,
+    RIGHT_TRIGGER_SOFT = 11,
+    LEFT_TRIGGER_SOFT = 12,
+    A = 13,
+    B = 14,
+    X = 15,
+    Y = 16,
+    LEFT_STICK_CLICK = 17,
+    )
 
-  class HapticIntensity:
-    """Values for 'haptic_intensity'."""
-    OFF = 0
-    LOW = 1
-    MEDIUM = 2
-    HIGH = 3
+  # Values for 'haptic_intensity'.
+  HapticIntensity = types.SimpleNamespace(
+    OFF = 0,
+    LOW = 1,
+    MEDIUM = 2,
+    HIGH = 3,
+    )
 
-  class MouseDampeningTrigger:
-    """Values for 'mouse_dampening_trigger'."""
-    NO = 0
-    RIGHT_TRIGGER_SOFT_PULL = 1
-    LEFT_TRIGGER_SOFT_PULL = 2
-    BOTH_TRIGGER_SOFT_PULL = 3
-    RIGHT_TRIGGER_FULL_PULL = 4
-    LEFT_TRIGGER_FULL_PULL = 5
-    BOTH_TRIGGER_FULL_PULL = 6
+  # Values for 'mouse_dampening_trigger'.
+  MouseDampeningTrigger = types.SimpleNamespace(
+    NO = 0,
+    RIGHT_TRIGGER_SOFT_PULL = 1,
+    LEFT_TRIGGER_SOFT_PULL = 2,
+    BOTH_TRIGGER_SOFT_PULL = 3,
+    RIGHT_TRIGGER_FULL_PULL = 4,
+    LEFT_TRIGGER_FULL_PULL = 5,
+    BOTH_TRIGGER_FULL_PULL = 6,
+    )
 
-  class SwipeDuration:
-    """Values for 'swipe_duration'."""
-    OFF = 0
-    LOW = 1
-    MEDIUM = 2
-    HIGH =3
+  # Values for 'swipe_duration'.
+  SwipeDuration = types.SimpleNamespace(
+    OFF = 0,
+    LOW = 1,
+    MEDIUM = 2,
+    HIGH =3,
+    )
 
-  class OutputAxis:
-    """Values for 'output_joystick'."""
-    HORIZONTAL = 0
-    VERTICAL = 1
-    BOTH = 2
+  # Values for 'output_joystick'.
+  OutputAxis = types.SimpleNamespace(
+    HORIZONTAL = 0,
+    VERTICAL = 1,
+    BOTH = 2,
+    )
 
-  class OutputTrigger:
-    """Values for 'output_trigger'."""
-    NO_ANALOG = 0
-    LEFT_TRIGGER = 1
-    RIGHT_TRIGGER = 2
+  # Values for 'output_trigger'.
+  OutputTrigger = types.SimpleNamespace(
+    NO_ANALOG = 0,
+    LEFT_TRIGGER = 1,
+    RIGHT_TRIGGER = 2,
+    )
 
-  class TouchmenuButtonFireType:
-    """Values for 'touchmenu_button_fire_type'."""
-    BUTTON_CLICK = 0
-    BUTTON_RELEASE = 1
-    TOUCH_RELEASE_MODESHIFT_END = 2
-    TOUCH_RELEASE = TOUCH_RELEASE_MODESHIFT_END
-    MODESHIFT_END = TOUCH_RELEASE_MODESHIFT_END
-    ALWAYS = 3
+  # Values for 'touchmenu_button_fire_type'.
+  TouchmenuButtonFireType = types.SimpleNamespace(
+    BUTTON_CLICK = 0,
+    BUTTON_RELEASE = 1,
+    TOUCH_RELEASE_MODESHIFT_END = 2,
+    ALWAYS = 3,
+    )
+  # aliases
+  TouchmenuButtonFireType.TOUCH_RELEASE = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
+  TouchmenuButtonFireType.MODESHIFT_END = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
 
   # Constraints on settings values.
   # Tuples indicate an integer range, such that tuple[0] <= value <= tuple[1]
@@ -846,6 +815,40 @@ class GroupBase (object):
     elif VSC_SETTINGS in kwargs:
       self.settings.update(kwargs[VSC_SETTINGS])
 
+  @staticmethod
+  def _basic_getter (settings_key):
+    def getter (self):
+      return self.settings[settings_key]
+    return getter
+  @staticmethod
+  def _basic_setter (settings_key):
+    def setter (self, val):
+      constraint = self._Settings.get(val, None)
+      if isinstance(constraint,tuple):      # integer range constraint.
+        lower, upper = contraint
+        if (val < lower) or (lower < val):
+          return
+      elif isinstance(constraint,list):     # any from a list.
+        if not (val in constraints):
+          return
+      elif type(constraint) == types.SimpleNamespace:   # any from namespace.
+        if not (val in contraint.__dict__.values()):
+          return
+      else:       # is of type.
+        if type(val) != constraint:
+          return
+      self.settings[settings_key] = val
+  @staticmethod
+  def _basic_deleter (settings_key):
+    def deleter (self):
+      del self.settings[settings_key]
+  @staticmethod
+  def _basic_property (settings_key):
+    return property(GroupBase._basic_getter(settings_key),
+                    GroupBase._basic_setter(settings_key),
+                    GroupBase._basic_deleter(settings_key))
+
+
   def make_input (self, input_element, py_activators=None, **kwargs):
     '''Factory for 'input' node.'''
     inp = ControllerInput(input_element, py_activators=py_activators, **kwargs)
@@ -861,13 +864,14 @@ class AbsoluteMouse (GroupBase):
     CLICK, DOUBLETAP, TOUCH
     ])
 
-  class Friction:
-    """Values for 'friction."""
-    OFF = 0    # no inertia -- do not spin at all
-    LOW = 1
-    MEDIUM = 2
-    HIGH = 3
-    NONE = 4   # no-friction -- spin forever
+  # Values for 'friction.
+  Friction = types.SimpleNamespace(
+    OFF = 0,    # no inertia -- do not spin at all
+    LOW = 1,
+    MEDIUM = 2,
+    HIGH = 3,
+    NONE = 4,   # no-friction -- spin forever
+    )
 
   S = GroupBase.SETTINGS
   _Settings = {
@@ -907,11 +911,12 @@ class GroupDpad (GroupBase):
     DPAD_NORTH, DPAD_WEST, DPAD_EAST, DPAD_SOUTH, DPAD_CLICK, DPAD_EDGE
     ])
 
-  class Layout:
+  Layout = types.SimpleNamespace(
     FOUR_WAY = 0,
     EIGHT_WAY = 1,
     ANALOG_EMULATION = 2,
-    CROSS_GATE = 3
+    CROSS_GATE = 3,
+    )
 
   S = GroupBase.SETTINGS
   GyroButton = GroupBase.GyroButton
@@ -954,10 +959,11 @@ class GroupJoystickCamera (GroupBase):
   SwipeDuration = GroupBase.SwipeDuration
   HapticIntensity = GroupBase.HapticIntensity
   GyroButton = GroupBase.GyroButton
-  class OutputJoystick:
-    MATCHED_SIDE = 0
-    OPPOSITE_SITE = 1
-    RELATIVE_MOUSE = 2
+  OutputJoystick = types.SimpleNamespace(
+    MATCHED_SIDE = 0,
+    OPPOSITE_SITE = 1,
+    RELATIVE_MOUSE = 2,
+    )
 
   S = GroupBase.SETTINGS
   _Settings = {
@@ -982,9 +988,10 @@ class GroupJoystickMouse (GroupBase):
   INPUTS = set([ CLICK, EDGE ])
 
   CurveExponent = GroupBase.CurveExponent
-  class OutputJoystick:
-    MATCHED_SIDE = 0
-    OPPOSITE_SIDE = 1
+  OutputJoystick = types.SimpleNamespace(
+    MATCHED_SIDE = 0,
+    OPPOSITE_SIDE = 1,
+    )
   S = GroupBase.SETTINGS
   _Settings = {
     S.CURVE_EXPONENT: CurveExponent,
@@ -1002,10 +1009,11 @@ class GroupJoystickMove (GroupBase):
   GyroButton = GroupBase.GyroButton
   HapticIntensity = GroupBase.HapticIntensity
   OutputAxis = GroupBase.OutputAxis
-  class OutputJoystick:
-    LEFT_JOYSTICK = 0
-    RIGHT_JOYSTICK = 1
-    RELATIVE_JOYSTICK = 2
+  OutputJoystick = types.SimpleNamespace(
+    LEFT_JOYSTICK = 0,
+    RIGHT_JOYSTICK = 1,
+    RELATIVE_JOYSTICK = 2,
+    )
   S = GroupBase.SETTINGS
   _Settings = {
     S.CURVE_EXPONENT: CurveExponent,
@@ -1069,10 +1077,11 @@ class GroupMouseRegion (GroupBase):
 
   HapticIntensity = GroupBase.HapticIntensity
   MouseDampeningTrigger = GroupBase.MouseDampeningTrigger
-  class OutputJoystick: # TODO: clarify later.
-    LEFT = 0
-    RIGHT = 1
-    MOUSE = 2
+  OutputJoystick = types.SimpleNamespace(
+    LEFT = 0,
+    RIGHT = 1,
+    MOUSE = 2,
+    )
   S = GroupBase.SETTINGS
   _Settings = {
     S.EDGE_BINDING_RADIUS: (1, 32767),
@@ -1114,10 +1123,11 @@ class GroupScrollwheel (GroupBase):
 
   Friction = GroupBase.Friction
   HapticIntensity = GroupBase.HapticIntensity
-  class ScrollType:
-    CIRCULAR = 0
-    HORIZONTAL = 1
-    VERTICAL = 1
+  ScrollType = types.SimpleNamespace(
+    CIRCULAR = 0,
+    HORIZONTAL = 1,
+    VERTICAL = 2,
+    )
   S = GroupBase.SETTINGS
   _Settings = {
     S.SCROLL_ANGLE: (1, 180),
@@ -1171,13 +1181,14 @@ class GroupTrigger (GroupBase):
   EDGE = "edge"
   INPUTS = set([ CLICK, EDGE ])
 
-  class AdaptiveThreshold:
-    SIMPLE_THRESHOLD = 0
-    HAIR_TRIGGER = 1
-    HIP_FIRE_AGGRESSIVE = 2
-    HIP_FIRE_NORMAL = 3
-    HIP_FIRE_RELAXED = 4
-    HIP_FIRE_EXCLUSIVE = 5
+  AdaptiveThreshold = types.SimpleNamespace(
+    SIMPLE_THRESHOLD = 0,
+    HAIR_TRIGGER = 1,
+    HIP_FIRE_AGGRESSIVE = 2,
+    HIP_FIRE_NORMAL = 3,
+    HIP_FIRE_RELAXED = 4,
+    HIP_FIRE_EXCLUSIVE = 5,
+    )
   CurveExponent = GroupBase.CurveExponent
   OutputTrigger = GroupBase.OutputTrigger
   S = GroupBase.SETTINGS
