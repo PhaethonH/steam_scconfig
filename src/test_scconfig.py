@@ -296,8 +296,38 @@ class TestScconfigEncoding (unittest.TestCase):
     self.hash_and_dump(config, "01dc2f4e9b6c8f86e2d1678c2763540d")
 
 
+class TestScvdfComponents (unittest.TestCase):
+  def test_binding (self):
+    b = scconfig.Binding("key_press ESCAPE, Open Menu")
+    self.assertEqual(b.geninfo.__class__, scconfig.Evgen_Keystroke)
+    self.assertEqual(b.label, "Open Menu")
+
+    b = scconfig.Binding("mouse_button 1")
+    self.assertEqual(b.geninfo.__class__, scconfig.Evgen_MouseSwitch)
+
+    b = scconfig.Binding("xinput_button a")
+    self.assertEqual(b.geninfo.__class__, scconfig.Evgen_Gamepad)
+
+    b = scconfig.Binding("controller_action steammusic_playpause")
+    self.assertEqual(b.geninfo.__class__, scconfig.Evgen_Host)
+
+    b = scconfig.Binding("controller_action set_led 0 0 0 0 0 0")
+    self.assertEqual(b.geninfo.__class__, scconfig.Evgen_Light)
+
+    b = scconfig.Binding("controller_action add_layer 2 0 0")
+    self.assertEqual(b.geninfo.__class__, scconfig.Evgen_Overlay)
+
+    b = scconfig.Binding("mode_shift joystick 12")
+    self.assertEqual(b.geninfo.__class__, scconfig.Evgen_Modeshift)
+
+    b = scconfig.Binding("controller_action empty_binding")
+    self.assertEqual(b.geninfo.__class__, scconfig.Evgen_Empty)
+
+
+
 if __name__ == "__main__":
   #unittest.main(defaultTest=['TestScconfigEncoding.test_dumping0'])
   #unittest.main(defaultTest=['TestScconfigEncoding.test_loading1'])
+  unittest.main(defaultTest=['TestScvdfComponents.test_binding'])
   unittest.main()
 
