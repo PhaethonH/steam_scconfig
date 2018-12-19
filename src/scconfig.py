@@ -14,7 +14,7 @@ import scvdf
 ####################
 
 
-# Helper function for iterating SCVDFDict values -- helps simplify iteration as: for x in itermulti(dictMultivalueInstance)
+# Helper function for iterating SCVDFDict values -- helps simplify iteration as: for x in get_all(dictMultivalueInstance)
 def get_all (container, key, default_value):
   if key in container:
     val = container[key]
@@ -152,29 +152,6 @@ VSC_INACTIVE = "inactive"
 # Substantiative objects #
 ##########################
 
-
-class BindInfo (list):
-  """Encapsulates 'binding command' portion of a "binding" field."""
-  def __init__ (self, cmd, *args):
-    list.__init__(self)
-    if ' ' in cmd:
-      # split in place.
-      # TODO: parse quoted and escapes?
-      words = cmd.split()
-      cmd = words[0]
-      args = words[1:]
-    self.append(cmd)
-    self.extend(args)
-  @property
-  def cmd (self):
-    """The 'command' portion of the bind."""
-    return self[0]
-  @property
-  def x (self):
-    """The first argument, 'x'."""
-    return self[1]
-  def __str__ (self):
-    return ' '.join(self)
 
 class IconInfo (object):
   """Icon info, third portion of "binding" command, for radial menus."""
