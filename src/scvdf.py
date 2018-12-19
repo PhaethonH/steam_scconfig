@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# encoding=utf-8
 
 # VDF parser, rewritten for use in externally configuring Steam Controller.
 #
@@ -30,24 +31,24 @@ example evolution:
 >>> d['a']                      # 3
 >>> del d['a']                  # {}
 >>> d['a']                      ## KeyError
->>> d['a'] = ['A','A', 'A']     # { "a": ['A', 'A', 'A'] }
->>> d['a'] = 100                # { "a": [ ['A', 'A', 'A'], 100 ] }
->>> d['a'] = None               # { "a": [ ['A', 'A', 'A'], 100, None ] }
+>>> d['a'] = ['A', 'B', 'C' ]   # { "a": [ 'A', 'B', 'C'] }
+>>> d['a'] = 100                # { "a": [ 'A', 'B', 'C', 100 ] }
+>>> d['a'] = None               # { "a": [ 'A', 'B', 'C', 100, None ] }
 >>> d['a']                      # None
 
 Accessing by subscript yields the last value for compatibility with dict.
 This last value may be None (for zero-length list).
 The method get_all() is provided for accessing the entire list:
->>> d.get_all('a')              # [ ['A', 'A', 'A'], 100, None ]
+>>> d.get_all('a')              # [ 'A', 'B', 'C', 100, None ]
 >>> d.get_all('none')           # KeyError
 >>> d.get_all('none',[])        # []           # by extension of dict.get()
 
 Specific multivalue can be accessed with tuple of (key,position).
->>> d['a',0]                    # ['A', 'A','A']
->>> d['a',1]                    # 100
->>> d['a',2]                    # None
->>> d['a',3]                    ## IndexError
->>> d['a',]                     # [ ['A', 'A', 'A'], 100, None ]    # all
+>>> d['a',0]                    # 'A'
+>>> d['a',3]                    # 100
+>>> d['a',4]                    # None
+>>> d['a',5]                    ## IndexError
+>>> d['a',]                     # [ 'A', 'B', 'C', 100, None ]    # all
 >>> d['b',]                     ## KeyError
 >>> d['b',0]                    ## KeyError
 
@@ -58,10 +59,22 @@ Therefore, a python list as a value indicates special handling.
 VDF is the Valve KeyValue file format as used in many of their software, and Steam Client in particular.
 There is nothing particularly special about VDF used by Steam Controller, but the name SCVDF was chosen to avoid conflicts with existing libraries.
 """
-  def __init__ (self, *args, **kwargs):
-    dict.__init__(self, *args, **kwargs)
-    self.multiset = set()
-    self.keyorder = []
+  def __init__ (self, src=None, **kwargs):
+#    dict.__init__(self, *args, **kwargs)
+    dict.__init__(self)
+    self._multiset = set()
+    self._keyorder = []
+    if src is not None:
+      if _listlike(src):
+        for k,v in src:
+          self[k] = v
+      elif _dictlike(src):
+        for k,v in src.items():
+          self[k] = v
+      else:
+        self[src] = None
+    for k,v in kwargs.items():
+      self[k] = v
 
   def append (self, pair):
     """List sense, assume element is 2-tuple of (key,value)."""
@@ -84,53 +97,68 @@ There is nothing particularly special about VDF used by Steam Controller, but th
         raise KeyError(k.__repr__())
     else:
       vl = super(SCVDFDict,self).__getitem__(k)
-      if k in self.multiset:
-        return v[-1]
+      if k in self._multiset:
+        return vl[-1]
       else:
         return vl
 
+  @staticmethod
+  def _convert_r (x):
+    if _stringlike(x) or isinstance(x, SCVDFDict):
+      return x
+    elif _listlike(x):
+      return [ SCVDFDict._convert_r(y) for y in x ]
+    elif _dictlike(x):
+      return SCVDFDict(x)
+    else:
+      return x
+
   def __setitem__ (self, k, v):
+    v = self._convert_r(v)   # Convert nested dict into SCVDF.
     if self.__contains__(k):
       # Assigning to existing key.
-      if k in self.multiset:
-        # Already in list form.
-        temp = super(SCVDFDict,self).__getitem__(k)
-        temp.append(v)
+      temp = super(SCVDFDict,self).__getitem__(k)
+      if not k in self._multiset:
+        temp = [ temp ]       # Convert to list form.
+        self._multiset.add(k)
+      # annex to list form.
+      if _listlike(v):
+        temp.extend(v)
       else:
-        # Convert to list form.
-        temp = [ super(SCVDFDict,self).__getitem__(k), v ]
-        self.multiset.add(k)
+        temp.append(v)
     else:
-      # New dict key; singular value.
+      # New dict key; prepare value.
+      self._keyorder.append(k)
       temp = v
-      self.keyorder.append(k)
+      if _listlike(v):
+        self._multiset.add(k)   # assigned in multi form.
     super(SCVDFDict,self).__setitem__(k, temp)
 
   def __delitem__ (self, k):
-    if k in self.multiset:
-      self.multiset.remove(k)
-    if k in self.keyorder:
-      self.remove(k)
+    if k in self._multiset:
+      self._multiset.remove(k)
+    if k in self._keyorder:
+      self._keyorder.remove(k)
     super(SCVDFDict,self).__delitem__(k)
 
   def __iter__ (self):
-    for k in self.keyorder:
+    for k in self._keyorder:
       yield k
     return
 
   def keys (self):
-    return self.keyorder
+    return self._keyorder
 
   def values (self):
-    for k in self.keyorder:
+    for k in self._keyorder:
       yield self[k]
     return
 
   def items (self):
     # Return all pair-wise key/value as (key,value) pairs.
-    for k in self.keyorder:
+    for k in self._keyorder:
       vl = super(SCVDFDict,self).__getitem__(k)
-      if k in self.multiset:
+      if k in self._multiset:
         for v in vl:
           yield (k,v)
       else:
@@ -148,7 +176,7 @@ There is nothing particularly special about VDF used by Steam Controller, but th
   def get_all (self, k, *args):
     """Ensure get() is in list form."""
     try:
-      if k in self.multiset:
+      if k in self._multiset:
         return super(SCVDFDict,self).__getitem__(k)  # entire list.
       else:
         return [ super(SCVDFDict,self).__getitem__(k) ]  # listify.
@@ -172,6 +200,48 @@ There is nothing particularly special about VDF used by Steam Controller, but th
 
   def __repr__ (self):
     return super(SCVDFDict,self).__repr__()
+
+
+
+def _listlike (x):
+  try: return callable(x.extend)
+  except AttributeError: return False
+
+def _dictlike (x):
+  try: return callable(x.keys)
+  except AttributeError: return False
+
+def _stringlike (x):
+  try:
+    return callable(x.isalpha)
+  except AttributeError:
+    return False
+
+def toDict (vdf):
+  if _stringlike(vdf):
+    return vdf  # leave string alone.
+
+  if not _dictlike(vdf):
+    if _listlike(vdf):
+      if len(vdf) == 1:
+        return toDict(vdf[0])  # remove list-sense.
+      else:
+        return [ toDict(x) for x in vdf ]  # maintain list-sense.
+    else:
+      # treat as scalar
+      return vdf
+
+  # recurse within dict.
+
+  retval = dict()
+  for k in vdf.keys():
+    try:
+      vl = vdf[k,]
+    except KeyError:
+      vl = vdf[k]
+    # recursively convert values.
+    retval[k] = toDict(vl)
+  return retval
 
 
 
@@ -497,18 +567,9 @@ class TokenizeComment (TokenizeState):
 # Parser #
 ##########
 
-# Convert stream of tokens into object (list of 2-tuples).
-class Parser (object):
-  def __init__ (self):
-    self.tokenizer = None
-    self.store = []
 
-  def parse (self, srcstream):
-    pass
-
-
-
-def _parse (tokenizer, interim=None, depth=0, storetype=list):
+# Parser VDF into SCVDFDict (or other dict-like).
+def _parse (tokenizer, interim=None, depth=0, storetype=SCVDFDict):
   halt = False
   if interim is None:
     interim = storetype()
@@ -556,18 +617,14 @@ def _parse (tokenizer, interim=None, depth=0, storetype=list):
 
     if not interim:
       interim = storetype()
-    try:
-      interim.append((k,v))
-    except AttributeError as e:
-      interim[k] = v
+    interim[k] = v
 
 
-
-def load (srcstream, storetype=list):
+def load (srcstream, storetype=SCVDFDict):
   tokenizer = StreamTokenizer(srcstream)
   return _parse(tokenizer, storetype(), storetype=storetype)
 
-def loads (srcstream, storetype=list):
+def loads (srcstream, storetype=SCVDFDict):
   tokenizer = StringTokenizer(srcstream)
   return _parse(tokenizer, storetype(), storetype=storetype)
 
@@ -630,6 +687,15 @@ def dump (store, f):
   parts = _toLOS(iterlop, [])
   for p in parts:
     f.write(p)
+
+
+
+
+#py_dict = dict
+## Convert vdf to python dict.
+#def dict (vdf):
+#  pass
+
 
 
 

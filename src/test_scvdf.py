@@ -5,6 +5,68 @@ import sys, unittest
 
 import scvdf
 from scvdf import Tokenizer, StreamTokenizer, StringTokenizer, TokenizeState
+from scvdf import toDict, SCVDFDict
+
+
+class TestScvdfDict (unittest.TestCase):
+  def test_evolution_0 (self):
+    # Test the example evolution is/remains valid.
+    r"""
+>>> d = SCVDFDict()             # {}
+>>> d['a'] = 1                  # { "a": [1] }
+>>> d['a'] = 2                  # { "a": [1,2] }
+>>> d['a']                      # 2
+>>> d['a'] = 3                  # { "a": [1,2,3] }
+>>> d['a']                      # 3
+>>> del d['a']                  # {}
+>>> d['a']                      ## KeyError
+>>> d['a'] = ['A','B', 'C']     # { "a": [ 'A', 'B', 'C' }
+>>> d['a'] = 100                # { "a": [ 'A', 'B', 'C', 100 ] }
+>>> d['a'] = None               # { "a": [ 'A', 'B', 'C', 100, None ] }
+>>> d['a']                      # None
+
+Accessing by subscript yields the last value for compatibility with dict.
+This last value may be None (for zero-length list).
+The method get_all() is provided for accessing the entire list:
+>>> d.get_all('a')              # [ 'A', 'B', 'C', 100, None ]
+>>> d.get_all('none')           # KeyError
+>>> d.get_all('none',[])        # []           # by extension of dict.get()
+
+Specific multivalue can be accessed with tuple of (key,position).
+>>> d['a',0]                    # 'A'
+>>> d['a',3]                    # 100
+>>> d['a',4]                    # None
+>>> d['a',5]                    ## IndexError
+>>> d['a',]                     # [ 'A', 'B', 'C', 100, None ]    # all
+>>> d['b',]                     ## KeyError
+>>> d['b',0]                    ## KeyError
+"""
+    d = SCVDFDict()
+    self.assertTrue(isinstance(d, SCVDFDict))
+    d['a'] = 1
+    d['a'] = 2
+    self.assertEqual(d['a'], 2)
+    d['a'] = 3
+    self.assertEqual(d['a'], 3)
+    del d['a']
+    self.assertRaises(KeyError, lambda: d['a'])
+    d['a'] = [ 'A', 'B', 'C' ]
+    d['a'] = 100
+    d['a'] = None
+    self.assertEqual(d['a'], None)
+
+    self.assertEqual(d.get_all('a'), [ 'A', 'B', 'C', 100, None ])
+    self.assertRaises(KeyError, lambda: d.get_all('none'))
+    self.assertEqual(d.get_all('none',[]), [])
+
+    self.assertEqual( d['a',0] , 'A' )
+    self.assertEqual( d['a',3] , 100 )
+    self.assertEqual( d['a',4] , None )
+    self.assertRaises(IndexError, lambda: d['a',5])
+    self.assertEqual( d['a',], [ 'A', 'B', 'C', 100, None ] )
+    self.assertRaises(KeyError, lambda: d['b',])
+    self.assertRaises(KeyError, lambda: d['b',0])
+
 
 class TestVdfTokenizer (unittest.TestCase):
   def setUp (self):
@@ -163,7 +225,7 @@ class TestVdfReader (unittest.TestCase):
     src = '''"foo" "bar"'''
     res = scvdf.loads(src)
     #print("res = {!r}".format(res))
-    self.assertEqual(res, [("foo","bar")])
+    self.assertEqual(res, { "foo": "bar" })
 
   def test_parse2 (self):
     src = r'''
@@ -172,7 +234,7 @@ class TestVdfReader (unittest.TestCase):
 '''
     res = scvdf.loads(src)
     #print("res = {!r}".format(res))
-    self.assertEqual(res, [("foo","bar"), ("quux", '"quuux"')])
+    self.assertEqual(res, {"foo":"bar", "quux":'"quuux"'})
 
   def test_parse1sub (self):
     src = r'''
@@ -182,7 +244,7 @@ class TestVdfReader (unittest.TestCase):
 '''
     res = scvdf.loads(src)
     #print("res = {!r}".format(res))
-    self.assertEqual( res, [("foo", [("a","b")])] )
+    self.assertEqual( res, { "foo": { "a": "b" } } )
 
   def test_parse1sub2 (self):
     src = r'''
@@ -193,17 +255,17 @@ class TestVdfReader (unittest.TestCase):
 '''
     res = scvdf.loads(src)
     #print("res = {!r}".format(res))
-    self.assertEqual( res, [("foo", [ ("a",[("aa","bb")]) ])] )
+    self.assertEqual( res, { "foo": { "a": { "aa": "bb" }}} )
 
   def test_empty (self):
     src = ''
     res = scvdf.loads(src)
-    self.assertEqual( res, [] )
+    self.assertFalse(res)
 
   def test_only_comment (self):
     src = '//empty vdf\n'
     res = scvdf.loads(src)
-    self.assertEqual( res, [] )
+    self.assertFalse(res)
 
   def test_bad_1 (self):
     src = r'''}'''
@@ -213,15 +275,15 @@ class TestVdfReader (unittest.TestCase):
   def test_empty_value (self):
     src = r'''"foo" { }'''
     res = scvdf.loads(src)
-    self.assertEqual(res, [ ("foo", []) ])
+    self.assertEqual(res, { "foo": {} })
 
     src = r'''"foo" {}'''
     res = scvdf.loads(src)
-    self.assertEqual(res, [ ("foo", []) ])
+    self.assertEqual(res, { "foo": {} })
 
     src = r'''foo{}'''
     res = scvdf.loads(src)
-    self.assertEqual(res, [ ("foo", []) ])
+    self.assertEqual(res, { "foo": {} })
 
   def test_load_1 (self):
     fname = '../examples/defaults1_0.vdf'
@@ -240,6 +302,8 @@ class TestVdfReader (unittest.TestCase):
     d['a'] = 2
     d['a'] = 3
     self.assertEqual(d, {"a":[1,2,3]})
+    self.assertEqual(d['a'], 3)
+    self.assertEqual(d['a',1], 2)
 
   def test_load_othertype (self):
     src = r'''
@@ -404,8 +468,6 @@ class TestVdfWriter (unittest.TestCase):
     self.assertEqual(digested, "01dc2f4e9b6c8f86e2d1678c2763540d")
 
 
-
-
 if __name__ == "__main__":
   #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted'])
   #unittest.main(defaultTest=['TestVdfTokenizer.test_unquoted_into_comment'])
@@ -416,5 +478,6 @@ if __name__ == "__main__":
   #unittest.main(defaultTest=['TestVdfReader.test_multivalue'])
   #unittest.main(defaultTest=['TestVdfReader.test_empty_value'])
   #unittest.main(defaultTest=['TestVdfWriter.test_load_save_1'])
+  #unittest.main(defaultTest=['TestScvdfDict.test_evolution_0'])
   unittest.main()
 
