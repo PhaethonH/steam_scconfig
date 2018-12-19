@@ -67,6 +67,38 @@ Specific multivalue can be accessed with tuple of (key,position).
     self.assertRaises(KeyError, lambda: d['b',])
     self.assertRaises(KeyError, lambda: d['b',0])
 
+  def test_primitive_predicates (self):
+    s = ""
+    t = ()
+    l = []
+    d = {}
+
+    self.assertTrue(scvdf._stringlike(s))
+    self.assertFalse(scvdf._stringlike(t))
+    self.assertFalse(scvdf._stringlike(l))
+    self.assertFalse(scvdf._stringlike(d))
+
+    self.assertFalse(scvdf._nssequencelike(s))
+    self.assertTrue(scvdf._nssequencelike(t))
+    self.assertTrue(scvdf._nssequencelike(l))
+    self.assertFalse(scvdf._nssequencelike(d))
+
+    self.assertFalse(scvdf._nstuplelike(s))
+    self.assertTrue(scvdf._nstuplelike(t))
+    self.assertFalse(scvdf._nstuplelike(l))
+    self.assertFalse(scvdf._nstuplelike(d))
+
+    self.assertFalse(scvdf._nslistlike(s))
+    self.assertFalse(scvdf._nslistlike(t))
+    self.assertTrue(scvdf._nslistlike(l))
+    self.assertFalse(scvdf._nslistlike(d))
+
+    self.assertFalse(scvdf._dictlike(s))
+    self.assertFalse(scvdf._dictlike(t))
+    self.assertFalse(scvdf._dictlike(l))
+    self.assertTrue(scvdf._dictlike(d))
+
+
 
 class TestVdfTokenizer (unittest.TestCase):
   def setUp (self):

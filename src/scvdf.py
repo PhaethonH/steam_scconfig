@@ -64,8 +64,11 @@ There is nothing particularly special about VDF used by Steam Controller, but th
     dict.__init__(self)
     self._multiset = set()
     self._keyorder = []
+    self.update(src, **kwargs)
+
+  def update (self, src=None, **kwargs):
     if src is not None:
-      if _listlike(src):
+      if _nslistlike(src):
         for k,v in src:
           self[k] = v
       elif _dictlike(src):
@@ -76,16 +79,11 @@ There is nothing particularly special about VDF used by Steam Controller, but th
     for k,v in kwargs.items():
       self[k] = v
 
-  def append (self, pair):
-    """List sense, assume element is 2-tuple of (key,value)."""
-    (k,v) = pair
-    self[k] = v
-
   def __getitem__ (self, k):
     """Also supports tuple as keys in the form (dict_key, position:int)
 1-tuple returns multivalue as list (same as get_all()), e.g. ("key0",).
 """
-    if isinstance(k, tuple):
+    if _nstuplelike(k):  # Multi-path
       primary = k[0]
       vl = self.get_all(primary)
       if len(k) == 1:
@@ -106,8 +104,11 @@ There is nothing particularly special about VDF used by Steam Controller, but th
   def _convert_r (x):
     if _stringlike(x) or isinstance(x, SCVDFDict):
       return x
-    elif _listlike(x):
-      return [ SCVDFDict._convert_r(y) for y in x ]
+    elif _nslistlike(x):
+      if isinstance(x[0],tuple):
+        return SCVDFDict(x)
+      else:
+        return [ SCVDFDict._convert_r(y) for y in x ]
     elif _dictlike(x):
       return SCVDFDict(x)
     else:
@@ -122,7 +123,7 @@ There is nothing particularly special about VDF used by Steam Controller, but th
         temp = [ temp ]       # Convert to list form.
         self._multiset.add(k)
       # annex to list form.
-      if _listlike(v):
+      if _nslistlike(v):
         temp.extend(v)
       else:
         temp.append(v)
@@ -130,7 +131,7 @@ There is nothing particularly special about VDF used by Steam Controller, but th
       # New dict key; prepare value.
       self._keyorder.append(k)
       temp = v
-      if _listlike(v):
+      if _nslistlike(v):
         self._multiset.add(k)   # assigned in multi form.
     super(SCVDFDict,self).__setitem__(k, temp)
 
@@ -185,44 +186,49 @@ There is nothing particularly special about VDF used by Steam Controller, but th
         return args[0]
       raise
 
-  def update_pairs (self, pairs):
-    """Update from list of pairs."""
-    for pair in pairs:
-      (k,v) = pair
-      if isinstance(v,list):
-        # Recursively convert list-of-pairs into SCVDFDict.
-        subkv = SCVDFDict()
-        subkv.update_pairs(v)
-        self[k] = subkv
-      else:
-        self[k] = v
-    return self
-
   def __repr__ (self):
     return super(SCVDFDict,self).__repr__()
 
 
 
-def _listlike (x):
-  try: return callable(x.extend)
-  except AttributeError: return False
-
-def _dictlike (x):
-  try: return callable(x.keys)
-  except AttributeError: return False
-
 def _stringlike (x):
+  """String: sequence, character-aware."""
+  if isinstance(x,str): return True
   try:
     return callable(x.isalpha)
   except AttributeError:
     return False
 
+def _nssequencelike (x):
+  """Non-String Sequence Like - elements are indexable by integer."""
+  if _stringlike(x): return False
+  try: return callable(x.index)       # indexable by integer.
+  except AttributeError: return False
+
+def _nstuplelike (x):
+  """Tuple: immutable sequence, not string."""
+  if isinstance(x, tuple): return True
+  return _nssequencelike(x) and not _stringlike(x) and not _nslistlike(x)
+
+def _nslistlike (x):
+  """Non-String List Like: mutable sequence."""
+  if isinstance(x, list): return True
+  try: return _nssequencelike(x) and callable(x.append)  # mutability
+  except AttributeError: return False
+
+def _dictlike (x):
+  """Dict: iterable keys."""
+  if isinstance(x, dict): return True
+  try: return callable(x.keys)
+  except AttributeError: return False
+
+# Convert SCVDF to dict.
 def toDict (vdf):
   if _stringlike(vdf):
     return vdf  # leave string alone.
 
   if not _dictlike(vdf):
-    if _listlike(vdf):
+    if _nslistlike(vdf):
       if len(vdf) == 1:
         return toDict(vdf[0])  # remove list-sense.
       else:
@@ -631,15 +637,11 @@ def loads (srcstream, storetype=SCVDFDict):
 
 
 
-def _stringlike (x):
-  try:
-    x.strip
-    return True
-  except AttributeError:
-    return False
-
+# Input is expected to be a list-of-pairs (SCVDFDict.items())
 # Convert to list of strings (can be passed to ''.join() for printing).
-def _toLOS (iterlop, accumulator, indent=""):
+def _toLOS (iterlop, accumulator=None, indent=""):
+  if accumulator is None:
+    accumulator = []
   # Head of list.
   for pair in iterlop:
     (k, v) = pair
@@ -663,7 +665,8 @@ def _toLOS (iterlop, accumulator, indent=""):
         iv = v.items()
       except AttributeError as e:
         iv = iter(v)
-      accumulator.extend(_toLOS(iv, [], "{}{}".format(indent, "\t")))
+      # Recurse, reuse current accumulator.
+      _toLOS(iv, accumulator, "{}{}".format(indent, "\t"))
       # formatting minutiae
       accumulator.extend([indent, "}"])
     accumulator.append("\n")
@@ -676,7 +679,7 @@ def dumps (store):
     iterlop = store.items()
   except AttributeError:
     iterlop = iter(store)
-  parts = _toLOS(iterlop, [])
+  parts = _toLOS(iterlop)
   return ''.join(parts)
 
 def dump (store, f):
@@ -684,17 +687,9 @@ def dump (store, f):
     iterlop = store.items()
   except AttributeError:
     iterlop = iter(store)
-  parts = _toLOS(iterlop, [])
+  parts = _toLOS(iterlop)
   for p in parts:
     f.write(p)
-
-
-
-
-#py_dict = dict
-## Convert vdf to python dict.
-#def dict (vdf):
-#  pass
 
 
 

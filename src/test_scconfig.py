@@ -282,7 +282,7 @@ class TestScconfigEncoding (unittest.TestCase):
 
   def test_loading0 (self):
     kv = scvdf.SCVDFDict()
-    kv.update_pairs(PRESET_DEFAULTS1)
+    kv.update(PRESET_DEFAULTS1)
     config = scconfig.ControllerConfigFactory.make_from_dict(kv)
 
     self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc")
