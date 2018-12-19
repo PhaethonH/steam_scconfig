@@ -132,6 +132,20 @@ def _stringlike (x):
   except AttributeError: return False
 
 
+# VSC config keywords.
+VSC_KEYPRESS = "key_press"
+VSC_MOUSEBUTTON = "mouse_button"
+VSC_MOUSEWHEEL = "mouse_wheel"
+VSC_SETLED = "set_led"
+VSC_CONTROLLERACTION = "controller_action"
+VSC_GAMEPADBUTTON = "xinput_button"
+VSC_EMPTYBINDING = "empty_binding"
+VSC_MODE_SHIFT = "mode_shift"   # with underscore, in bindings{}
+VSC_MODESHIFT = "modeshift"     # without underscore, in preset{}
+VSC_ACTIVE = "active"
+VSC_INACTIVE = "inactive"
+
+
 
 
 ##########################
@@ -225,45 +239,25 @@ class Evgen_Invalid (EvgenBase):
 
 class Evgen_Empty (EvgenBase):
   """alias for Evgen_Host('empty_binding')"""
-  ALIASES = [ 'controller_action' ]
+  ALIASES = [ VSC_CONTROLLERACTION ]
   def __init__ (self, strict_match=None, *args):
     if strict_match is not None:
       if strict_match != 'empty_binding':
         raise ValueError("Invalid argument to initializer: {!r}".format(strict_match))
-    EvgenBase.__init__(self, 'controller_action', 'empty_binding')
+    EvgenBase.__init__(self, VSC_CONTROLLERACTION, VSC_EMPTYBINDING)
 
   def __repr__ (self):
     return "{}()".format(self.__class__.__name__)
 
-  @staticmethod
-  def _make (bindinfo, label, iconinfo):
-    """Instantiate from a parsed tuple."""
-    if bindinfo.cmd == 'controller_action' and bindinfo.x == 'empty_binding':
-      return Evgen_Empty()
-    return None
-
 
 class Evgen_Keystroke (EvgenBase):
-  ALIASES = [ 'key_press' ]
+  ALIASES = [ VSC_KEYPRESS ]
   def __init__ (self, evcode):
-    EvgenBase.__init__(self, "key_press", evcode)
-
-#  def __repr__ (self):
-#    return "{}({!r})".format(self.__class__.__name__, self._get_evdetails()[0])
-
-  @staticmethod
-  def _make (bindinfo, label, iconinfo):
-    """Instantiate from a parsed tuple."""
-    if bindinfo.cmd in ('key_press',):
-      try:
-        return Evgen_Keystroke(bindinfo.x)
-      except:
-        pass
-    return None
+    EvgenBase.__init__(self, VSC_KEYPRESS, evcode)
 
 
 class Evgen_MouseSwitch (EvgenBase):
-  ALIASES = [ 'mouse_button', 'mouse_wheel' ]
+  ALIASES = [ VSC_MOUSEBUTTON, VSC_MOUSEWHEEL ]
   TRANSLATE_BUTTON = {
     "1": "LEFT", "2": "MIDDLE", "3": "RIGHT",
     "4": "BACK", "5": "FORWARD"
@@ -275,28 +269,18 @@ class Evgen_MouseSwitch (EvgenBase):
     major, vdfliteral = None, None
     if vdfliteral is None:
       vdfliteral = filter_enum(self.TRANSLATE_BUTTON, evcode)
-      major = 'mouse_button' if vdfliteral else None
+      major = VSC_MOUSEBUTTON if vdfliteral else None
     if vdfliteral is None:
       vdfliteral = filter_enum(self.TRANSLATE_WHEEL, evcode)
-      major = 'mouse_wheel' if vdfliteral else None
+      major = VSC_MOUSEWHEEL if vdfliteral else None
     if major and vdfliteral:
       EvgenBase.__init__(self, major, vdfliteral)
     else:
       raise ValueError("Unknown mouse evcode '{}'".format(evcode))
 
-  @staticmethod
-  def _make (bindinfo, label, iconinfo):
-    """Instantiate from a parsed tuple."""
-    if bindinfo.cmd in ('mouse_button', 'mouse_wheel'):
-      try:
-        return Evgen_MouseSwitch(bindinfo.cmd, bindinfo.x)
-      except:
-        pass
-    return None
-
 
 class Evgen_Gamepad (EvgenBase):
-  ALIASES = [ 'xinput_button' ]
+  ALIASES = [ VSC_GAMEPADBUTTON ]
   TRANSLATION = {
     "A": "A", "B": "B", "X": "X", "Y": "Y",
     "LB": "SHOULDER_LEFT", "RB": "SHOULDER_RIGHT",
@@ -309,22 +293,13 @@ class Evgen_Gamepad (EvgenBase):
   def __init__ (self, evcode):
     vdfliteral = filter_enum(self.TRANSLATION, evcode)
     if vdfliteral is not None:
-      EvgenBase.__init__(self, "xinput_button", vdfliteral)
+      EvgenBase.__init__(self, VSC_GAMEPADBUTTON, vdfliteral)
     else:
       raise KeyError("Unknown xpad evcode '{}'.".format(evcode))
 
-  @staticmethod
-  def _make (bindinfo, label, iconinfo):
-    """Instantiate from a parsed tuple."""
-    if bindinfo.cmd == 'xinput_button':
-      try:
-        return Evgen_Gamepad(bindinfo.x)
-      except:
-        pass
-    return None
 
 class Evgen_Host (EvgenBase):
-  ALIASES = [ 'controller_action' ]
+  ALIASES = [ VSC_CONTROLLERACTION ]
   """Host operations."""
   TRANSLATION = {
 #    'empty': "empty_binding",
@@ -358,30 +333,22 @@ class Evgen_Host (EvgenBase):
     if vdfliteral is None:
       mangle = mangle_vdfliteral(details)
       raise ValueError("Unknown host action '{}'".format(mangled))
-    EvgenBase.__init__(self, vdfliteral)
-
-  @staticmethod
-  def _make (bindinfo, label, iconinfo):
-    """Instantiate from a parsed tuple."""
-    try:
-      return Evgen_Host(bindinfo.cmd)
-    except:
-      return None
+    EvgenBase.__init__(self, VSC_CONTROLLERACTION, vdfliteral)
 
 
 class Evgen_Light (EvgenBase):
-  ALIASES = [ 'controller_action' ]
+  ALIASES = [ VSC_CONTROLLERACTION ]
   """Set controller LED - color and/or brightness.
 
 R : red value, 0..255
 G : green value, 0..255
 B : blue value, 0..255
-X : unknown, 0
+X : unknown, 100
 L : brightness, 0..255 (off to brightest)
 M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ignore R,G,B,X,L)
 """
   def __init__ (self, major, R, G, B, X, L, M):
-    EvgenBase.__init__(self, "controller_acdtion", "set_led", R, G, B, X, L, M)
+    EvgenBase.__init__(self, VSC_CONTROLLERACTION, VSC_SETLED, R, G, B, X, L, M)
     self.R = R
     self.G = G
     self.B = B
@@ -389,16 +356,9 @@ M : 0=UserPrefs (ignore R,G,B,X,L), 1=use R,G,B,L values, 2=set by XInput ID (ig
     self.L = L
     self.M = M
 
-  @staticmethod
-  def _make (bindinfo, label, iconinfo):
-    """Instantiate from a parsed tuple."""
-    if bindinfo.cmd == 'set_led':
-      return Evgen_Light(*(bindinfo.args), label=label)
-    return None
-
 
 class Evgen_Overlay (EvgenBase):
-  ALIASES = [ 'controller_action' ]
+  ALIASES = [ VSC_CONTROLLERACTION ]
   """Control overlays."""
   ACTIONS = {
     "apply_layer": "add_layer",
@@ -408,37 +368,20 @@ class Evgen_Overlay (EvgenBase):
     "hold_layer": "hold_layer",
     "hold": "hold_layer",
     "change": "change_preset",
-#    "empty": "empty_binding",
-# TODO: change action set
   }
   def __init__ (self, actionspec, target_id, frob0, frob1):
     vdfliteral = filter_enum(self.ACTIONS, actionspec)
     if vdfliteral is None:
       raise ValueError("Unknown overlay action '{}'".format(vdfliteral))
     marshal = [ vdfliteral, str(target_id), str(frob0), str(frob1) ]
-    EvgenBase.__init__(self, 'controller_action', *marshal)
+    EvgenBase.__init__(self, VSC_CONTROLLERACTION, *marshal)
     self.target_id = target_id
     self.frob0 = frob0
     self.frob1 = frob1
 
-  @staticmethod
-  def _make (bindinfo, label, iconinfo):
-    if (bindinfo.cmd == 'controller_action'):
-      try:
-        return Evgen_Overlay(*bindinfo.args[:4])
-      except:
-        pass
-      if bindinfo.x in ('empty_binding', 'empty', None):
-        return Evgen_Empty()
-      else:
-        mangled = mangle_vdfliteral(str(bindinfo))
-        #return Evgen_Empty('UNKNOWN_CONTROLLER_ACTION({})'.format(mangled))
-        return Evgen_Empty()
-    return None
-
 
 class Evgen_Modeshift (EvgenBase):
-  ALIASES = [ 'mode_shift' ]
+  ALIASES = [ VSC_MODE_SHIFT ]
   ACCEPTABLE = [
     "left_trackpad", "right_trackpad",
     "left_trigger", "right_trigger",
@@ -447,18 +390,9 @@ class Evgen_Modeshift (EvgenBase):
     ]
   def __init__ (self, input_source, group_id):
     vdfliteral = filter_enum(self.ACCEPTABLE, input_source)
-    EvgenBase.__init__(self, 'mode_shift', vdfliteral, str(group_id))
+    EvgenBase.__init__(self, VSC_MODE_SHIFT, vdfliteral, str(group_id))
     self.inpsrc = vdfliteral
     self.group_id = group_id
-
-  @staticmethod
-  def _make (bindinfo, label, iconinfo):
-    """Instantiate from a parsed tuple."""
-    if (bindinfo.cmd == 'mode_shift'):
-      inp = bindinfo[1]
-      gid = bindinfo[2]
-      return Evgen_Modeshift(inp, gid)
-    return None
 
 
 
@@ -864,11 +798,11 @@ class GroupSourceBinding (object):
     rhs = []
     rhs.append(self.grpsrc)
     if self.active:
-      rhs.append("active")
+      rhs.append(VSC_ACTIVE)
     else:
-      rhs.append("inactive")
+      rhs.append(VSC_INACTIVE)
     if self.modeshift:
-      rhs.append("modeshift")
+      rhs.append(VSC_MODESHIFT)
     retval = ' '.join(rhs)
     return retval
 
@@ -905,8 +839,8 @@ class Preset (object):
       # assume not parsed.
       phrases = groupsrc.split()
       groupsrc = phrases[0]
-      active = (phrases[1] == 'active')
-      modeshift = (phrases[2] == 'modeshift') if len(phrases)>2 else False
+      active = (phrases[1] == VSC_ACTIVE)
+      modeshift = (phrases[2] == VSC_MODESHIFT) if len(phrases)>2 else False
     gsb = GroupSourceBinding(groupid, groupsrc, active, modeshift)
     self.gsb.append(gsb)
     return gsb
