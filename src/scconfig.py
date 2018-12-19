@@ -192,6 +192,10 @@ class IconInfo (object):
     self.fg = fg
   def __str__ (self):
     return ' '.join([self.path, self.bg, self.fg])
+  def __repr__ (self):
+    return "{}(path={!r},bg={!r},fg={!r})".format(
+            self.__class__.__name__,
+            self.path, self.bg, self.fg)
 
 
 # Evgen = Event Generator (Synthesis)
@@ -413,7 +417,6 @@ class EvgenFactory (object):
   def make_hostcall (hostreq):
     return Evgen_Host(hostreq)
   @staticmethod
-# TODO: test set_led
   def make_light (led_mode, red, green, blue, unk, brightness):
     return Evgen_Light(red, green, blue, unk, brightness, mode)
   @staticmethod
@@ -493,7 +496,15 @@ class Binding (object):
     if self.iconinfo:
       while len(phrases) < 2: phrases.append('')
       phrases.append(self.iconinfo.__str__())
-    return ', '.join(phrases)
+    retval = ', '.join(phrases)
+    return retval
+
+  def __repr__ (self):
+    return "{}(geninfo={!r}, label={!r}, iconinfo={!r})".format(
+              self.__class__.__name__,
+              self.geninfo,
+              self.label,
+              self.iconinfo)
 
   @staticmethod
   def _parse (s):
@@ -504,13 +515,6 @@ class Binding (object):
     iconinfo = IconInfo(*(phrases[2].split())) if len(phrases) > 2 else None
     retval = (geninfo, label, iconinfo)
     return retval
-
-  def __repr__ (self):
-    return "{}(geninfo={!r}, label={!r}, iconinfo={!r})".format(
-              self.__class__.__name__,
-              self.geninfo,
-              self.label,
-              self.iconinfo)
 
 
 
@@ -1068,6 +1072,8 @@ class Mapping (object):
 
     if self.settings:
       kv['settings'] = self.settings.encode_kv()
+    else:
+      kv['settings'] = {}
 
     return kv
 

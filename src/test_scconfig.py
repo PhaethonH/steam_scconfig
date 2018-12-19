@@ -177,6 +177,14 @@ class TestScvdfComponents (unittest.TestCase):
     b = scconfig.Binding("controller_action change_preset 2 0 0")
     self.assertEqual(b.geninfo.__class__, scconfig.Evgen_Overlay)
 
+    b = scconfig.Binding("controller_action sed_led 255 0 255 100 192 2, manually set led, ghost_045_move_0413.png #232323 #E4E4E4")
+    self.assertEqual(b.geninfo.__class__, scconfig.Evgen_Light)
+    self.assertEqual(b.label, "manually set led")
+    self.assertEqual(b.iconinfo.__class__, scconfig.IconInfo)
+    self.assertEqual(b.iconinfo.path, "ghost_045_move_0413.png")
+    self.assertEqual(b.iconinfo.bg, "#232323")
+    self.assertEqual(b.iconinfo.fg, "#E4E4E4")
+
 
 
 class TestScconfigEncoding (unittest.TestCase):
@@ -327,10 +335,15 @@ class TestScconfigEncoding (unittest.TestCase):
 
     self.hash_and_dump(config, "01dc2f4e9b6c8f86e2d1678c2763540d")
 
+  def test_loading2 (self):
+    f = open("../examples/led_sets1_0.vdf", "rt")
+    pydict = scvdf.load(f, scvdf.SCVDFDict)
+    f.close()
+    config = scconfig.ControllerConfigFactory.make_from_dict(pydict)
+
+    self.hash_and_dump(config, "1bd70090976c6d218cf6273ba3e26a12")
+
 
 if __name__ == "__main__":
-  #unittest.main(defaultTest=['TestScconfigEncoding.test_dumping0'])
-  #unittest.main(defaultTest=['TestScconfigEncoding.test_loading1'])
-  #unittest.main(defaultTest=['TestScvdfComponents.test_binding'])
   unittest.main()
 
