@@ -188,6 +188,40 @@ class TestScvdfComponents (unittest.TestCase):
   def test_group (self):
     g = scconfig.GroupDpad()
 
+    # Test boolean property.
+    g.requires_click
+    g.requires_click = True
+    self.assertEqual(g.requires_click, True)
+    g.requires_click = False
+    self.assertEqual(g.requires_click, False)
+    with self.assertRaisesRegex(ValueError, 'Value 42.*constraints.*bool'):
+      g.requires_click = 42
+    self.assertEqual(g.requires_click, False)
+
+    # Test enumerated/namespaced property.
+    g.layout
+    g.layout = g.Layout.CROSS_GATE
+    self.assertEqual(g.layout, 3)
+    g.layout = g.Layout.EIGHT_WAY
+    self.assertEqual(g.layout, 1)
+    with self.assertRaisesRegex(ValueError, 'Value 42.*constraints.*CROSS_GATE'):
+      g.layout = 42
+    self.assertEqual(g.layout, 1)
+
+    # Test range-constraint integer.
+    g.deadzone
+    g.deadzone = 0
+    self.assertEqual(g.deadzone, 0)
+    g.deadzone = 10000
+    self.assertEqual(g.deadzone, 10000)
+    g.deadzone = 32000
+    self.assertEqual(g.deadzone, 32000)
+    with self.assertRaisesRegex(ValueError, "Value.*constraints.*0, 32767"):
+      g.deadzone = 99999
+    self.assertEqual(g.deadzone, 32000)
+
+    kv = g.settings.encode_kv()
+    self.assertEqual(kv, { "requires_click": "0", "layout": "1", "deadzone": "32000" })
 
 
 class TestScconfigEncoding (unittest.TestCase):

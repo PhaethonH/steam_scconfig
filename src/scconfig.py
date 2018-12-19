@@ -7,6 +7,7 @@
 
 import scvdf
 import types
+from collections import OrderedDict
 
 
 
@@ -36,12 +37,15 @@ def dict2lop (kv_dict):
 
 
 # Helper class for commonly recurring 'settings' field, which is all-scalar.
-class EncodableDict (scvdf.SCVDFDict):
+class EncodableDict (OrderedDict):
   """Extends SCVDFDict to support .encode_kv()"""
   def __init__ (self, index=None, copyfrom=None):
     if isinstance(index,dict):  # implies copyfrom currently None.
       copyfrom, index = index, None
-    scvdf.SCVDFDict.__init__(self, copyfrom)
+    if copyfrom:
+      OrderedDict.__init__(self, copyfrom)
+    else:
+      OrderedDict.__init__(self)
     self.index = VSC_SETTINGS if (index is None) else None
   def encode_kv (self):
     kv = scvdf.SCVDFDict()
@@ -49,6 +53,7 @@ class EncodableDict (scvdf.SCVDFDict):
       try:
         kv[k] = v.encode_kv()     # recursively encode.
       except AttributeError as e:
+        if isinstance(v, bool): v = int(v)    # cast bool to int.
         kv[k] = str(v)
     return kv
 
@@ -818,30 +823,33 @@ class GroupBase (object):
   @staticmethod
   def _basic_getter (settings_key):
     def getter (self):
-      return self.settings[settings_key]
+      return self.settings.get(settings_key, None)
     return getter
   @staticmethod
   def _basic_setter (settings_key):
     def setter (self, val):
-      constraint = self._Settings.get(val, None)
+      constraint = self._Settings.get(settings_key, None)
       if isinstance(constraint,tuple):      # integer range constraint.
-        lower, upper = contraint
-        if (val < lower) or (lower < val):
-          return
+        lower, upper = constraint
+        if (val < lower) or (upper < val):
+          raise ValueError("Value {} not within constraints {}".format(val, constraint))
       elif isinstance(constraint,list):     # any from a list.
         if not (val in constraints):
-          return
+          raise ValueError("Value {} not within constraints {}".format(val, constraint))
       elif type(constraint) == types.SimpleNamespace:   # any from namespace.
-        if not (val in contraint.__dict__.values()):
+        if not (val in constraint.__dict__.values()):
+          raise ValueError("Value {} not within constraints {}".format(val, constraint))
           return
       else:       # is of type.
         if type(val) != constraint:
-          return
+          raise ValueError("Value {} not within constraints type({})".format(val, constraint))
       self.settings[settings_key] = val
+    return setter
   @staticmethod
   def _basic_deleter (settings_key):
     def deleter (self):
       del self.settings[settings_key]
+    return deleter
   @staticmethod
   def _basic_property (settings_key):
     return property(GroupBase._basic_getter(settings_key),
@@ -856,7 +864,7 @@ class GroupBase (object):
     return inp
 
 
-class AbsoluteMouse (GroupBase):
+class GroupAbsoluteMouse (GroupBase):
   CLICK = "click"
   DOUBLETAP = "doubletap"
   TOUCH = "toucH"
@@ -899,6 +907,46 @@ class AbsoluteMouse (GroupBase):
     S.DEADZONE_OUTER_RADIUS: (0, 32000),
     }
 
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'absolute_mouse', index, py_inputs, py_settings, **kwargs)
+
+#  @property
+#  def sensitivity (self):
+#    return self.settings.get(self.S.SENSITIVITY, None)
+#  @sensitivity.setter
+#  def sensitivity (self, val):
+#    self.setings[self.S.SENSITIVITY] = val
+#  @sensitivity.deleter
+#  def sensitivity (self):
+#    del self.settings[self.S.SENSITIVITY]
+
+  sensitivity = property(GroupBase._basic_getter(S.SENSITIVITY),
+                          GroupBase._basic_setter(S.SENSITIVITY),
+                          GroupBase._basic_deleter(S.SENSITIVITY))
+
+  trackball = GroupBase._basic_property(S.TRACKBALL)
+  doubletap_beep = GroupBase._basic_property(S.DOUBLETAP_BEEP)
+  invert_x = GroupBase._basic_property(S.INVERT_X)
+  invert_y = GroupBase._basic_property(S.INVERT_Y)
+  haptic_intensity = GroupBase._basic_property(S.HAPTIC_INTENSITY)
+  rotation = GroupBase._basic_property(S.ROTATION)
+  friction = GroupBase._basic_property(S.FRICTION)
+  friction_vert_scale = GroupBase._basic_property(S.FRICTION_VERT_SCALE)
+  sensitivity_vert_scale = GroupBase._basic_property(S.SENSITIVITY_VERT_SCALE)
+  acceleration = GroupBase._basic_property(S.ACCELERATION)
+  mouse_move_threshold = GroupBase._basic_property(S.MOUSE_MOVE_THRESHOLD)
+  mouse_smoothing = GroupBase._basic_property(S.MOUSE_SMOOTHING)
+  edge_spin_velocity = GroupBase._basic_property(S.EDGE_SPIN_VELOCITY)
+  edge_spin_radius = GroupBase._basic_property(S.EDGE_SPIN_RADIUS)
+  doubletap_max_duration = GroupBase._basic_property(S.DOUBLETAP_MAX_DURATION)
+  mouse_dampening_trigger = GroupBase._basic_property(S.MOUSE_DAMPENING_TRIGGER)
+  mouse_trigger_clamp_amount = GroupBase._basic_property(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+  gyro_axis = GroupBase._basic_property(S.GYRO_AXIS)
+  gyro_button = GroupBase._basic_property(S.GYRO_BUTTON)
+  gyro_button_invert = GroupBase._basic_property(S.GYRO_BUTTON_INVERT)
+  deadzone_outer_radius = GroupBase._basic_property(S.DEADZONE_OUTER_RADIUS)
+  # alias
+  doubetape_max_duraction = doubletap_max_duration
 
 class GroupDpad (GroupBase):
   DPAD_NORTH = 'dpad_north'
@@ -938,6 +986,18 @@ class GroupDpad (GroupBase):
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'dpad', index, py_inputs, py_settings, **kwargs)
 
+  requires_click = GroupBase._basic_property(S.REQUIRES_CLICK)
+  layout = GroupBase._basic_property(S.LAYOUT)
+  deadzone = GroupBase._basic_property(S.DEADZONE)
+  edge_binding_radius = GroupBase._basic_property(S.EDGE_BINDING_RADIUS)
+  edge_binding_invert = GroupBase._basic_property(S.EDGE_BINDING_INVERT)
+  analog_emulation_period = GroupBase._basic_property(S.ANALOG_EMULATION_PERIOD)
+  overlap_region = GroupBase._basic_property(S.OVERLAP_REGION)
+  gyro_button_invert = GroupBase._basic_property(S.GYRO_BUTTON_INVERT)
+  gyro_button = GroupBase._basic_property(S.GYRO_BUTTON)
+  gyro_neutral = GroupBase._basic_property(S.GYRO_NEUTRAL)
+  haptic_intensity_override = GroupBase._basic_property(S.HAPTIC_INTENSITY_OVERRIDE)
+
 class GroupFourButtons (GroupBase):
   BUTTON_A = 'down'
   BUTTON_B = 'right'
@@ -953,6 +1013,15 @@ class GroupFourButtons (GroupBase):
     S.BUTTON_SIZE: (1, 32767),
     S.BUTTON_DIST: (1, 32767),
     }
+
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'four_buttons', index, py_inputs, py_settings, **kwargs)
+
+  requires_click = GroupBase._basic_property(S.REQUIRES_CLICK)
+  button_size = GroupBase._basic_property(S.BUTTON_SIZE)
+  button_dist = GroupBase._basic_property(S.BUTTON_DIST)
+  # alias
+  button_distance = button_dist
 
 class GroupJoystickCamera (GroupBase):
   CurveExponent = GroupBase.CurveExponent
@@ -982,6 +1051,23 @@ class GroupJoystickCamera (GroupBase):
     S.GYRO_NEUTRAL: (0, 32767),
   }
 
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'joystick_camera', index, py_inputs, py_settings, **kwargs)
+
+  curve_exponent = GroupBase._basic_property(S.CURVE_EXPONENT)
+  swipe_duration = GroupBase._basic_property(S.SWIPE_DURATION)
+  haptic_intensity = GroupBase._basic_property(S.HAPTIC_INTENSITY)
+  output_joystick = GroupBase._basic_property(S.OUTPUT_JOYSTICK)
+  sensitivity_vert_scale = GroupBase._basic_property(S.SENSITIVITY_VERT_SCALE)
+  anti_deadzone = GroupBase._basic_property(S.ANTI_DEADZONE)
+  anti_deadzone_buffer = GroupBase._basic_property(S.ANTI_DEADZONE_BUFFER)
+  invert_x = GroupBase._basic_property(S.INVERT_X)
+  invert_y = GroupBase._basic_property(S.INVERT_Y)
+  joystick_smoothing = GroupBase._basic_property(S.JOYSTICK_SMOOTHING)
+  sensitivity = GroupBase._basic_property(S.SENSITIVITY)
+  gyro_button = GroupBase._basic_property(S.GYRO_BUTTON)
+  gyro_neutral = GroupBase._basic_property(S.GYRO_NEUTRAL)
+
 class GroupJoystickMouse (GroupBase):
   CLICK = "click"
   EDGE = "edge"
@@ -1002,6 +1088,17 @@ class GroupJoystickMouse (GroupBase):
     S.ANTI_DEADZONE_BUFFER: (0, 32767),
     S.OUTPUT_JOYSTICK: OutputJoystick,
   }
+
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'joystick_mouse', index, py_inputs, py_settings, **kwargs)
+
+  curve_exponent = GroupBase._basic_property(S.CURVE_EXPONENT)
+  custom_curve_exponent = GroupBase._basic_property(S.CUSTOM_CURVE_EXPONENT)
+  edge_binding_radius = GroupBase._basic_property(S.EDGE_BINDING_RADIUS)
+  edge_binding_invert = GroupBase._basic_property(S.EDGE_BINDING_INVERT)
+  anti_deadzone = GroupBase._basic_property(S.ANTI_DEADZONE)
+  anti_deadzone_buffer = GroupBase._basic_property(S.ANTI_DEADZONE_BUFFER)
+  output_joystick = GroupBase._basic_property(S.OUTPUT_JOYSTICK)
 
 class GroupJoystickMove (GroupBase):
   CurveExponent = GroupBase.CurveExponent
@@ -1039,6 +1136,31 @@ class GroupJoystickMove (GroupBase):
     S.GYRO_LOCK_EXTENTS: bool,
   }
 
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'joystick_move', index, py_inputs, py_settings, **kwargs)
+
+  curve_exponent = GroupBase._basic_property(S.CURVE_EXPONENT)
+  custom_curve_exponent = GroupBase._basic_property(S.CUSTOM_CURVE_EXPONENT)
+  edge_binding_radius = GroupBase._basic_property(S.EDGE_BINDING_RADIUS)
+  edge_binding_invert = GroupBase._basic_property(S.EDGE_BINDING_INVERT)
+  output_joystick = GroupBase._basic_property(S.OUTPUT_JOYSTICK)
+  anti_deadzone = GroupBase._basic_property(S.ANTI_DEADZONE)
+  anti_deadzone_buffer = GroupBase._basic_property(S.ANTI_DEADZONE_BUFFER)
+  haptic_intensity = GroupBase._basic_property(S.HAPTIC_INTENSITY)
+  deadzone_inner_radius = GroupBase._basic_property(S.DEADZONE_INNER_RADIUS)
+  deadzone_outer_radius = GroupBase._basic_property(S.DEADZONE_OUTER_RADIUS)
+  output_axis = GroupBase._basic_property(S.OUTPUT_AXIS)
+  gyro_lock_extents = GroupBase._basic_property(S.GYRO_LOCK_EXTENTS)
+  invert_x = GroupBase._basic_property(S.INVERT_X)
+  invert_y = GroupBase._basic_property(S.INVERT_Y)
+  sensitivity = GroupBase._basic_property(S.SENSITIVITY)
+  sensitivity_vert_scale = GroupBase._basic_property(S.SENSITIVITY_VERT_SCALE)
+  sensitivity_horiz_scale = GroupBase._basic_property(S.SENSITIVITY_HORIZ_SCALE)
+  gyro_neutral = GroupBase._basic_property(S.GYRO_NEUTRAL)
+  gyro_button = GroupBase._basic_property(S.GYRO_BUTTON)
+  gyro_button_invert = GroupBase._basic_property(S.GYRO_BUTTON_INVERT)
+  gyro_lock_extents = GroupBase._basic_property(S.GYRO_LOCK_EXTENTS)
+
 class GroupMouseJoystick (GroupBase):
   Friction = GroupBase.Friction
   GyroButton = GroupBase.GyroButton
@@ -1069,6 +1191,32 @@ class GroupMouseJoystick (GroupBase):
     S.GYRO_SENSITIVITY_SCALE: int, # TODO: research limits
   }
 
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'mouse_joystick', index, py_inputs, py_settings, **kwargs)
+
+  trackball = GroupBase._basic_property(S.TRACKBALL)
+  doubletap_beep = GroupBase._basic_property(S.DOUBLETAP_BEEP)
+  invert_x = GroupBase._basic_property(S.INVERT_X)
+  invert_y = GroupBase._basic_property(S.INVERT_Y)
+  haptic_intensity = GroupBase._basic_property(S.HAPTIC_INTENSITY)
+  rotation = GroupBase._basic_property(S.ROTATION)
+  friction = GroupBase._basic_property(S.FRICTION)
+  sensitivity_vert_scale = GroupBase._basic_property(S.SENSITIVITY_VERT_SCALE)
+  mouse_move_threshold = GroupBase._basic_property(S.MOUSE_MOVE_THRESHOLD)
+  edge_spin_velocity = GroupBase._basic_property(S.EDGE_SPIN_VELOCITY)
+  edge_spin_radius = GroupBase._basic_property(S.EDGE_SPIN_RADIUS)
+  doubletap_max_duration = GroupBase._basic_property(S.DOUBLETAP_MAX_DURATION)
+  mouse_dampening_trigger = GroupBase._basic_property(S.MOUSE_DAMPENING_TRIGGER)
+  mouse_trigger_clamp_amount = GroupBase._basic_property(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+  mousejoystick_deadzone_x = GroupBase._basic_property(S.MOUSEJOYSTICK_DEADZONE_X)
+  mousejoystick_deadzone_y = GroupBase._basic_property(S.MOUSEJOYSTICK_DEADZONE_Y)
+  mousejoystick_precision = GroupBase._basic_property(S.MOUSEJOYSTICK_PRECISION)
+  custom_curve_exponent = GroupBase._basic_property(S.CUSTOM_CURVE_EXPONENT)
+  gyro_button = GroupBase._basic_property(S.GYRO_BUTTON)
+  gyro_button_invert = GroupBase._basic_property(S.GYRO_BUTTON_INVERT)
+  gyro_axis = GroupBase._basic_property(S.GYRO_AXIS)
+  gyro_sensitivity_scale = GroupBase._basic_property(S.GYRO_SENSITIVITY_SCALE)
+
 class GroupMouseRegion (GroupBase):
   CLICK = "click"
   EDGE = "edge"
@@ -1098,6 +1246,22 @@ class GroupMouseRegion (GroupBase):
     S.MOUSE_TRIGGER_CLAMP_AMOUNT: (100, 8000),
   }
 
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'mouse_region', index, py_inputs, py_settings, **kwargs)
+
+  edge_binding_radius = GroupBase._basic_property(S.EDGE_BINDING_RADIUS)
+  edge_binding_invert = GroupBase._basic_property(S.EDGE_BINDING_INVERT)
+  haptic_intensity = GroupBase._basic_property(S.HAPTIC_INTENSITY)
+  output_joystick = GroupBase._basic_property(S.OUTPUT_JOYSTICK)
+  scale = GroupBase._basic_property(S.SCALE)
+  position_x = GroupBase._basic_property(S.POSITION_X)
+  position_y = GroupBase._basic_property(S.POSITION_Y)
+  sensitivity_vert_scale = GroupBase._basic_property(S.SENSITIVITY_VERT_SCALE)
+  sensitivity_horiz_scale = GroupBase._basic_property(S.SENSITIVITY_HORIZ_SCALE)
+  teleport_stop = GroupBase._basic_property(S.TELEPORT_STOP)
+  mouse_dampening_trigger = GroupBase._basic_property(S.MOUSE_DAMPENING_TRIGGER)
+  mouse_trigger_clamp_amount = GroupBase._basic_property(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+
 class GroupRadialMenu (GroupBase):
   CLICK = "click"
   # touch_menu_button_%d  0..15
@@ -1113,6 +1277,16 @@ class GroupRadialMenu (GroupBase):
     S.TOUCH_MENU_SCALE: (50, 150),
     S.TOUCH_MENU_SHOW_LABELS: bool,
   }
+
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'radial_menu', index, py_inputs, py_settings, **kwargs)
+
+  touchmenu_button_fire_type = GroupBase._basic_property(S.TOUCHMENU_BUTTON_FIRE_TYPE)
+  touch_menu_opacity = GroupBase._basic_property(S.TOUCH_MENU_OPACITY)
+  touch_menu_position_x = GroupBase._basic_property(S.TOUCH_MENU_POSITION_X)
+  touch_menu_position_y = GroupBase._basic_property(S.TOUCH_MENU_POSITION_Y)
+  touch_menu_scale = GroupBase._basic_property(S.TOUCH_MENU_SCALE)
+  touch_menu_show_labels = GroupBase._basic_property(S.TOUCH_MENU_SHOW_LABELS)
 
 class GroupScrollwheel (GroupBase):
   CLICK = "click"
@@ -1138,10 +1312,23 @@ class GroupScrollwheel (GroupBase):
     S.SCROLL_FRICTION: Friction,
   }
 
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'scrollwheel', index, py_inputs, py_settings, **kwargs)
+
+  scroll_angle = GroupBase._basic_property(S.SCROLL_ANGLE)
+  haptic_intensity = GroupBase._basic_property(S.HAPTIC_INTENSITY)
+  scroll_type = GroupBase._basic_property(S.SCROLL_TYPE)
+  scroll_invert = GroupBase._basic_property(S.SCROLL_INVERT)
+  scroll_wrap = GroupBase._basic_property(S.SCROLL_WRAP)
+  scroll_friction = GroupBase._basic_property(S.SCROLL_FRICTION)
+
 class GroupSingleButton (GroupBase):
   CLICK = "click"
   TOUCH = "touch"
   INPUTS = set([ CLICK, TOUCH ])
+
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'single_button', index, py_inputs, py_settings, **kwargs)
 
 class GroupSwitches (GroupBase):
   BUTTON_ESCAPE = "button_escape"
@@ -1162,6 +1349,9 @@ class GroupSwitches (GroupBase):
   BUTTON_X_MODESHIFT = "button_x_modeshift"
   BUTTON_Y_MODESHIFT = "button_y_modeshift"
 
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'switches', index, py_inputs, py_settings, **kwargs)
+
 class GroupTouchMenu (GroupBase):
   # touch_menu_button_%d  0..15
   TouchmenuButtonFireType = GroupBase.TouchmenuButtonFireType
@@ -1175,6 +1365,17 @@ class GroupTouchMenu (GroupBase):
     S.TOUCH_MENU_SHOW_LABELS: bool,
     S.TOUCHMENU_BUTTON_FIRE_TYPE: TouchmenuButtonFireType,
     }
+
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'touch_menu', index, py_inputs, py_settings, **kwargs)
+
+  touch_menu_button_count = GroupBase._basic_property(S.TOUCH_MENU_BUTTON_COUNT)
+  touch_menu_opacity = GroupBase._basic_property(S.TOUCH_MENU_OPACITY)
+  touch_menu_position_x = GroupBase._basic_property(S.TOUCH_MENU_POSITION_X)
+  touch_menu_position_y = GroupBase._basic_property(S.TOUCH_MENU_POSITION_Y)
+  touch_menu_scale = GroupBase._basic_property(S.TOUCH_MENU_SCALE)
+  touch_menu_show_labels = GroupBase._basic_property(S.TOUCH_MENU_SHOW_LABELS)
+  touchmenu_button_fire_type = GroupBase._basic_property(S.TOUCHMENU_BUTTON_FIRE_TYPE)
 
 class GroupTrigger (GroupBase):
   CLICK = "click"
@@ -1202,7 +1403,16 @@ class GroupTrigger (GroupBase):
     S.CUSTOM_CURVE_EXPONENT: (25, 4000),
   }
 
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
+    GroupBase.__init__(self, 'trigger', index, py_inputs, py_settings, **kwargs)
 
+  output_trigger = GroupBase._basic_property(S.OUTPUT_TRIGGER)
+  deadzone_outer_radius = GroupBase._basic_property(S.DEADZONE_OUTER_RADIUS)
+  deadzone_inner_radius = GroupBase._basic_property(S.DEADZONE_INNER_RADIUS)
+  edge_binding_radius = GroupBase._basic_property(S.EDGE_BINDING_RADIUS)
+  adaptive_threshold = GroupBase._basic_property(S.ADAPTIVE_THRESHOLD)
+  curve_exponent = GroupBase._basic_property(S.CURVE_EXPONENT)
+  custom_curve_exponent = GroupBase._basic_property(S.CUSTOM_CURVE_EXPONENT)
 
 
 class Group (object):
