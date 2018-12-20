@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 # encoding=utf-8
 
+try:
+  unicode
+except NameError:
+  # py3
+  def bytevector (x):
+    return bytes(x, "utf-8")
+else:
+  # py2
+  bytevector = bytes
+
+
 import unittest, hashlib, sys
 import scconfig, scvdf
 try:
@@ -147,6 +158,12 @@ PRESET_DEFAULTS1 = [('controller_mappings',
    ('settings', [('left_trackpad_mode', '0'), ('right_trackpad_mode', '0')])])]
 
 
+try:
+  unittest.TestCase.assertRaisesRegex
+except AttributeError:
+  # py2
+  unittest.TestCase.assertRaisesRegex = unittest.TestCase.assertRaisesRegexp
+
 class TestScvdfComponents (unittest.TestCase):
   def test_binding (self):
     b = scconfig.Binding("key_press ESCAPE, Open Menu")
@@ -204,7 +221,7 @@ class TestScvdfComponents (unittest.TestCase):
     self.assertEqual(g.settings.layout, 3)
     g.settings.layout = g.settings.Layout.EIGHT_WAY
     self.assertEqual(g.settings.layout, 1)
-    with self.assertRaisesRegex(ValueError, 'Value 42.*constraint.*CROSS_GATE'):
+    with self.assertRaisesRegex(ValueError, 'Value 42.*namespace constraint'):
       g.settings.layout = 42
     self.assertEqual(g.settings.layout, 1)
 
@@ -262,7 +279,7 @@ class TestScconfigEncoding (unittest.TestCase):
     kvs = configobj.encode_kv()
     fulldump_kvs = scvdf.dumps(kvs)
     #print(fulldump_kvs)
-    fulldump_hashable = fulldump_kvs.encode("utf-8")
+    fulldump_hashable = bytevector(fulldump_kvs)
     hasher = hashlib.new("md5")
     hasher.update(fulldump_hashable)
     if f:

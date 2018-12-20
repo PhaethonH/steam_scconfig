@@ -9,6 +9,18 @@ import scvdf
 import types
 from collections import OrderedDict
 
+# PseudoNamespace - py2 and py3 compat.  Access list of names with _nsdict.
+try:
+  types.SimpleNamespace
+except AttributeError:
+  # py2
+  class PseudoNamespace (object):
+    def __init__ (me, **k): [me.__dict__.__setitem__(k,v) for k,v in k.items()]
+    _nsdict = property(lambda self: self.__dict__)
+else:
+  # py3
+  class PseudoNamespace (types.SimpleNamespace):
+    _nsdict = property(lambda self: self.__dict__)
 
 
 ####################
@@ -26,14 +38,6 @@ def get_all (container, key, default_value):
       return iter(val)
   else:
     return default_value
-
-
-# Convert dict type to list-of-pairs (list of 2-tuples).
-def dict2lop (kv_dict):
-  lop = []
-  for k,v in kv_dict.items():
-    lop.append( (k,str(v)) )
-  return lop
 
 
 # Helper class for commonly recurring 'settings' field, which is all-scalar.
@@ -139,8 +143,8 @@ class SettingsBase (OrderedDict):
     elif isinstance(constraint,list):     # any from a list.
       if not (val in constraint):
         raise ValueError("Value {} violates list constraint {}".format(val, constraint))
-    elif type(constraint) == types.SimpleNamespace:   # any from namespace.
-      if not (val in constraint.__dict__.values()):
+    elif type(constraint) == PseudoNamespace:   # any from namespace.
+      if not (val in constraint._nsdict.values()):
         raise ValueError("Value {} violates namespace constraint {}".format(val, constraint))
         return
     elif constraint is None:  # no constraint.
@@ -565,7 +569,7 @@ Nested attributes:
   signal = None     # change for each derived class.
 
   class Settings (SettingsBase):
-    _VSC_KEYS = types.SimpleNamespace(
+    _VSC_KEYS = PseudoNamespace(
       TOGGLE = "toggle",
       INTERRUPTIBLE = "interruptable",    # sic
       DELAY_START = "delay_start",
@@ -579,7 +583,7 @@ Nested attributes:
       CHORD_BUTTON = "chord_button",
       )
 
-    HapticIntensity = types.SimpleNamespace(
+    HapticIntensity = PseudoNamespace(
       OFF = 0,
       LOW = 1,
       MEDIUM = 2,
@@ -753,7 +757,7 @@ class ActivatorRelease (ActivatorBase):
 class ActivatorChord (ActivatorBase):
   signal = 'chord'
   class Settings (ActivatorBase.Settings):
-    ChordButton = types.SimpleNamespace(
+    ChordButton = PseudoNamespace(
       NONE = 0,
       LEFT_BUMPER = 1,
       RIGHT_BUMPER= 2,
@@ -907,7 +911,7 @@ class GroupBase (object):
 
   class Settings (SettingsBase):
     # VSC VDF settings keys at 'group' level.
-    _VSC_KEYS = types.SimpleNamespace(
+    _VSC_KEYS = PseudoNamespace(
   # starting with dpad
       REQUIRES_CLICK = "requires_click",
       LAYOUT = "layout",
@@ -1000,10 +1004,9 @@ class GroupBase (object):
       ACCELERATION = "acceleration",
       MOUSE_SMOOTHING = "mouse_smoothing",
       )
-    _VSC_KEYS.DOUBETAP_MAX_DURATION = _VSC_KEYS.DOUBLETAP_MAX_DURATION  # maintain misspelling.
 
     # Values for 'acceleration'.
-    Acceleration = types.SimpleNamespace(
+    Acceleration = PseudoNamespace(
       OFF = 0,
       LOW = 1,
       MEDIUM = 2,
@@ -1011,7 +1014,7 @@ class GroupBase (object):
       )
 
     # Values for 'curve_exponent'.
-    CurveExponent = types.SimpleNamespace(
+    CurveExponent = PseudoNamespace(
       LINEAR = 0,
       AGGRESIVE = 1,
       RELAXED = 2,
@@ -1021,14 +1024,14 @@ class GroupBase (object):
       )
 
     # Values for 'deadzone_shape'.
-    DeadzoneShape = types.SimpleNamespace(
+    DeadzoneShape = PseudoNamespace(
       CROSS = 0,
       CIRCLE = 1,
       SQUARE = 2,
       )
 
     # Values for 'friction'.
-    Friction = types.SimpleNamespace(
+    Friction = PseudoNamespace(
       OFF = 0,
       LOW = 1,
       MEDIUM = 2,
@@ -1038,7 +1041,7 @@ class GroupBase (object):
     Friction.DEFAULT = Friction.MEDIUM
 
     # values for 'gyro_button'.
-    GyroButton = types.SimpleNamespace(
+    GyroButton = PseudoNamespace(
       ALWAYS = None,   # actually, key itself should be missing.
       RIGHT_PAD_TOUCH = 1,
       LEFT_PAD_TOUCH = 2,
@@ -1060,7 +1063,7 @@ class GroupBase (object):
       )
 
     # Values for 'haptic_intensity'.
-    HapticIntensity = types.SimpleNamespace(
+    HapticIntensity = PseudoNamespace(
       OFF = 0,
       LOW = 1,
       MEDIUM = 2,
@@ -1068,7 +1071,7 @@ class GroupBase (object):
       )
 
     # Values for 'mouse_dampening_trigger'.
-    MouseDampeningTrigger = types.SimpleNamespace(
+    MouseDampeningTrigger = PseudoNamespace(
       NO = 0,
       RIGHT_TRIGGER_SOFT_PULL = 1,
       LEFT_TRIGGER_SOFT_PULL = 2,
@@ -1079,7 +1082,7 @@ class GroupBase (object):
       )
 
     # Values for 'swipe_duration'.
-    SwipeDuration = types.SimpleNamespace(
+    SwipeDuration = PseudoNamespace(
       OFF = 0,
       LOW = 1,
       MEDIUM = 2,
@@ -1087,21 +1090,21 @@ class GroupBase (object):
       )
 
     # Values for 'output_joystick'.
-    OutputAxis = types.SimpleNamespace(
+    OutputAxis = PseudoNamespace(
       HORIZONTAL = 0,
       VERTICAL = 1,
       BOTH = 2,
       )
 
     # Values for 'output_trigger'.
-    OutputTrigger = types.SimpleNamespace(
+    OutputTrigger = PseudoNamespace(
       NO_ANALOG = 0,
       LEFT_TRIGGER = 1,
       RIGHT_TRIGGER = 2,
       )
 
     # Values for 'touchmenu_button_fire_type'.
-    TouchmenuButtonFireType = types.SimpleNamespace(
+    TouchmenuButtonFireType = PseudoNamespace(
       BUTTON_CLICK = 0,
       BUTTON_RELEASE = 1,
       TOUCH_RELEASE_MODESHIFT_END = 2,
@@ -1166,7 +1169,7 @@ class GroupAbsoluteMouse (GroupBase):
 
   class Settings (GroupBase.Settings):
     # Values for 'friction.
-    Friction = types.SimpleNamespace(
+    Friction = PseudoNamespace(
       OFF = 0,    # no inertia -- do not spin at all
       LOW = 1,
       MEDIUM = 2,
@@ -1252,7 +1255,7 @@ class GroupDpad (GroupBase):
     ])
 
   class Settings (GroupBase.Settings):
-    Layout = types.SimpleNamespace(
+    Layout = PseudoNamespace(
       FOUR_WAY = 0,
       EIGHT_WAY = 1,
       ANALOG_EMULATION = 2,
@@ -1324,7 +1327,7 @@ class GroupJoystickCamera (GroupBase):
     SwipeDuration = GroupBase.Settings.SwipeDuration
     HapticIntensity = GroupBase.Settings. HapticIntensity
     GyroButton = GroupBase.Settings.GyroButton
-    OutputJoystick = types.SimpleNamespace(
+    OutputJoystick = PseudoNamespace(
       MATCHED_SIDE = 0,
       OPPOSITE_SITE = 1,
       RELATIVE_MOUSE = 2,
@@ -1371,7 +1374,7 @@ class GroupJoystickMouse (GroupBase):
 
   class Settings (GroupBase.Settings):
     CurveExponent = GroupBase.Settings.CurveExponent
-    OutputJoystick = types.SimpleNamespace(
+    OutputJoystick = PseudoNamespace(
       MATCHED_SIDE = 0,
       OPPOSITE_SIDE = 1,
       )
@@ -1404,7 +1407,7 @@ class GroupJoystickMove (GroupBase):
     GyroButton = GroupBase.Settings.GyroButton
     HapticIntensity = GroupBase.Settings.HapticIntensity
     OutputAxis = GroupBase.Settings.OutputAxis
-    OutputJoystick = types.SimpleNamespace(
+    OutputJoystick = PseudoNamespace(
       LEFT_JOYSTICK = 0,
       RIGHT_JOYSTICK = 1,
       RELATIVE_JOYSTICK = 2,
@@ -1525,7 +1528,7 @@ class GroupMouseRegion (GroupBase):
   class Settings (GroupBase.Settings):
     HapticIntensity = GroupBase.Settings.HapticIntensity
     MouseDampeningTrigger = GroupBase.Settings.MouseDampeningTrigger
-    OutputJoystick = types.SimpleNamespace(
+    OutputJoystick = PseudoNamespace(
       LEFT = 0,
       RIGHT = 1,
       MOUSE = 2,
@@ -1599,7 +1602,7 @@ class GroupScrollwheel (GroupBase):
   class Settings (GroupBase.Settings):
     Friction = GroupBase.Settings.Friction
     HapticIntensity = GroupBase.Settings.HapticIntensity
-    ScrollType = types.SimpleNamespace(
+    ScrollType = PseudoNamespace(
       CIRCULAR = 0,
       HORIZONTAL = 1,
       VERTICAL = 2,
@@ -1686,7 +1689,7 @@ class GroupTrigger (GroupBase):
   INPUTS = set([ CLICK, EDGE ])
 
   class Settings (GroupBase.Settings):
-    AdaptiveThreshold = types.SimpleNamespace(
+    AdaptiveThreshold = PseudoNamespace(
       SIMPLE_THRESHOLD = 0,
       HAIR_TRIGGER = 1,
       HIP_FIRE_AGGRESSIVE = 2,
@@ -1886,7 +1889,7 @@ class ActionSet (Overlay):
 
 
 class GroupSourceBindingValue (object):
-  ValidSources = types.SimpleNamespace(
+  ValidSources = PseudoNamespace(
     SWITCH = 'switch',
     DPAD = 'dpad',
     BUTTON_DIAMOND = 'button_diamond',
@@ -2005,7 +2008,7 @@ class Mapping (object):
     self.timestamp = Timestamp
 
   class Settings (SettingsBase):
-    _VSC_KEYS = types.SimpleNamespace(
+    _VSC_KEYS = PseudoNamespace(
       LEFT_TRACKPAD_MODE = "left_trackpad_mode",
       RIGHT_TRACKPAD_MODE = "right_trackpad_mode",
       ACTION_SET_TRIGGER_CURSOR_SHOW = "action_set_trigger_cursor_show",

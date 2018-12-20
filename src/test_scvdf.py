@@ -7,6 +7,15 @@ import scvdf
 from scvdf import Tokenizer, StreamTokenizer, StringTokenizer, TokenizeState
 from scvdf import toDict, SCVDFDict
 
+try:
+    unicode
+except NameError:
+    # py3
+    bytevector = lambda s: bytes(s, "utf-8")
+else:
+    # py2
+    bytevector = bytes
+
 
 class TestScvdfDict (unittest.TestCase):
   def test_evolution_0 (self):
@@ -482,7 +491,8 @@ class TestVdfWriter (unittest.TestCase):
     g = StringIO()
     scvdf.dump(res, g)
     summer = hashlib.new("md5")
-    summer.update(g.getvalue().encode("utf-8"))
+    b = bytevector(g.getvalue())
+    summer.update(b)
     digested = summer.hexdigest()
     self.assertEqual(digested, "01dc2f4e9b6c8f86e2d1678c2763540d")
 
