@@ -875,6 +875,15 @@ class GroupBase (ContainsSettings, object):
     self.inputs[input_element] = inp
     return inp
 
+  def encode_kv (self):
+    kv = scvdf.SCVDFDict()
+    kv['id'] = str(self.index)
+    kv['mode'] = str(self.mode)
+    # Always generate ['inputs']
+    kv[VSC_INPUTS] = self.inputs.encode_kv()
+    if self.settings:
+      kv[VSC_SETTINGS] = self.settings.encode_kv()
+    return kv
 
 class GroupAbsoluteMouse (GroupBase):
   CLICK = "click"
@@ -1470,6 +1479,7 @@ class GroupFactory (object):
   def make_trigger (index, py_inputs=None, py_settings=None, **kwargs):
     return GroupTrigger(index, py_inputs, py_settings=None, **kwargs)
 
+  # GroupFactory.make
   @staticmethod
   def make (py_index=None, py_mode=None, py_inputs=None, py_settings=None, **kwargs):
     DISPATCH = {
@@ -1512,104 +1522,13 @@ class GroupFactory (object):
       py_index = int(kwargs['id']) if 'id' in kwargs else None
     maker = DISPATCH.get(py_mode, None)
     if maker:
-      maker(py_index, py_inputs, py_settings, **kwargs)
+      return maker(py_index, py_inputs, py_settings, **kwargs)
     else:
       return None
 
 
-class Group (ContainsSettings, object):
-  """A group of controls.
-Multiple controller elements combine together into groups that act as a unit to form a higher-order input type.
-Notable example include the four cardinal points of a d-pad to form not just a d-pad, but also pie menu control.
-"""
-  MODES = {
-    "pen": "absolute_mouse",
-    "touchpad": "absolute_mouse",
-    "absolute": "absolute_mouse",
-    "dpad": "dpad",
-    "4buttons": "four_buttons",
-    "button_quad": "four_buttons",
-    "button_diamond": "four_buttons",
-    "diamond": "four_buttons",
-    "face_buttons": "four_buttons",
-    "camera": "joystick_camera",
-    "mousejs": "joystick_mouse",
-    "joystick": "joystick_move",
-    "force_joystick": "mouse_joystick",
-    "fake_joystick": "mouse_joystick",
-    "region": "mouse_region",
-    "radial": "radial_menu",
-    "scroll_wheel": "scrollwheel",
-    "one_button": "single_button",
-    "switches": "switches",
-    "menu": "touch_menu",
-    "touchmenu": "touch_menu",
-    "trigger": "trigger",
-  }
-  def __init__ (self, index=None, py_mode=None, py_inputs=None, py_settings=None, **kwargs):
-    if index is None:
-      if 'id' in kwargs:
-        index = int(kwargs['id'])
-    if index is None:
-      index = 0
-
-    if py_mode is None:
-      if 'mode' in kwargs:
-        py_mode = kwargs['mode']
-    py_mode = filter_enum(self.MODES, py_mode)
-
-    self.index = index
-    # TODO: py_mode == None  =>  remove Group.
-    self.mode = py_mode
-    self.inputs = EncodableDict(VSC_INPUTS)
-#    self.settings = EncodableDict(VSC_SETTINGS)
-    self.prep_settings()
-
-    if py_inputs:
-      # Expect dictionary of key to pyobjects.
-      self.inputs.update(inputs)
-    elif VSC_INPUTS in kwargs:
-      # expect dict within ControllerConfig
-      for (inp_name, inp_kv) in kwargs[VSC_INPUTS].items():
-        self.make_input(inp_name, **inp_kv)
-
-    if py_settings:
-      # Expect dictionary of pure scalars.  This might break in future?
-      self.settings.update(settings)
-    elif VSC_SETTINGS in kwargs:
-      self.settings.update(kwargs[VSC_SETTINGS])
-
-  def make_input (self, input_element, py_activators=None, **kwargs):
-    inp = ControllerInput(input_element, py_activators=py_activators, **kwargs)
-    self.inputs[input_element] = inp
-    return inp
-
-  def encode_pair (self):
-    lop = []
-    lop.append( ('id', str(self.index)) )
-    lop.append( ('mode', str(self.mode)) )
-
-    # Always generate ['inputs']
-    lop.append( self.inputs.encode_pair() )
-
-    if self.settings:
-      lop.append( self.settings.encode_pair() )
-
-    whole = ('group', lop)
-    return whole
-
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
-    kv['id'] = str(self.index)
-    kv['mode'] = str(self.mode)
-
-    # Always generate ['inputs']
-    kv[VSC_INPUTS] = self.inputs.encode_kv()
-
-    if self.settings:
-      kv[VSC_SETTINGS] = self.settings.encode_kv()
-
-    return kv
+def Group (*args, **kwargs):
+  return GroupFactory.make(*args, **kwargs)
 
 
 class Overlay (object):
@@ -1835,8 +1754,7 @@ class Mapping (ContainsSettings, object):
 
     if 'group' in kwargs:
       for grp_kv in get_all(kwargs, 'group', []):
-#        self.make_group(**grp_kv)
-        GroupFactory.make(**grp_kv)
+        self.make_group(**grp_kv)
 
     if 'preset' in kwargs:
       for preset_kv in get_all(kwargs, 'preset', []):
