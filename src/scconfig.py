@@ -163,8 +163,8 @@ class ContainsSettings (object):
                     ContainsSettings._basic_setter(settings_key),
                     ContainsSettings._basic_deleter(settings_key))
 
-  def prep_settings (self):
-    self.settings = EncodableDict(VSC_SETTINGS)
+  def make_settings (self):
+    return EncodableDict(VSC_SETTINGS)
 
 
 
@@ -544,8 +544,7 @@ Responses include:
   def __init__ (self, signal, py_bindings=None, **kwargs):
     self.signal = signal
     self.bindings = []
-#    self.settings = EncodableDict(VSC_SETTINGS)
-    self.prep_settings()
+    self.settings = self.make_settings()
 
     if py_bindings:
       # expect list of pyobject.
@@ -852,8 +851,7 @@ class GroupBase (ContainsSettings, object):
     self.index = index
     self.mode = py_mode
     self.inputs = EncodableDict(VSC_INPUTS)
-#    self.settings = EncodableDict(VSC_SETTINGS)
-    self.prep_settings()
+    self.settings = self.make_settings()
 
     if py_inputs:
       # Expect dictionary of key to pyobjects.
@@ -1742,7 +1740,7 @@ class Mapping (ContainsSettings, object):
     self.presets = []
     # Miscellaneous settings
     #self.settings = EncodableDict(VSC_SETTINGS)
-    self.prep_settings()
+    self.settings = self.make_settings()
 
     if 'actions' in kwargs:
       for obj_name, obj_kv in kwargs['actions'].items():
