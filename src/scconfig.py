@@ -163,8 +163,19 @@ class ContainsSettings (object):
                     ContainsSettings._basic_setter(settings_key),
                     ContainsSettings._basic_deleter(settings_key))
 
-  def make_settings (self):
-    return EncodableDict(VSC_SETTINGS)
+  @property
+  def settings (self):
+    try: self.__vsc_settings        # assign initial if missing.
+    except AttributeError: self.__vsc_settings = EncodableDict()
+    return self.__vsc_settings      # return attribute.
+  @settings.setter
+  def settings (self, v):
+    try: v.keys                                       # check dict-like.
+    except AttributeError: self.__vsc_settings = v    # not a dict.
+    else: self.__vsc_validate = EncodableDict()       # dict-like, override.
+  @settings.deleter
+  def settings (self):
+    self.__vsc_validate = None
 
 
 
@@ -544,7 +555,7 @@ Responses include:
   def __init__ (self, signal, py_bindings=None, **kwargs):
     self.signal = signal
     self.bindings = []
-    self.settings = self.make_settings()
+    self.settings = {}
 
     if py_bindings:
       # expect list of pyobject.
@@ -851,7 +862,7 @@ class GroupBase (ContainsSettings, object):
     self.index = index
     self.mode = py_mode
     self.inputs = EncodableDict(VSC_INPUTS)
-    self.settings = self.make_settings()
+    self.settings = {}
 
     if py_inputs:
       # Expect dictionary of key to pyobjects.
@@ -1740,7 +1751,7 @@ class Mapping (ContainsSettings, object):
     self.presets = []
     # Miscellaneous settings
     #self.settings = EncodableDict(VSC_SETTINGS)
-    self.settings = self.make_settings()
+    self.settings = {}
 
     if 'actions' in kwargs:
       for obj_name, obj_kv in kwargs['actions'].items():
