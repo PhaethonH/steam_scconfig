@@ -112,6 +112,62 @@ VSC_INPUTS = "inputs"
 
 
 
+##################################
+
+
+class ContainsSettings (object):
+  """Mix-in for classes that contain a 'settings' field."""
+
+  # Constraints on settings values.
+  # Tuples indicate an integer range, such that tuple[0] <= value <= tuple[1]
+  # List specifies the set of acceptable values
+  # class-object contains acceptable values: class.__dict__.values()
+  # primitive type to indicate the allowable value type
+  _Settings = {}
+
+  @staticmethod
+  def _basic_getter (settings_key):
+    def getter (self):
+      return self.settings.get(settings_key, None)
+    return getter
+  @staticmethod
+  def _basic_setter (settings_key):
+    def setter (self, val):
+      constraint = self._Settings.get(settings_key, None)
+      if isinstance(constraint,tuple):      # integer range constraint.
+        lower, upper = constraint
+        if (val < lower) or (upper < val):
+          raise ValueError("Value {} not within constraints {}".format(val, constraint))
+      elif isinstance(constraint,list):     # any from a list.
+        if not (val in constraints):
+          raise ValueError("Value {} not within constraints {}".format(val, constraint))
+      elif type(constraint) == types.SimpleNamespace:   # any from namespace.
+        if not (val in constraint.__dict__.values()):
+          raise ValueError("Value {} not within constraints {}".format(val, constraint))
+          return
+      elif constraint is None:  # no constraint.
+        pass
+      else:       # is of type.
+        if type(val) != constraint:
+          raise ValueError("Value {} not within constraints type({})".format(val, constraint))
+      self.settings[settings_key] = val
+    return setter
+  @staticmethod
+  def _basic_deleter (settings_key):
+    def deleter (self):
+      del self.settings[settings_key]
+    return deleter
+  @staticmethod
+  def _basic_property (settings_key):
+    return property(ContainsSettings._basic_getter(settings_key),
+                    ContainsSettings._basic_setter(settings_key),
+                    ContainsSettings._basic_deleter(settings_key))
+
+  def prep_settings (self):
+    self.settings = EncodableDict(VSC_SETTINGS)
+
+
+
 ##########################
 # Substantiative objects #
 ##########################
@@ -465,7 +521,7 @@ class Binding (object):
 
 
 
-class Activator (object):
+class Activator (ContainsSettings, object):
   """Activator element within a list of activators.
 Each activator specifies what button-activation signal to respond to, and how to respond to it (usually with a controller, keyboard, or mouse key/button press).
 
@@ -488,7 +544,8 @@ Responses include:
   def __init__ (self, signal, py_bindings=None, **kwargs):
     self.signal = signal
     self.bindings = []
-    self.settings = EncodableDict(VSC_SETTINGS)
+#    self.settings = EncodableDict(VSC_SETTINGS)
+    self.prep_settings()
 
     if py_bindings:
       # expect list of pyobject.
@@ -570,11 +627,9 @@ class ControllerInput (object):
     return kv
 
 
-# TODO: base class GroupBase.
-# TODO: derived class for each Mode variant.
 # TODO: change Group into factory class/namespace.
 
-class GroupBase (object):
+class GroupBase (ContainsSettings, object):
   """Base class for input groups: joystick, dpad, triggers, etc."""
 
   # VSC VDF settings keys at 'group' level.
@@ -782,13 +837,6 @@ class GroupBase (object):
   TouchmenuButtonFireType.TOUCH_RELEASE = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
   TouchmenuButtonFireType.MODESHIFT_END = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
 
-  # Constraints on settings values.
-  # Tuples indicate an integer range, such that tuple[0] <= value <= tuple[1]
-  # List specifies the set of acceptable values
-  # class-object contains acceptable values: class.__dict__.values()
-  # primitive type to indicate the allowable value type
-  _Settings = {}
-
   def __init__ (self, py_mode=None, index=None, py_inputs=None, py_settings=None, **kwargs):
     if index is None:
       if 'id' in kwargs:
@@ -804,7 +852,8 @@ class GroupBase (object):
     self.index = index
     self.mode = py_mode
     self.inputs = EncodableDict(VSC_INPUTS)
-    self.settings = EncodableDict(VSC_SETTINGS)
+#    self.settings = EncodableDict(VSC_SETTINGS)
+    self.prep_settings()
 
     if py_inputs:
       # Expect dictionary of key to pyobjects.
@@ -819,43 +868,6 @@ class GroupBase (object):
       self.settings.update(settings)
     elif VSC_SETTINGS in kwargs:
       self.settings.update(kwargs[VSC_SETTINGS])
-
-  @staticmethod
-  def _basic_getter (settings_key):
-    def getter (self):
-      return self.settings.get(settings_key, None)
-    return getter
-  @staticmethod
-  def _basic_setter (settings_key):
-    def setter (self, val):
-      constraint = self._Settings.get(settings_key, None)
-      if isinstance(constraint,tuple):      # integer range constraint.
-        lower, upper = constraint
-        if (val < lower) or (upper < val):
-          raise ValueError("Value {} not within constraints {}".format(val, constraint))
-      elif isinstance(constraint,list):     # any from a list.
-        if not (val in constraints):
-          raise ValueError("Value {} not within constraints {}".format(val, constraint))
-      elif type(constraint) == types.SimpleNamespace:   # any from namespace.
-        if not (val in constraint.__dict__.values()):
-          raise ValueError("Value {} not within constraints {}".format(val, constraint))
-          return
-      else:       # is of type.
-        if type(val) != constraint:
-          raise ValueError("Value {} not within constraints type({})".format(val, constraint))
-      self.settings[settings_key] = val
-    return setter
-  @staticmethod
-  def _basic_deleter (settings_key):
-    def deleter (self):
-      del self.settings[settings_key]
-    return deleter
-  @staticmethod
-  def _basic_property (settings_key):
-    return property(GroupBase._basic_getter(settings_key),
-                    GroupBase._basic_setter(settings_key),
-                    GroupBase._basic_deleter(settings_key))
-
 
   def make_input (self, input_element, py_activators=None, **kwargs):
     '''Factory for 'input' node.'''
@@ -1414,8 +1426,98 @@ class GroupTrigger (GroupBase):
   curve_exponent = GroupBase._basic_property(S.CURVE_EXPONENT)
   custom_curve_exponent = GroupBase._basic_property(S.CUSTOM_CURVE_EXPONENT)
 
+class GroupFactory (object):
+  @staticmethod
+  def make_absolute_mouse (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupAbsoluteMouse(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_dpad (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupDpad(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_four_buttons (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupFourButtons(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_joystick_camera (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupJoystickCamera(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_joystick_move (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupJoystickMove(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_joystick_mouse (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupJoystickMouse(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_mouse_joystick (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupJoystickMove(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_mouse_region (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupMouseRegion(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_radial_menu (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupRadialMenu(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_scrollwheel (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupScrollwheel(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_single_button (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupSingleButton(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_switches (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupSwitches(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_touch_menu (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupTouchMenu(index, py_inputs, py_settings=None, **kwargs)
+  @staticmethod
+  def make_trigger (index, py_inputs=None, py_settings=None, **kwargs):
+    return GroupTrigger(index, py_inputs, py_settings=None, **kwargs)
 
-class Group (object):
+  @staticmethod
+  def make (py_index=None, py_mode=None, py_inputs=None, py_settings=None, **kwargs):
+    DISPATCH = {
+      'absolute_mouse': GroupFactory.make_absolute_mouse,
+      'dpad': GroupFactory.make_dpad,
+      'four_buttons': GroupFactory.make_four_buttons,
+      'joystick_camera': GroupFactory.make_joystick_camera,
+      'joystick_mouse': GroupFactory.make_joystick_mouse,
+      'joystick_move': GroupFactory.make_joystick_move,
+      'mouse_joystick': GroupFactory.make_mouse_joystick,
+      'mouse_region': GroupFactory.make_mouse_region,
+      'radial_menu': GroupFactory.make_radial_menu,
+      'scrollwheel': GroupFactory.make_scrollwheel,
+      'single_button': GroupFactory.make_single_button,
+      'switches': GroupFactory.make_switches,
+      'touch_menu': GroupFactory.make_touch_menu,
+      'trigger': GroupFactory.make_trigger,
+
+      'pen': GroupFactory.make_absolute_mouse,
+      'absolute': GroupFactory.make_absolute_mouse,
+      '4buttons': GroupFactory.make_four_buttons,
+      'face_buttons': GroupFactory.make_four_buttons,
+      'camera': GroupFactory.make_joystick_camera,
+      'joystick': GroupFactory.make_joystick_move,
+      'mousejs': GroupFactory.make_mouse_joystick,
+      'scroll_wheel': GroupFactory.make_scrollwheel,
+      'radial': GroupFactory.make_radial_menu,
+      'piemenu': GroupFactory.make_radial_menu,
+      'pie_menu': GroupFactory.make_radial_menu,
+      'region': GroupFactory.make_mouse_region,
+      'singlebutton': GroupFactory.make_single_button,
+      'one_button': GroupFactory.make_single_button,
+      'onebutton': GroupFactory.make_single_button,
+      'touchmenu': GroupFactory.make_touch_menu,
+      }
+    if py_mode is None:
+      if 'mode' in kwargs:
+        py_mode = kwargs['mode']
+    if py_index is None:
+      py_index = int(kwargs['id']) if 'id' in kwargs else None
+    maker = DISPATCH.get(py_mode, None)
+    if maker:
+      maker(py_index, py_inputs, py_settings, **kwargs)
+    else:
+      return None
+
+
+class Group (ContainsSettings, object):
   """A group of controls.
 Multiple controller elements combine together into groups that act as a unit to form a higher-order input type.
 Notable example include the four cardinal points of a d-pad to form not just a d-pad, but also pie menu control.
@@ -1460,7 +1562,8 @@ Notable example include the four cardinal points of a d-pad to form not just a d
     # TODO: py_mode == None  =>  remove Group.
     self.mode = py_mode
     self.inputs = EncodableDict(VSC_INPUTS)
-    self.settings = EncodableDict(VSC_SETTINGS)
+#    self.settings = EncodableDict(VSC_SETTINGS)
+    self.prep_settings()
 
     if py_inputs:
       # Expect dictionary of key to pyobjects.
@@ -1661,7 +1764,7 @@ class Preset (object):
     return kv
 
 
-class Mapping (object):
+class Mapping (ContainsSettings, object):
   """Encapsulates controller mapping (toplevel)"""
   def __init__ (self, index=None, version=None, revision=None, title=None, description=None, creator=None, controller_type=None, Timestamp=None):
     self.index = index
@@ -1719,7 +1822,8 @@ class Mapping (object):
     # List of Presets
     self.presets = []
     # Miscellaneous settings
-    self.settings = EncodableDict(VSC_SETTINGS)
+    #self.settings = EncodableDict(VSC_SETTINGS)
+    self.prep_settings()
 
     if 'actions' in kwargs:
       for obj_name, obj_kv in kwargs['actions'].items():
@@ -1731,7 +1835,8 @@ class Mapping (object):
 
     if 'group' in kwargs:
       for grp_kv in get_all(kwargs, 'group', []):
-        self.make_group(**grp_kv)
+#        self.make_group(**grp_kv)
+        GroupFactory.make(**grp_kv)
 
     if 'preset' in kwargs:
       for preset_kv in get_all(kwargs, 'preset', []):
