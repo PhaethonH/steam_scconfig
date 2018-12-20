@@ -246,6 +246,15 @@ class TestScvdfComponents (unittest.TestCase):
     with self.assertRaisesRegex(ValueError, 'Value.*constraint.*[0-9]'):
       a.repeat_rate = False
 
+    d = a.encode_kv()
+    self.assertEqual(d, {
+      "bindings": {},
+      "settings": {
+        "interruptable": "1", # sic
+        "haptic_intensity": "0",
+        "toggle": "1", "delay_start": "0", "delay_end": "0",
+        "cycle": "0", "hold_repeats": "0", "repeat_rate": "1" }})
+
 
 class TestScconfigEncoding (unittest.TestCase):
   def hash_and_dump (self, configobj, cksum, f=None):
