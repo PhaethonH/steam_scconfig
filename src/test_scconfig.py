@@ -189,47 +189,48 @@ class TestScvdfComponents (unittest.TestCase):
     g = scconfig.GroupDpad()
 
     # Test boolean property.
-    g.requires_click
-    g.requires_click = True
-    self.assertEqual(g.requires_click, True)
-    g.requires_click = False
-    self.assertEqual(g.requires_click, False)
+    g.settings.requires_click
+    g.settings.requires_click = True
+    self.assertEqual(g.settings.requires_click, True)
+    g.settings.requires_click = False
+    self.assertEqual(g.settings.requires_click, False)
     with self.assertRaisesRegex(ValueError, 'Value 42.*constraint.*bool'):
-      g.requires_click = 42
-    self.assertEqual(g.requires_click, False)
+      g.settings.requires_click = 42
+    self.assertEqual(g.settings.requires_click, False)
 
     # Test enumerated/namespaced property.
-    g.layout
-    g.layout = g.Layout.CROSS_GATE
-    self.assertEqual(g.layout, 3)
-    g.layout = g.Layout.EIGHT_WAY
-    self.assertEqual(g.layout, 1)
+    g.settings.layout
+    g.settings.layout = g.settings.Layout.CROSS_GATE
+    self.assertEqual(g.settings.layout, 3)
+    g.settings.layout = g.settings.Layout.EIGHT_WAY
+    self.assertEqual(g.settings.layout, 1)
     with self.assertRaisesRegex(ValueError, 'Value 42.*constraint.*CROSS_GATE'):
-      g.layout = 42
-    self.assertEqual(g.layout, 1)
+      g.settings.layout = 42
+    self.assertEqual(g.settings.layout, 1)
 
     # Test range-constraint integer.
-    g.deadzone
-    g.deadzone = 0
-    self.assertEqual(g.deadzone, 0)
-    g.deadzone = 10000
-    self.assertEqual(g.deadzone, 10000)
-    g.deadzone = 32000
-    self.assertEqual(g.deadzone, 32000)
+    g.settings.deadzone
+    g.settings.deadzone = 0
+    self.assertEqual(g.settings.deadzone, 0)
+    g.settings.deadzone = 10000
+    self.assertEqual(g.settings.deadzone, 10000)
+    g.settings.deadzone = 32000
+    self.assertEqual(g.settings.deadzone, 32000)
     with self.assertRaisesRegex(ValueError, "Value.*constraint.*0, 32767"):
-      g.deadzone = 99999
-    self.assertEqual(g.deadzone, 32000)
+      g.settings.deadzone = 99999
+    self.assertEqual(g.settings.deadzone, 32000)
 
     kv = g.settings.encode_kv()
     self.assertEqual(kv, { "requires_click": "0", "layout": "1", "deadzone": "32000" })
 
-    g.__class__.check_of_list = scconfig.ContainsSettings._new_setting("check_of_list")
-    g._Settings['check_of_list'] = [ 'foo', 'bar', 'quux' ]
-    self.assertEqual(g.check_of_list, None)
+    s = g.settings
+    s.__class__.check_of_list = s._new_setting("check_of_list")
+    s._CONSTRAINTS['check_of_list'] = [ 'foo', 'bar', 'quux' ]
+    self.assertEqual(s.check_of_list, None)
     with self.assertRaisesRegex(ValueError, 'Value.*constraint.*\['):
-      g.check_of_list = 42
-    g.check_of_list ='bar'
-    self.assertEqual(g.check_of_list, 'bar')
+      s.check_of_list = 42
+    s.check_of_list ='bar'
+    self.assertEqual(s.check_of_list, 'bar')
 
   def test_activator (self):
     a = scconfig.ActivatorFullPress()
