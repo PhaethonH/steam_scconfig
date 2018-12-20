@@ -40,14 +40,6 @@ def get_all (container, key, default_value):
     return default_value
 
 
-# Convert dict type to list-of-pairs (list of 2-tuples).
-def dict2lop (kv_dict):
-  lop = []
-  for k,v in kv_dict.items():
-    lop.append( (k,str(v)) )
-  return lop
-
-
 # Helper class for commonly recurring 'settings' field, which is all-scalar.
 class EncodableDict (OrderedDict):
   """Extends SCVDFDict to support .encode_kv()"""
