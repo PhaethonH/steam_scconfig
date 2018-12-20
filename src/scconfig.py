@@ -179,34 +179,17 @@ class ContainsSettings (object):
 
 
 
-##########################
-# Substantiative objects #
-##########################
-
-
-class IconInfo (object):
-  """Icon info, third portion of "binding" command, for radial menus."""
-  def __init__ (self, path=None, bg=None, fg=None, *args):
-    if path and len(path)>0 and ' ' in path:
-      # split in place.
-      # TODO: parse quoted, escaped, space-in-path?
-      words = path.split(None,3)
-      path = words[0]
-      bg = words[1]
-      fg = words[2]
-      # ignore fourth space and after.
-    self.path = path
-    self.bg = bg
-    self.fg = fg
-  def __str__ (self):
-    return ' '.join([self.path, self.bg, self.fg])
-  def __repr__ (self):
-    return "{}(path={!r},bg={!r},fg={!r})".format(
-            self.__class__.__name__,
-            self.path, self.bg, self.fg)
-
-
-# Evgen = Event Generator (Synthesis)
+###########################
+# Evgen - Event Generator #
+###########################
+# Empty
+# Keystroke
+# MouseSwitch
+# Gamepad
+# Host
+# Light
+# Overlay
+# Modeshift
 
 class EvgenBase (object):
   """One binding instance in a list of many, as part of Activate"""
@@ -481,6 +464,28 @@ class EvgenFactory (object):
     return retval
 
 
+class IconInfo (object):
+  """Icon info, third portion of "binding" command, for radial menus."""
+  def __init__ (self, path=None, bg=None, fg=None, *args):
+    if path and len(path)>0 and ' ' in path:
+      # split in place.
+      # TODO: parse quoted, escaped, space-in-path?
+      words = path.split(None,3)
+      path = words[0]
+      bg = words[1]
+      fg = words[2]
+      # ignore fourth space and after.
+    self.path = path
+    self.bg = bg
+    self.fg = fg
+  def __str__ (self):
+    return ' '.join([self.path, self.bg, self.fg])
+  def __repr__ (self):
+    return "{}(path={!r},bg={!r},fg={!r})".format(
+            self.__class__.__name__,
+            self.path, self.bg, self.fg)
+
+
 class Binding (object):
   """Binding object connects:
   1. Evgen object
@@ -525,35 +530,58 @@ class Binding (object):
     retval = (geninfo, label, iconinfo)
     return retval
 
-
-
-
 ### end of Binding and Bindings related classes ###
 
 
 
-class Activator (ContainsSettings, object):
-  """Activator element within a list of activators.
-Each activator specifies what button-activation signal to respond to, and how to respond to it (usually with a controller, keyboard, or mouse key/button press).
+#############
+# Activator #
+#############
+# Full_Press
+# Double_Press
+# Long_Press
+# Start_Press
+# Release
+# Chord
 
-Activation signals include:
-  Regular (reacts to both press and release)
-  Long (source button was held)
-  Start (source button started to be pressed)
-  Release (source button being released)
-  Double (previous press detected within some time interval of current press)
-  Chord (source button detected as being pressed with another is held)
 
-Responses include:
-  key_press : generate a keyboard event
-  xinput_button : generate a XInput/XBox360 event
-  add layers
-  remove layers
-  change action sets
-  set controller lights
+class ActivatorBase (ContainsSettings, object):
+  """Base class for activators:
+* FullPress ("Full_Press"), aka RegularPress
+* LongPress ("Long_Press")
+* StartPress ("Start_Press")
+* DoublePress ("Double_Press")
+* Release ("release")
+* Chord ("chord")
+
+Nested attributes:
+ * bindings: list of `binding` instances, what event to event to synthesize.
+ * settings: settings for the activator (e.g. enable repeat while held).
 """
-  def __init__ (self, signal, py_bindings=None, **kwargs):
-    self.signal = signal
+  signal = None     # change for each derived class.
+  SETTINGS = types.SimpleNamespace(
+    TOGGLE = "toggle",
+    INTERRUPTIBLE = "interruptable",    # sic
+    DELAY_START = "delay_start",
+    DELAY_END = "delay_end",
+    HAPTIC_INTENSITY = "haptic_intensity",
+    CYCLE = "cycle",
+    HOLD_REPEATS = "hold_repeats",
+    REPEAT_RATE = "repeat_rate",
+    DOUBLE_TAP_TIME = "double_tap_time",
+    LONG_PRESS_TIME = "long_press_time",
+    CHORD_BUTTON = "chord_button",
+    )
+
+  HapticIntensity = types.SimpleNamespace(
+    OFF = 0,
+    LOW = 1,
+    MEDIUM = 2,
+    HIGH = 3,
+    )
+
+  def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
+    # self.signal  is class-scope per derived class.
     self.bindings = []
     self.settings = {}
 
@@ -563,32 +591,26 @@ Responses include:
     elif 'bindings' in kwargs:
       for bind_name, bind_val in kwargs['bindings'].items():
         if bind_name == "binding":
-          self.add_binding_str(bind_val)
+          self.add_binding(bind_val)
 
     if VSC_SETTINGS in kwargs:
       self.settings.update(kwargs[VSC_SETTINGS])
 
-  def add_binding_obj (self, binding_obj):
-    self.bindings.append(binding_obj)
-    return binding_obj
-  def add_binding_str (self, binding_str):
-    #bindinfo = EvgenFactory.parse(binding_str)
-    bindinfo = Binding(binding_str)
-    return self.add_binding_obj(bindinfo)
-  def encode_pair (self):
-    lop = []
+  def add_binding (self, binding):
+    try:
+      binding.isalpha
+    except AttributeError:
+      # treat as not-string - assume instance of Binding.
+      pass
+    else:
+      binding_str = binding
+      if binding_str:
+        binding = Binding(binding_str)
+      else:
+        binding = None
+    if binding:
+      self.bindings.append(binding)
 
-    kv_bindings = []
-    for binding in self.bindings:
-      entry = ('binding', str(binding))
-      kv_bindings.append(entry)
-    lop.append( ('bindings', kv_bindings) )
-
-    if self.settings:
-      lop.append( self.settings.encode_pair() )
-
-    whole = ( (str(self.signal),lop) )
-    return whole
   def encode_kv (self):
     kv = scvdf.SCVDFDict()
     kv_bindings = scvdf.SCVDFDict()
@@ -598,6 +620,225 @@ Responses include:
     if self.settings:
       kv[VSC_SETTINGS] = self.settings.encode_kv()
     return kv
+
+class ActivatorFullPress (ActivatorBase):
+  signal = 'Full_Press'
+  HapticIntensity = ActivatorBase.HapticIntensity
+  S = ActivatorBase.SETTINGS
+  _Settings = {
+    S.TOGGLE: bool,
+    S.INTERRUPTIBLE: bool,
+    S.DELAY_START: int,   # TODO: range
+    S.DELAY_END: int,     # TODO: range
+    S.HAPTIC_INTENSITY: HapticIntensity,
+    S.CYCLE: bool,
+    S.HOLD_REPEATS: bool,
+    S.REPEAT_RATE: (1, 9999),
+  }
+  def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
+    ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
+
+  toggle = ContainsSettings._new_setting(S.TOGGLE)
+  interruptible = ContainsSettings._new_setting(S.INTERRUPTIBLE)
+  delay_start = ContainsSettings._new_setting(S.DELAY_START)
+  delay_end = ContainsSettings._new_setting(S.DELAY_END)
+  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
+  cycle = ContainsSettings._new_setting(S.CYCLE)
+  hold_repeats = ContainsSettings._new_setting(S.HOLD_REPEATS)
+  repeat_rate = ContainsSettings._new_setting(S.REPEAT_RATE)
+
+class ActivatorDoublePress (ActivatorBase):
+  signal = 'Double_Press'
+  HapticIntensity = ActivatorBase.HapticIntensity
+  S = ActivatorBase.SETTINGS
+  _Settings = {
+    S.DOUBLE_TAP_TIME: int,  # TODO: range
+    S.TOGGLE: bool,
+    S.INTERRUPTIBLE: bool,
+    S.DELAY_START: int,   # TODO: range
+    S.DELAY_END: int,     # TODO: range
+    S.HAPTIC_INTENSITY: HapticIntensity,
+    S.CYCLE: bool,
+    S.HOLD_REPEATS: bool,
+    S.REPEAT_RATE: (1, 9999),
+  }
+  def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
+    ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
+
+  double_tap_time = ContainsSettings._new_setting(S.DOUBLE_TAP_TIME)
+  toggle = ContainsSettings._new_setting(S.TOGGLE)
+  interruptible = ContainsSettings._new_setting(S.INTERRUPTIBLE)
+  delay_start = ContainsSettings._new_setting(S.DELAY_START)
+  delay_end = ContainsSettings._new_setting(S.DELAY_END)
+  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
+  cycle = ContainsSettings._new_setting(S.CYCLE)
+  hold_repeats = ContainsSettings._new_setting(S.HOLD_REPEATS)
+  repeat_rate = ContainsSettings._new_setting(S.REPEAT_RATE)
+
+class ActivatorLongPress (ActivatorBase):
+  signal = 'Long_Press'
+  HapticIntensity = ActivatorBase.HapticIntensity
+  S = ActivatorBase.SETTINGS
+  _Settings = {
+    S.LONG_PRESS_TIME: int,  # TODO: range
+    S.TOGGLE: bool,
+    S.INTERRUPTIBLE: bool,
+    S.DELAY_START: int,   # TODO: range
+    S.DELAY_END: int,     # TODO: range
+    S.HAPTIC_INTENSITY: HapticIntensity,
+    S.CYCLE: bool,
+    S.HOLD_REPEATS: bool,
+    S.REPEAT_RATE: (1, 9999),
+  }
+  def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
+    ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
+
+  long_press_time = ContainsSettings._new_setting(S.LONG_PRESS_TIME)
+  toggle = ContainsSettings._new_setting(S.TOGGLE)
+  interruptible = ContainsSettings._new_setting(S.INTERRUPTIBLE)
+  delay_start = ContainsSettings._new_setting(S.DELAY_START)
+  delay_end = ContainsSettings._new_setting(S.DELAY_END)
+  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
+  cycle = ContainsSettings._new_setting(S.CYCLE)
+  hold_repeats = ContainsSettings._new_setting(S.HOLD_REPEATS)
+  repeat_rate = ContainsSettings._new_setting(S.REPEAT_RATE)
+
+class ActivatorStartPress (ActivatorBase):
+  signal = 'Start_Press'
+  HapticIntensity = ActivatorBase.HapticIntensity
+  S = ActivatorBase.SETTINGS
+  _Settings = {
+    S.TOGGLE: bool,
+    S.DELAY_START: int,   # TODO: range
+    S.DELAY_END: int,     # TODO: range
+    S.HAPTIC_INTENSITY: HapticIntensity,
+    S.CYCLE: bool,
+  }
+  def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
+    ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
+
+  toggle = ContainsSettings._new_setting(S.TOGGLE)
+  delay_start = ContainsSettings._new_setting(S.DELAY_START)
+  delay_end = ContainsSettings._new_setting(S.DELAY_END)
+  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
+  cycle = ContainsSettings._new_setting(S.CYCLE)
+
+class ActivatorRelease (ActivatorBase):
+  signal = 'release'
+  HapticIntensity = ActivatorBase.HapticIntensity
+  S = ActivatorBase.SETTINGS
+  _Settings = {
+    S.TOGGLE: bool,
+    S.INTERRUPTIBLE: bool,
+    S.DELAY_START: int,   # TODO: range
+    S.DELAY_END: int,     # TODO: range
+    S.HAPTIC_INTENSITY: HapticIntensity,
+  }
+  def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
+    ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
+
+  toggle = ContainsSettings._new_setting(S.TOGGLE)
+  interruptible = ContainsSettings._new_setting(S.INTERRUPTIBLE)
+  delay_start = ContainsSettings._new_setting(S.DELAY_START)
+  delay_end = ContainsSettings._new_setting(S.DELAY_END)
+  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
+  cycle = ContainsSettings._new_setting(S.CYCLE)
+
+class ActivatorChord (ActivatorBase):
+  signal = 'chord'
+  ChordButton = types.SimpleNamespace(
+    NONE = 0,
+    LEFT_BUMPER = 1,
+    RIGHT_BUMPER= 2,
+    LEFT_GRIP = 3,
+    RIGHT_GRIP = 4,
+    LEFT_TRIGGER_FULL = 5,
+    RIGHT_TRIGGER_FULL = 6,
+    LEFT_TRIGGER_SOFT = 7,
+    RIGHT_TRIGGER_SOFT = 8,
+    JOYSTICK_CLICK = 9,
+    BUTTON_A = 10,
+    BUTTON_B = 11,
+    BUTTON_X = 12,
+    BUTTON_Y = 13,
+    SELECT = 14,
+    START = 15,
+    LEFT_PAD_TOUCH = 16,
+    RIGHT_PAD_TOUCH = 17,
+    LEFT_PAD_CLICK = 18,
+    RIGHT_PAD_CLICK = 19,
+    )
+  HapticIntensity = ActivatorBase.HapticIntensity
+  S = ActivatorBase.SETTINGS
+  _Settings = {
+    S.CHORD_BUTTON: ChordButton,
+    S.TOGGLE: bool,
+    S.INTERRUPTIBLE: bool,
+    S.DELAY_START: int,   # TODO: range
+    S.DELAY_END: int,     # TODO: range
+    S.HAPTIC_INTENSITY: HapticIntensity,
+    S.HOLD_REPEATS: bool,
+    S.REPEAT_RATE: (1, 9999),
+  }
+  def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
+    ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
+
+  chord_button = ContainsSettings._new_setting(S.CHORD_BUTTON)
+  toggle = ContainsSettings._new_setting(S.TOGGLE)
+  interruptible = ContainsSettings._new_setting(S.INTERRUPTIBLE)
+  delay_start = ContainsSettings._new_setting(S.DELAY_START)
+  delay_end = ContainsSettings._new_setting(S.DELAY_END)
+  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
+  cycle = ContainsSettings._new_setting(S.CYCLE)
+  hold_repeats = ContainsSettings._new_setting(S.HOLD_REPEATS)
+  repeat_rate = ContainsSettings._new_setting(S.REPEAT_RATE)
+
+
+class ActivatorFactory:
+  @staticmethod
+  def make_full_press (py_bindings=None, py_settings=None, **kwargs):
+    return ActivatorFullPress(py_bindings, py_settings, **kwargs)
+  @staticmethod
+  def make_double_press (py_bindings=None, py_settings=None, **kwargs):
+    return ActivatorDoublePress(py_bindings, py_settings, **kwargs)
+  @staticmethod
+  def make_long_press (py_bindings=None, py_settings=None, **kwargs):
+    return ActivatorLongPress(py_bindings, py_settings, **kwargs)
+  @staticmethod
+  def make_start_press (py_bindings=None, py_settings=None, **kwargs):
+    return ActivatorStartPress(py_bindings, py_settings, **kwargs)
+  @staticmethod
+  def make_release (py_bindings=None, py_settings=None, **kwargs):
+    return ActivatorRelease(py_bindings, py_settings, **kwargs)
+  @staticmethod
+  def make_chord (py_bindings=None, py_settings=None, **kwargs):
+    return ActivatorChord(py_bindings, py_settings, **kwargs)
+
+  DELEGATES = [
+    ActivatorFullPress,
+    ActivatorDoublePress,
+    ActivatorLongPress,
+    ActivatorStartPress,
+    ActivatorRelease,
+    ActivatorChord,
+  ]
+  @staticmethod
+  def make (signal_name=None, py_bindings=None, py_settings=None, **kwargs):
+    retval = None
+    for delegate in ActivatorFactory.DELEGATES:
+      if signal_name == delegate.signal:
+        try:
+          retval = delegate(py_bindings, py_settings, **kwargs)
+        except Exception as e:
+          raise
+    return retval
+
+
+def Activator (activator_signal, **kwargs):
+  return ActivatorFactory.make(activator_signal, **kwargs)
+
+###### end of Activator ######
+
 
 
 class ControllerInput (object):
@@ -637,7 +878,23 @@ class ControllerInput (object):
     return kv
 
 
-# TODO: change Group into factory class/namespace.
+
+#################
+# (Input) Group #
+#################
+# AbsoluteMouse
+# Dpad
+# FourButtons
+# JoystickCamera
+# JoystickMove
+# JoystickMouse
+# MouseJoystick
+# MouseRegion
+# RadialMenu
+# Scrollwheel
+# SingleButton
+# Switches
+# TouchMenu
 
 class GroupBase (ContainsSettings, object):
   """Base class for input groups: joystick, dpad, triggers, etc."""
@@ -1539,6 +1796,14 @@ class GroupFactory (object):
 def Group (*args, **kwargs):
   return GroupFactory.make(*args, **kwargs)
 
+##### end Group #####
+
+
+###########
+# Overlay #
+###########
+# ActionSet
+# ActionLayer
 
 class Overlay (object):
   """base for ActionSet and ActionLayer.
@@ -1599,6 +1864,8 @@ class ActionSet (Overlay):
   """An 'Action Set', consists of one or more Actions Layers."""
   def __init__ (self, index=None, py_title=None, py_legacy=None, **kwargs):
     Overlay.__init__(self, 0, index, py_title, py_legacy, py_parent=None, **kwargs)
+
+##### end of Overly #####
 
 
 class GroupSourceBinding (object):
