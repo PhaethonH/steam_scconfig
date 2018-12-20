@@ -179,34 +179,17 @@ class ContainsSettings (object):
 
 
 
-##########################
-# Substantiative objects #
-##########################
-
-
-class IconInfo (object):
-  """Icon info, third portion of "binding" command, for radial menus."""
-  def __init__ (self, path=None, bg=None, fg=None, *args):
-    if path and len(path)>0 and ' ' in path:
-      # split in place.
-      # TODO: parse quoted, escaped, space-in-path?
-      words = path.split(None,3)
-      path = words[0]
-      bg = words[1]
-      fg = words[2]
-      # ignore fourth space and after.
-    self.path = path
-    self.bg = bg
-    self.fg = fg
-  def __str__ (self):
-    return ' '.join([self.path, self.bg, self.fg])
-  def __repr__ (self):
-    return "{}(path={!r},bg={!r},fg={!r})".format(
-            self.__class__.__name__,
-            self.path, self.bg, self.fg)
-
-
-# Evgen = Event Generator (Synthesis)
+###########################
+# Evgen - Event Generator #
+###########################
+# Empty
+# Keystroke
+# MouseSwitch
+# Gamepad
+# Host
+# Light
+# Overlay
+# Modeshift
 
 class EvgenBase (object):
   """One binding instance in a list of many, as part of Activate"""
@@ -481,6 +464,28 @@ class EvgenFactory (object):
     return retval
 
 
+class IconInfo (object):
+  """Icon info, third portion of "binding" command, for radial menus."""
+  def __init__ (self, path=None, bg=None, fg=None, *args):
+    if path and len(path)>0 and ' ' in path:
+      # split in place.
+      # TODO: parse quoted, escaped, space-in-path?
+      words = path.split(None,3)
+      path = words[0]
+      bg = words[1]
+      fg = words[2]
+      # ignore fourth space and after.
+    self.path = path
+    self.bg = bg
+    self.fg = fg
+  def __str__ (self):
+    return ' '.join([self.path, self.bg, self.fg])
+  def __repr__ (self):
+    return "{}(path={!r},bg={!r},fg={!r})".format(
+            self.__class__.__name__,
+            self.path, self.bg, self.fg)
+
+
 class Binding (object):
   """Binding object connects:
   1. Evgen object
@@ -525,11 +530,19 @@ class Binding (object):
     retval = (geninfo, label, iconinfo)
     return retval
 
-
-
-
 ### end of Binding and Bindings related classes ###
 
+
+
+#############
+# Activator #
+#############
+# Full_Press
+# Double_Press
+# Long_Press
+# Start_Press
+# Release
+# Chord
 
 
 class ActivatorBase (ContainsSettings, object):
@@ -824,6 +837,7 @@ class ActivatorFactory:
 def Activator (activator_signal, **kwargs):
   return ActivatorFactory.make(activator_signal, **kwargs)
 
+###### end of Activator ######
 
 
 
@@ -864,7 +878,23 @@ class ControllerInput (object):
     return kv
 
 
-# TODO: change Group into factory class/namespace.
+
+#################
+# (Input) Group #
+#################
+# AbsoluteMouse
+# Dpad
+# FourButtons
+# JoystickCamera
+# JoystickMove
+# JoystickMouse
+# MouseJoystick
+# MouseRegion
+# RadialMenu
+# Scrollwheel
+# SingleButton
+# Switches
+# TouchMenu
 
 class GroupBase (ContainsSettings, object):
   """Base class for input groups: joystick, dpad, triggers, etc."""
@@ -1766,6 +1796,14 @@ class GroupFactory (object):
 def Group (*args, **kwargs):
   return GroupFactory.make(*args, **kwargs)
 
+##### end Group #####
+
+
+###########
+# Overlay #
+###########
+# ActionSet
+# ActionLayer
 
 class Overlay (object):
   """base for ActionSet and ActionLayer.
@@ -1826,6 +1864,8 @@ class ActionSet (Overlay):
   """An 'Action Set', consists of one or more Actions Layers."""
   def __init__ (self, index=None, py_title=None, py_legacy=None, **kwargs):
     Overlay.__init__(self, 0, index, py_title, py_legacy, py_parent=None, **kwargs)
+
+##### end of Overly #####
 
 
 class GroupSourceBinding (object):
