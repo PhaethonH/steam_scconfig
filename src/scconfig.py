@@ -178,6 +178,82 @@ class ContainsSettings (object):
     self.__vsc_validate = None
 
 
+class SettingsBase (scvdf.SCVDFDict):
+  # Constraints on settings values.
+  # Tuples indicate an integer range, such that tuple[0] <= value <= tuple[1]
+  # List specifies the set of acceptable values
+  # class-object contains acceptable values: class.__dict__.values()
+  # primitive type to indicate the allowable value type
+  _Settings = {}
+
+  def __init__ (self, index=None, **kwargs):
+    scvdf.SCVDFDict.__init__(self, kwargs)
+    if index is not None:
+      self.index = index
+
+  @staticmethod
+  def _settings_getter (settings_key):
+    def getter (self):
+      return self.get(settings_key, None)
+    return getter
+  @staticmethod
+  def _settings_setter (settings_key):
+    def setter (self, val):
+      constraint = self._Settings.get(settings_key, None)
+      if isinstance(constraint,tuple):      # integer range constraint.
+        lower, upper = constraint
+        if (val < lower) or (upper < val):
+          raise ValueError("Value {} not within constraint {}".format(val, constraint))
+      elif isinstance(constraint,list):     # any from a list.
+        if not (val in constraint):
+          raise ValueError("Value {} not within constraint {}".format(val, constraint))
+      elif type(constraint) == types.SimpleNamespace:   # any from namespace.
+        if not (val in constraint.__dict__.values()):
+          raise ValueError("Value {} not within constraint {}".format(val, constraint))
+          return
+      elif constraint is None:  # no constraint.
+        pass
+      else:       # is of type.
+        if type(val) != constraint:
+          raise ValueError("Value {} not within constraint type({})".format(val, constraint))
+      self[settings_key] = val
+    return setter
+  @staticmethod
+  def _settings_deleter (settings_key):
+    def deleter (self):
+      del self[settings_key]
+    return deleter
+  @staticmethod
+  def _new_setting (settings_key):
+    return property(SettingsBase._settings_getter(settings_key),
+                    SettingsBase._settings_setter(settings_key),
+                    SettingsBase._settings_deleter(settings_key))
+
+  @property
+  def settings (self):
+    try: self.__vsc_settings        # assign initial if missing.
+    except AttributeError: self.__vsc_settings = EncodableDict()
+    return self.__vsc_settings      # return attribute.
+  @settings.setter
+  def settings (self, v):
+    try: v.keys                                       # check dict-like.
+    except AttributeError: self.__vsc_settings = v    # not a dict.
+    else: self.__vsc_validate = EncodableDict()       # dict-like, override.
+  @settings.deleter
+  def settings (self):
+    self.__vsc_validate = None
+
+  def encode_kv (self):
+    kv = scvdf.SCVDFDict()
+    for k, v in self.items():
+      try:
+        kv[k] = v.encode_kv()     # recursively encode.
+      except AttributeError as e:
+        if isinstance(v, bool): v = int(v)    # cast bool to int.
+        kv[k] = str(v)
+    return kv
+
+
 
 ###########################
 # Evgen - Event Generator #
@@ -545,7 +621,7 @@ class Binding (object):
 # Chord
 
 
-class ActivatorBase (ContainsSettings, object):
+class ActivatorBase (object):
   """Base class for activators:
 * FullPress ("Full_Press"), aka RegularPress
 * LongPress ("Long_Press")
@@ -559,31 +635,33 @@ Nested attributes:
  * settings: settings for the activator (e.g. enable repeat while held).
 """
   signal = None     # change for each derived class.
-  SETTINGS = types.SimpleNamespace(
-    TOGGLE = "toggle",
-    INTERRUPTIBLE = "interruptable",    # sic
-    DELAY_START = "delay_start",
-    DELAY_END = "delay_end",
-    HAPTIC_INTENSITY = "haptic_intensity",
-    CYCLE = "cycle",
-    HOLD_REPEATS = "hold_repeats",
-    REPEAT_RATE = "repeat_rate",
-    DOUBLE_TAP_TIME = "double_tap_time",
-    LONG_PRESS_TIME = "long_press_time",
-    CHORD_BUTTON = "chord_button",
-    )
 
-  HapticIntensity = types.SimpleNamespace(
-    OFF = 0,
-    LOW = 1,
-    MEDIUM = 2,
-    HIGH = 3,
-    )
+  class Settings (SettingsBase):
+    SETTINGS = types.SimpleNamespace(
+      TOGGLE = "toggle",
+      INTERRUPTIBLE = "interruptable",    # sic
+      DELAY_START = "delay_start",
+      DELAY_END = "delay_end",
+      HAPTIC_INTENSITY = "haptic_intensity",
+      CYCLE = "cycle",
+      HOLD_REPEATS = "hold_repeats",
+      REPEAT_RATE = "repeat_rate",
+      DOUBLE_TAP_TIME = "double_tap_time",
+      LONG_PRESS_TIME = "long_press_time",
+      CHORD_BUTTON = "chord_button",
+      )
+
+    HapticIntensity = types.SimpleNamespace(
+      OFF = 0,
+      LOW = 1,
+      MEDIUM = 2,
+      HIGH = 3,
+      )
 
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     # self.signal  is class-scope per derived class.
     self.bindings = []
-    self.settings = {}
+    self.settings = self.Settings(py_settings)
 
     if py_bindings:
       # expect list of pyobject.
@@ -623,175 +701,175 @@ Nested attributes:
 
 class ActivatorFullPress (ActivatorBase):
   signal = 'Full_Press'
-  HapticIntensity = ActivatorBase.HapticIntensity
-  S = ActivatorBase.SETTINGS
-  _Settings = {
-    S.TOGGLE: bool,
-    S.INTERRUPTIBLE: bool,
-    S.DELAY_START: int,   # TODO: range
-    S.DELAY_END: int,     # TODO: range
-    S.HAPTIC_INTENSITY: HapticIntensity,
-    S.CYCLE: bool,
-    S.HOLD_REPEATS: bool,
-    S.REPEAT_RATE: (1, 9999),
-  }
+  class Settings (ActivatorBase.Settings):
+    HapticIntensity = ActivatorBase.Settings.HapticIntensity
+    S = ActivatorBase.Settings.SETTINGS
+    _Settings = {
+      S.TOGGLE: bool,
+      S.INTERRUPTIBLE: bool,
+      S.DELAY_START: int,   # TODO: range
+      S.DELAY_END: int,     # TODO: range
+      S.HAPTIC_INTENSITY: HapticIntensity,
+      S.CYCLE: bool,
+      S.HOLD_REPEATS: bool,
+      S.REPEAT_RATE: (1, 9999),
+    }
+    toggle = SettingsBase._new_setting(S.TOGGLE)
+    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._new_setting(S.DELAY_START)
+    delay_end = SettingsBase._new_setting(S.DELAY_END)
+    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._new_setting(S.CYCLE)
+    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
-
-  toggle = ContainsSettings._new_setting(S.TOGGLE)
-  interruptible = ContainsSettings._new_setting(S.INTERRUPTIBLE)
-  delay_start = ContainsSettings._new_setting(S.DELAY_START)
-  delay_end = ContainsSettings._new_setting(S.DELAY_END)
-  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
-  cycle = ContainsSettings._new_setting(S.CYCLE)
-  hold_repeats = ContainsSettings._new_setting(S.HOLD_REPEATS)
-  repeat_rate = ContainsSettings._new_setting(S.REPEAT_RATE)
 
 class ActivatorDoublePress (ActivatorBase):
   signal = 'Double_Press'
-  HapticIntensity = ActivatorBase.HapticIntensity
-  S = ActivatorBase.SETTINGS
-  _Settings = {
-    S.DOUBLE_TAP_TIME: int,  # TODO: range
-    S.TOGGLE: bool,
-    S.INTERRUPTIBLE: bool,
-    S.DELAY_START: int,   # TODO: range
-    S.DELAY_END: int,     # TODO: range
-    S.HAPTIC_INTENSITY: HapticIntensity,
-    S.CYCLE: bool,
-    S.HOLD_REPEATS: bool,
-    S.REPEAT_RATE: (1, 9999),
-  }
+  class Settings (ActivatorBase.Settings):
+    HapticIntensity = ActivatorBase.Settings.HapticIntensity
+    S = ActivatorBase.Settings.SETTINGS
+    _Settings = {
+      S.DOUBLE_TAP_TIME: int,  # TODO: range
+      S.TOGGLE: bool,
+      S.INTERRUPTIBLE: bool,
+      S.DELAY_START: int,   # TODO: range
+      S.DELAY_END: int,     # TODO: range
+      S.HAPTIC_INTENSITY: HapticIntensity,
+      S.CYCLE: bool,
+      S.HOLD_REPEATS: bool,
+      S.REPEAT_RATE: (1, 9999),
+    }
+    double_tap_time = SettingsBase._new_setting(S.DOUBLE_TAP_TIME)
+    toggle = SettingsBase._new_setting(S.TOGGLE)
+    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._new_setting(S.DELAY_START)
+    delay_end = SettingsBase._new_setting(S.DELAY_END)
+    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._new_setting(S.CYCLE)
+    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
-
-  double_tap_time = ContainsSettings._new_setting(S.DOUBLE_TAP_TIME)
-  toggle = ContainsSettings._new_setting(S.TOGGLE)
-  interruptible = ContainsSettings._new_setting(S.INTERRUPTIBLE)
-  delay_start = ContainsSettings._new_setting(S.DELAY_START)
-  delay_end = ContainsSettings._new_setting(S.DELAY_END)
-  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
-  cycle = ContainsSettings._new_setting(S.CYCLE)
-  hold_repeats = ContainsSettings._new_setting(S.HOLD_REPEATS)
-  repeat_rate = ContainsSettings._new_setting(S.REPEAT_RATE)
 
 class ActivatorLongPress (ActivatorBase):
   signal = 'Long_Press'
-  HapticIntensity = ActivatorBase.HapticIntensity
-  S = ActivatorBase.SETTINGS
-  _Settings = {
-    S.LONG_PRESS_TIME: int,  # TODO: range
-    S.TOGGLE: bool,
-    S.INTERRUPTIBLE: bool,
-    S.DELAY_START: int,   # TODO: range
-    S.DELAY_END: int,     # TODO: range
-    S.HAPTIC_INTENSITY: HapticIntensity,
-    S.CYCLE: bool,
-    S.HOLD_REPEATS: bool,
-    S.REPEAT_RATE: (1, 9999),
-  }
+  class Settings (ActivatorBase.Settings):
+    HapticIntensity = ActivatorBase.Settings.HapticIntensity
+    S = ActivatorBase.Settings.SETTINGS
+    _Settings = {
+      S.LONG_PRESS_TIME: int,  # TODO: range
+      S.TOGGLE: bool,
+      S.INTERRUPTIBLE: bool,
+      S.DELAY_START: int,   # TODO: range
+      S.DELAY_END: int,     # TODO: range
+      S.HAPTIC_INTENSITY: HapticIntensity,
+      S.CYCLE: bool,
+      S.HOLD_REPEATS: bool,
+      S.REPEAT_RATE: (1, 9999),
+    }
+    long_press_time = SettingsBase._new_setting(S.LONG_PRESS_TIME)
+    toggle = SettingsBase._new_setting(S.TOGGLE)
+    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._new_setting(S.DELAY_START)
+    delay_end = SettingsBase._new_setting(S.DELAY_END)
+    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._new_setting(S.CYCLE)
+    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
-
-  long_press_time = ContainsSettings._new_setting(S.LONG_PRESS_TIME)
-  toggle = ContainsSettings._new_setting(S.TOGGLE)
-  interruptible = ContainsSettings._new_setting(S.INTERRUPTIBLE)
-  delay_start = ContainsSettings._new_setting(S.DELAY_START)
-  delay_end = ContainsSettings._new_setting(S.DELAY_END)
-  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
-  cycle = ContainsSettings._new_setting(S.CYCLE)
-  hold_repeats = ContainsSettings._new_setting(S.HOLD_REPEATS)
-  repeat_rate = ContainsSettings._new_setting(S.REPEAT_RATE)
 
 class ActivatorStartPress (ActivatorBase):
   signal = 'Start_Press'
-  HapticIntensity = ActivatorBase.HapticIntensity
-  S = ActivatorBase.SETTINGS
-  _Settings = {
-    S.TOGGLE: bool,
-    S.DELAY_START: int,   # TODO: range
-    S.DELAY_END: int,     # TODO: range
-    S.HAPTIC_INTENSITY: HapticIntensity,
-    S.CYCLE: bool,
-  }
+  class Settings (ActivatorBase.Settings):
+    HapticIntensity = ActivatorBase.Settings.HapticIntensity
+    S = ActivatorBase.Settings.SETTINGS
+    _Settings = {
+      S.TOGGLE: bool,
+      S.DELAY_START: int,   # TODO: range
+      S.DELAY_END: int,     # TODO: range
+      S.HAPTIC_INTENSITY: HapticIntensity,
+      S.CYCLE: bool,
+    }
+    toggle = SettingsBase._new_setting(S.TOGGLE)
+    delay_start = SettingsBase._new_setting(S.DELAY_START)
+    delay_end = SettingsBase._new_setting(S.DELAY_END)
+    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._new_setting(S.CYCLE)
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
-
-  toggle = ContainsSettings._new_setting(S.TOGGLE)
-  delay_start = ContainsSettings._new_setting(S.DELAY_START)
-  delay_end = ContainsSettings._new_setting(S.DELAY_END)
-  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
-  cycle = ContainsSettings._new_setting(S.CYCLE)
 
 class ActivatorRelease (ActivatorBase):
   signal = 'release'
-  HapticIntensity = ActivatorBase.HapticIntensity
-  S = ActivatorBase.SETTINGS
-  _Settings = {
-    S.TOGGLE: bool,
-    S.INTERRUPTIBLE: bool,
-    S.DELAY_START: int,   # TODO: range
-    S.DELAY_END: int,     # TODO: range
-    S.HAPTIC_INTENSITY: HapticIntensity,
-  }
+  class Settings (ActivatorBase.Settings):
+    HapticIntensity = ActivatorBase.Settings.HapticIntensity
+    S = ActivatorBase.Settings.SETTINGS
+    _Settings = {
+      S.TOGGLE: bool,
+      S.INTERRUPTIBLE: bool,
+      S.DELAY_START: int,   # TODO: range
+      S.DELAY_END: int,     # TODO: range
+      S.HAPTIC_INTENSITY: HapticIntensity,
+    }
+    toggle = SettingsBase._new_setting(S.TOGGLE)
+    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._new_setting(S.DELAY_START)
+    delay_end = SettingsBase._new_setting(S.DELAY_END)
+    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._new_setting(S.CYCLE)
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
-
-  toggle = ContainsSettings._new_setting(S.TOGGLE)
-  interruptible = ContainsSettings._new_setting(S.INTERRUPTIBLE)
-  delay_start = ContainsSettings._new_setting(S.DELAY_START)
-  delay_end = ContainsSettings._new_setting(S.DELAY_END)
-  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
-  cycle = ContainsSettings._new_setting(S.CYCLE)
 
 class ActivatorChord (ActivatorBase):
   signal = 'chord'
-  ChordButton = types.SimpleNamespace(
-    NONE = 0,
-    LEFT_BUMPER = 1,
-    RIGHT_BUMPER= 2,
-    LEFT_GRIP = 3,
-    RIGHT_GRIP = 4,
-    LEFT_TRIGGER_FULL = 5,
-    RIGHT_TRIGGER_FULL = 6,
-    LEFT_TRIGGER_SOFT = 7,
-    RIGHT_TRIGGER_SOFT = 8,
-    JOYSTICK_CLICK = 9,
-    BUTTON_A = 10,
-    BUTTON_B = 11,
-    BUTTON_X = 12,
-    BUTTON_Y = 13,
-    SELECT = 14,
-    START = 15,
-    LEFT_PAD_TOUCH = 16,
-    RIGHT_PAD_TOUCH = 17,
-    LEFT_PAD_CLICK = 18,
-    RIGHT_PAD_CLICK = 19,
-    )
-  HapticIntensity = ActivatorBase.HapticIntensity
-  S = ActivatorBase.SETTINGS
-  _Settings = {
-    S.CHORD_BUTTON: ChordButton,
-    S.TOGGLE: bool,
-    S.INTERRUPTIBLE: bool,
-    S.DELAY_START: int,   # TODO: range
-    S.DELAY_END: int,     # TODO: range
-    S.HAPTIC_INTENSITY: HapticIntensity,
-    S.HOLD_REPEATS: bool,
-    S.REPEAT_RATE: (1, 9999),
-  }
+  class Settings (ActivatorBase.Settings):
+    ChordButton = types.SimpleNamespace(
+      NONE = 0,
+      LEFT_BUMPER = 1,
+      RIGHT_BUMPER= 2,
+      LEFT_GRIP = 3,
+      RIGHT_GRIP = 4,
+      LEFT_TRIGGER_FULL = 5,
+      RIGHT_TRIGGER_FULL = 6,
+      LEFT_TRIGGER_SOFT = 7,
+      RIGHT_TRIGGER_SOFT = 8,
+      JOYSTICK_CLICK = 9,
+      BUTTON_A = 10,
+      BUTTON_B = 11,
+      BUTTON_X = 12,
+      BUTTON_Y = 13,
+      SELECT = 14,
+      START = 15,
+      LEFT_PAD_TOUCH = 16,
+      RIGHT_PAD_TOUCH = 17,
+      LEFT_PAD_CLICK = 18,
+      RIGHT_PAD_CLICK = 19,
+      )
+    HapticIntensity = ActivatorBase.Settings.HapticIntensity
+    S = ActivatorBase.Settings.SETTINGS
+    _Settings = {
+      S.CHORD_BUTTON: ChordButton,
+      S.TOGGLE: bool,
+      S.INTERRUPTIBLE: bool,
+      S.DELAY_START: int,   # TODO: range
+      S.DELAY_END: int,     # TODO: range
+      S.HAPTIC_INTENSITY: HapticIntensity,
+      S.HOLD_REPEATS: bool,
+      S.REPEAT_RATE: (1, 9999),
+    }
+    chord_button = SettingsBase._new_setting(S.CHORD_BUTTON)
+    toggle = SettingsBase._new_setting(S.TOGGLE)
+    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._new_setting(S.DELAY_START)
+    delay_end = SettingsBase._new_setting(S.DELAY_END)
+    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._new_setting(S.CYCLE)
+    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
-
-  chord_button = ContainsSettings._new_setting(S.CHORD_BUTTON)
-  toggle = ContainsSettings._new_setting(S.TOGGLE)
-  interruptible = ContainsSettings._new_setting(S.INTERRUPTIBLE)
-  delay_start = ContainsSettings._new_setting(S.DELAY_START)
-  delay_end = ContainsSettings._new_setting(S.DELAY_END)
-  haptic_intensity = ContainsSettings._new_setting(S.HAPTIC_INTENSITY)
-  cycle = ContainsSettings._new_setting(S.CYCLE)
-  hold_repeats = ContainsSettings._new_setting(S.HOLD_REPEATS)
-  repeat_rate = ContainsSettings._new_setting(S.REPEAT_RATE)
 
 
 class ActivatorFactory:

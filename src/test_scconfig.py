@@ -233,18 +233,18 @@ class TestScvdfComponents (unittest.TestCase):
 
   def test_activator (self):
     a = scconfig.ActivatorFullPress()
-    a.toggle = True
-    a.haptic_intensity = a.HapticIntensity.OFF
-    a.interruptible = True
-    a.delay_start = 0
-    a.delay_end = 0
-    a.cycle = False
-    a.hold_repeats = False
-    a.repeat_rate = 1
+    a.settings.toggle = True
+    a.settings.haptic_intensity = a.settings.HapticIntensity.OFF
+    a.settings.interruptible = True
+    a.settings.delay_start = 0
+    a.settings.delay_end = 0
+    a.settings.cycle = False
+    a.settings.hold_repeats = False
+    a.settings.repeat_rate = 1
     with self.assertRaisesRegex(ValueError, 'Value.*constraint.*bool'):
-      a.cycle = 42
+      a.settings.cycle = 42
     with self.assertRaisesRegex(ValueError, 'Value.*constraint.*[0-9]'):
-      a.repeat_rate = False
+      a.settings.repeat_rate = False
 
     d = a.encode_kv()
     self.assertEqual(d, {
