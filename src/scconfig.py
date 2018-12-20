@@ -137,19 +137,19 @@ class ContainsSettings (object):
       if isinstance(constraint,tuple):      # integer range constraint.
         lower, upper = constraint
         if (val < lower) or (upper < val):
-          raise ValueError("Value {} not within constraints {}".format(val, constraint))
+          raise ValueError("Value {} not within constraint {}".format(val, constraint))
       elif isinstance(constraint,list):     # any from a list.
-        if not (val in constraints):
-          raise ValueError("Value {} not within constraints {}".format(val, constraint))
+        if not (val in constraint):
+          raise ValueError("Value {} not within constraint {}".format(val, constraint))
       elif type(constraint) == types.SimpleNamespace:   # any from namespace.
         if not (val in constraint.__dict__.values()):
-          raise ValueError("Value {} not within constraints {}".format(val, constraint))
+          raise ValueError("Value {} not within constraint {}".format(val, constraint))
           return
       elif constraint is None:  # no constraint.
         pass
       else:       # is of type.
         if type(val) != constraint:
-          raise ValueError("Value {} not within constraints type({})".format(val, constraint))
+          raise ValueError("Value {} not within constraint type({})".format(val, constraint))
       self.settings[settings_key] = val
     return setter
   @staticmethod
