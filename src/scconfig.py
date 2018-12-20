@@ -852,7 +852,10 @@ def Activator (activator_signal, **kwargs):
 
 
 class ControllerInput (object):
-  """An input description within a group."""
+  """An input description within a group.
+Contains:
+ * list of activators.
+"""
   def __init__ (self, input_element, py_activators=None, **kwargs):
     self.ideal_input = input_element
     self.activators = []
@@ -886,6 +889,28 @@ class ControllerInput (object):
         kv_activators[signal] = activator.encode_kv()
     kv['activators'] = kv_activators
     return kv
+
+
+
+# Collection of inputs for a Group.
+# each ControllerInput get a unique name (e.g. "dpad_north").
+# creates a property to alias to that name.
+class InputsBase (EncodableDict):
+  _ALLOW = True
+  @staticmethod
+  def _alias (input_name):
+    def getter (self):
+      return self.get(input_name, None)
+    def setter (self, val):
+      self[input_name] = val
+    def deleter (self):
+      del self[input_name]
+    return property(getter, setter, deleter)
+  def __setitem__ (self, k, v):
+    if self._ALLOW != True:
+      if not k in self._ALLOW:
+        raise KeyError("Key not allowed: {}".format(k))
+    super(EncodableDict,self).__setitem__(k,v)
 
 
 
@@ -1114,6 +1139,10 @@ class GroupBase (object):
     TouchmenuButtonFireType.TOUCH_RELEASE = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
     TouchmenuButtonFireType.MODESHIFT_END = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
 
+  class Inputs (InputsBase):
+    # Restrictive, to encourage subclassing.
+    _ALLOW = False
+
   def __init__ (self, py_mode=None, index=None, py_inputs=None, py_settings=None, **kwargs):
     if index is None:
       if 'id' in kwargs:
@@ -1128,7 +1157,9 @@ class GroupBase (object):
 
     self.index = index
     self.mode = py_mode
-    self.inputs = EncodableDict(VSC_INPUTS)
+    #self.inputs = EncodableDict(VSC_INPUTS)
+    # Subclass-specific Inputs(), tailored to Group*-specific constraints.
+    self.inputs = self.Inputs(py_mode)
     self.settings = self.Settings(py_settings)
 
     if py_inputs:
@@ -1159,14 +1190,8 @@ class GroupBase (object):
       kv[VSC_SETTINGS] = self.settings.encode_kv()
     return kv
 
-class GroupAbsoluteMouse (GroupBase):
-  CLICK = "click"
-  DOUBLETAP = "doubletap"
-  TOUCH = "toucH"
-  INPUTS = set([
-    CLICK, DOUBLETAP, TOUCH
-    ])
 
+class GroupAbsoluteMouse (GroupBase):
   class Settings (GroupBase.Settings):
     # Values for 'friction.
     Friction = PseudoNamespace(
@@ -1239,21 +1264,22 @@ class GroupAbsoluteMouse (GroupBase):
     # alias
     doubetape_max_duraction = doubletap_max_duration
 
+  class Inputs (InputsBase):
+    CLICK = "click"
+    DOUBLETAP = "doubletap"
+    TOUCH = "touch"
+    _ALLOW = {
+      CLICK, DOUBLETAP, TOUCH,
+      }
+    click = InputsBase._alias(CLICK)
+    doubletap = InputsBase._alias(DOUBLETAP)
+    touch = InputsBase._alias(TOUCH)
+
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'absolute_mouse', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupDpad (GroupBase):
-  DPAD_NORTH = 'dpad_north'
-  DPAD_WEST = 'dpad_west'
-  DPAD_EAST = 'dpad_east'
-  DPAD_SOUTH = 'dpad_south'
-  DPAD_CLICK = 'dpad_click'
-  DPAD_EDGE = 'dpad_edge'
-  INPUTS = set([
-    DPAD_NORTH, DPAD_WEST, DPAD_EAST, DPAD_SOUTH, DPAD_CLICK, DPAD_EDGE
-    ])
-
   class Settings (GroupBase.Settings):
     Layout = PseudoNamespace(
       FOUR_WAY = 0,
@@ -1291,19 +1317,30 @@ class GroupDpad (GroupBase):
     gyro_neutral = SettingsBase._new_setting(S.GYRO_NEUTRAL)
     haptic_intensity_override = SettingsBase._new_setting(S.HAPTIC_INTENSITY_OVERRIDE)
 
+  # Collection of inputs.
+  class Inputs (InputsBase):
+    DPAD_NORTH = 'dpad_north'
+    DPAD_WEST = 'dpad_west'
+    DPAD_EAST = 'dpad_east'
+    DPAD_SOUTH = 'dpad_south'
+    CLICK = 'click'
+    EDGE = 'edge'
+    _ALLOW = {
+      DPAD_NORTH, DPAD_SOUTH, DPAD_EAST, DPAD_WEST,
+      CLICK, EDGE,
+      }
+    dpad_up = InputsBase._alias(DPAD_NORTH)
+    dpad_down = InputsBase._alias(DPAD_SOUTH)
+    dpad_left = InputsBase._alias(DPAD_WEST)
+    dpad_right = InputsBase._alias(DPAD_EAST)
+    dpad_click = InputsBase._alias(CLICK)
+    dpad_edge = InputsBase._alias(EDGE)
+
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'dpad', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupFourButtons (GroupBase):
-  BUTTON_A = 'down'
-  BUTTON_B = 'right'
-  BUTTON_X = 'left'
-  BUTTON_Y = 'right'
-  INPUTS = set([
-    BUTTON_A, BUTTON_B, BUTTON_X, BUTTON_Y
-    ])
-
   class Settings (GroupBase.Settings):
     S = GroupBase.Settings._VSC_KEYS
     _CONSTRAINTS = {
@@ -1316,6 +1353,19 @@ class GroupFourButtons (GroupBase):
     button_dist = SettingsBase._new_setting(S.BUTTON_DIST)
     # alias
     button_distance = button_dist
+
+  class Inputs (InputsBase):
+    BUTTON_A = "button_a"
+    BUTTON_B = "button_b"
+    BUTTON_X = "button_x"
+    BUTTON_Y = "button_y"
+    _ALLOW = {
+      BUTTON_A, BUTTON_B, BUTTON_X, BUTTON_Y,
+      }
+    button_a = InputsBase._alias(BUTTON_A)
+    button_b = InputsBase._alias(BUTTON_B)
+    button_x = InputsBase._alias(BUTTON_X)
+    button_y = InputsBase._alias(BUTTON_Y)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'four_buttons', index, py_inputs, py_settings, **kwargs)
@@ -1363,15 +1413,18 @@ class GroupJoystickCamera (GroupBase):
     gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
     gyro_neutral = SettingsBase._new_setting(S.GYRO_NEUTRAL)
 
+  class Inputs (InputsBase):
+    CLICK = "click"
+    _ALLOW = {
+      CLICK,
+      }
+    click = InputsBase._alias(CLICK)
+
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'joystick_camera', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupJoystickMouse (GroupBase):
-  CLICK = "click"
-  EDGE = "edge"
-  INPUTS = set([ CLICK, EDGE ])
-
   class Settings (GroupBase.Settings):
     CurveExponent = GroupBase.Settings.CurveExponent
     OutputJoystick = PseudoNamespace(
@@ -1395,6 +1448,15 @@ class GroupJoystickMouse (GroupBase):
     anti_deadzone = SettingsBase._new_setting(S.ANTI_DEADZONE)
     anti_deadzone_buffer = SettingsBase._new_setting(S.ANTI_DEADZONE_BUFFER)
     output_joystick = SettingsBase._new_setting(S.OUTPUT_JOYSTICK)
+
+  class Inputs (InputsBase):
+    CLICK = "click"
+    EDGE = "edge"
+    _ALLOW = {
+      CLICK, EDGE,
+      }
+    click = InputsBase._alias(CLICK)
+    edge = InputsBase._alias(EDGE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'joystick_mouse', index, py_inputs, py_settings, **kwargs)
@@ -1458,6 +1520,15 @@ class GroupJoystickMove (GroupBase):
     gyro_button_invert = SettingsBase._new_setting(S.GYRO_BUTTON_INVERT)
     gyro_lock_extents = SettingsBase._new_setting(S.GYRO_LOCK_EXTENTS)
 
+  class Inputs (InputsBase):
+    CLICK = "click"
+    EDGE = "edge"
+    _ALLOW = {
+      CLICK, EDGE,
+      }
+    click = InputsBase._alias(CLICK)
+    edge = InputsBase._alias(EDGE)
+
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'joystick_move', index, py_inputs, py_settings, **kwargs)
 
@@ -1515,16 +1586,20 @@ class GroupMouseJoystick (GroupBase):
     gyro_axis = SettingsBase._new_setting(S.GYRO_AXIS)
     gyro_sensitivity_scale = SettingsBase._new_setting(S.GYRO_SENSITIVITY_SCALE)
 
+  class Inputs (InputsBase):
+    CLICK = "click"
+    EDGE = "edge"
+    _ALLOW = {
+      CLICK, EDGE,
+      }
+    click = InputsBase._alias(CLICK)
+    edge = InputsBase._alias(EDGE)
+
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'mouse_joystick', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupMouseRegion (GroupBase):
-  CLICK = "click"
-  EDGE = "edge"
-  TOUCH = "touch"
-  INPUTS = set([ CLICK, EDGE, TOUCH ])
-
   class Settings (GroupBase.Settings):
     HapticIntensity = GroupBase.Settings.HapticIntensity
     MouseDampeningTrigger = GroupBase.Settings.MouseDampeningTrigger
@@ -1561,15 +1636,22 @@ class GroupMouseRegion (GroupBase):
     mouse_dampening_trigger = SettingsBase._new_setting(S.MOUSE_DAMPENING_TRIGGER)
     mouse_trigger_clamp_amount = SettingsBase._new_setting(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
 
+  class Inputs (InputsBase):
+    CLICK = "click"
+    EDGE = "edge"
+    TOUCH = "touch"
+    _ALLOW = {
+      CLICK, EDGE, TOUCH,
+      }
+    click = InputsBase._alias(CLICK)
+    edge = InputsBase._alias(EDGE)
+    touch = InputsBase._alias(TOUCH)
+
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'mouse_region', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupRadialMenu (GroupBase):
-  CLICK = "click"
-  # touch_menu_button_%d  0..15
-  INPUTS = set([ CLICK, ])
-
   class Settings (GroupBase.Settings):
     TouchmenuButtonFireType = GroupBase.Settings.TouchmenuButtonFireType
     S = GroupBase.Settings._VSC_KEYS
@@ -1588,17 +1670,22 @@ class GroupRadialMenu (GroupBase):
     touch_menu_scale = SettingsBase._new_setting(S.TOUCH_MENU_SCALE)
     touch_menu_show_labels = SettingsBase._new_setting(S.TOUCH_MENU_SHOW_LABELS)
 
+  class Inputs (InputsBase):
+    N_BUTTONS = 20
+    CLICK = "click"
+    _ALLOW = set( [CLICK] + [
+      "touch_menu_button_%d" % d for d in range(0,N_BUTTONS+1) ] )
+    click = InputsBase._alias(CLICK)
+  for d in range(0, Inputs.N_BUTTONS):
+    symbol = "touch_menu_button_%d" % d
+    property_ = InputsBase._alias(symbol)
+    setattr(Inputs, symbol, property_)
+
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'radial_menu', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupScrollwheel (GroupBase):
-  CLICK = "click"
-  SCROLL_CLOCKWISE = "scroll_clockwise"
-  SCROLL_COUNTERCLOCKWISE = "scroll_counterclockwise"
-  # scroll_wheel_list_%d  0..9
-  INPUTS = set([ CLICK, SCROLL_CLOCKWISE, SCROLL_COUNTERCLOCKWISE ])
-
   class Settings (GroupBase.Settings):
     Friction = GroupBase.Settings.Friction
     HapticIntensity = GroupBase.Settings.HapticIntensity
@@ -1623,17 +1710,34 @@ class GroupScrollwheel (GroupBase):
     scroll_wrap = SettingsBase._new_setting(S.SCROLL_WRAP)
     scroll_friction = SettingsBase._new_setting(S.SCROLL_FRICTION)
 
+  class Inputs (InputsBase):
+    CLICK = "click"
+    SCROLL_CLOCKWISE = "scroll_clockwise"
+    SCROLL_COUNTERCLOCKWISE = "scroll_counterclockwise"
+    _ALLOW = {
+      CLICK, SCROLL_CLOCKWISE, SCROLL_COUNTERCLOCKWISE
+      }
+    click = InputsBase._alias(CLICK)
+    scroll_clockwise = InputsBase._alias(SCROLL_CLOCKWISE)
+    scroll_counterclockwise = InputsBase._alias(SCROLL_COUNTERCLOCKWISE)
+
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'scrollwheel', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupSingleButton (GroupBase):
-  CLICK = "click"
-  TOUCH = "touch"
-  INPUTS = set([ CLICK, TOUCH ])
+  class Inputs (InputsBase):
+    CLICK = "click"
+    TOUCH = "touch"
+    _ALLOW = {
+      CLICK, TOUCH,
+      }
+    click = InputsBase._alias(CLICK)
+    touch = InputsBase._alias(TOUCH)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'single_button', index, py_inputs, py_settings, **kwargs)
+
 
 class GroupSwitches (GroupBase):
   BUTTON_ESCAPE = "button_escape"
@@ -1642,20 +1746,18 @@ class GroupSwitches (GroupBase):
   RIGHT_BUMPER = "right_bumper"
   BUTTON_BACK_LEFT = "button_back_left"
   BUTTON_BACK_RIGHT = "button_back_right"
-  RIGHT_TRIGGER_MODESHIFT = "right_trigger_modeshift"
-  RIGHT_TRIGGER_THRESHOLD_MODESHIFT = "right_trigger_threshold_modeshift"
-  LEFT_TRIGGER_MODESHIFT = "left_trigger_modeshift"
-  LEFT_TRIGGER_THRESHOLD_MODESHIFT = "left_trigger_threshold_modeshift"
-  LEFT_CLICK_MODESHIFT = "left_click_modeshift"
-  RIGHT_CLICK_MODESHIFT = "right_click_modeshift"
-  LEFT_STICK_CLICK_MODESHIFT = "left_stick_click_modeshift"
-  BUTTON_A_MODESHIFT = "button_a_modeshift"
-  BUTTON_B_MODESHIFT = "button_b_modeshift"
-  BUTTON_X_MODESHIFT = "button_x_modeshift"
-  BUTTON_Y_MODESHIFT = "button_y_modeshift"
+  LEFT_GRIP = BUTTON_BACK_LEFT
+  RIGHT_GRIP = BUTTON_BACK_RIGHT
+  LEFT_CLICK = "left_click"   # LT full pull
+  RIGHT_CLICK = "right_click" # RT full pull
+
+  # TODO: find out what may go in here.
+  class Inputs (InputsBase):
+    _ALLOW = True
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'switches', index, py_inputs, py_settings, **kwargs)
+
 
 class GroupTouchMenu (GroupBase):
   # touch_menu_button_%d  0..15
@@ -1679,15 +1781,19 @@ class GroupTouchMenu (GroupBase):
     touch_menu_show_labels = SettingsBase._new_setting(S.TOUCH_MENU_SHOW_LABELS)
     touchmenu_button_fire_type = SettingsBase._new_setting(S.TOUCHMENU_BUTTON_FIRE_TYPE)
 
+  class Inputs (InputsBase):
+    N_BUTTONS = 16
+    _ALLOW = set([ "touch_menu_button_%d" % d for d in range(0, N_BUTTONS+1)])
+  for d in range(0, Inputs.N_BUTTONS+1):
+    symbol = "touch_menu_button_%d"
+    property_ = InputsBase._alias(symbol)
+    setattr(Inputs, symbol, property_)
+
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'touch_menu', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupTrigger (GroupBase):
-  CLICK = "click"
-  EDGE = "edge"
-  INPUTS = set([ CLICK, EDGE ])
-
   class Settings (GroupBase.Settings):
     AdaptiveThreshold = PseudoNamespace(
       SIMPLE_THRESHOLD = 0,
@@ -1716,6 +1822,15 @@ class GroupTrigger (GroupBase):
     adaptive_threshold = SettingsBase._new_setting(S.ADAPTIVE_THRESHOLD)
     curve_exponent = SettingsBase._new_setting(S.CURVE_EXPONENT)
     custom_curve_exponent = SettingsBase._new_setting(S.CUSTOM_CURVE_EXPONENT)
+
+  class Inputs (InputsBase):
+    CLICK = "click"
+    EDGE = "edge"
+    _ALLOW = {
+      CLICK, EDGE,
+      }
+    click = InputsBase._alias(CLICK)
+    edge = InputsBase._alias(EDGE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'trigger', index, py_inputs, py_settings, **kwargs)
@@ -1946,7 +2061,7 @@ class Preset (object):
 
     self.index = index
     self.name = py_name
-    self.gsb = scvdf.SCVDFDict()  # map group-id:int to GroupSourceBindingValue
+    self.gsb = scvdf.SCVDFDict()  # map group-id:str to GroupSourceBindingValue
 
     if py_gsb:
       # expect compatible with dict.update()
@@ -1958,7 +2073,7 @@ class Preset (object):
 
   def add_gsb (self, groupid, groupsrc, active=True, modeshift=False):
     gsbv = GroupSourceBindingValue(groupsrc, active, modeshift)
-    self.gsb[int(groupid)] = gsbv
+    self.gsb[str(groupid)] = gsbv
 
   def encode_pair (self):
     lop = []

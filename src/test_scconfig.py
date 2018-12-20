@@ -249,6 +249,20 @@ class TestScvdfComponents (unittest.TestCase):
     s.check_of_list ='bar'
     self.assertEqual(s.check_of_list, 'bar')
 
+  def test_inputs (self):
+    # Test accessing and mutating input elements of a group.
+    g = scconfig.GroupDpad()
+    self.assertEqual(g.inputs.__class__, scconfig.GroupDpad.Inputs)
+    i = g.inputs.dpad_up
+    self.assertEqual(i, None)
+    with self.assertRaises(KeyError):
+      g.inputs['dpad_nope'] = None
+    with self.assertRaises(KeyError):
+      g.make_input("dpad_up")
+    g.make_input("dpad_north")
+    i = g.inputs.dpad_up
+    self.assertEqual(type(i), scconfig.ControllerInput)
+
   def test_activator (self):
     a = scconfig.ActivatorFullPress()
     a.settings.toggle = True
