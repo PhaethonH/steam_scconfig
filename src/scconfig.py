@@ -1012,7 +1012,6 @@ class GroupBase (object):
       ACCELERATION = "acceleration",
       MOUSE_SMOOTHING = "mouse_smoothing",
       )
-    _VSC_KEYS.DOUBETAP_MAX_DURATION = _VSC_KEYS.DOUBLETAP_MAX_DURATION  # maintain misspelling.
 
     # Values for 'acceleration'.
     Acceleration = PseudoNamespace(
