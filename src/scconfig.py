@@ -1868,38 +1868,53 @@ class ActionSet (Overlay):
 ##### end of Overly #####
 
 
-class GroupSourceBinding (object):
-  VALID_SOURCES = [
-    "switch", "dpad", "button_diamond", "left_trigger", "right_trigger",
-    "joystick", "right_joystick"
-    ]
-  def __init__ (self, groupid, groupsrc, active=True, modeshift=False):
-    if groupid is None:
-      groupid = 0
-    self.groupid = groupid
-    self.grpsrc = groupsrc
+class GroupSourceBindingValue (object):
+  ValidSources = types.SimpleNamespace(
+    SWITCH = 'switch',
+    DPAD = 'dpad',
+    BUTTON_DIAMOND = 'button_diamond',
+    LEFT_TRACKPAD = 'left_trackpad',
+    RIGHT_TRACKPAD = 'right_trackpad',
+    LEFT_TRIGGER = 'left_trigger',
+    RIGHT_TRIGGER = 'right_trigger',
+    JOYSTICK = 'joystick',
+    RIGHT_JOYSTICK = 'right_joystick',
+    )
+  VALID_SOURCES = list(ValidSources.__dict__.values())
+
+  def __init__ (self, groupsrc, active=True, modeshift=False):
+    if ' ' in groupsrc:
+      groupsrc, active, modeshift = self._parse(groupsrc)
     self.active = active
     self.modeshift = modeshift
+    self._groupsrc = None
+    # self.groupsrc is a property
+    self.groupsrc = groupsrc
 
-  def _encode (self):
-    rhs = []
-    rhs.append(self.grpsrc)
-    if self.active:
-      rhs.append(VSC_ACTIVE)
-    else:
-      rhs.append(VSC_INACTIVE)
-    if self.modeshift:
-      rhs.append(VSC_MODESHIFT)
-    retval = ' '.join(rhs)
-    return retval
+  @property
+  def groupsrc (self):
+    return self._groupsrc
+  @groupsrc.setter
+  def groupsrc (self, v):
+    if v is not None:
+      if v in GroupSourceBindingValue.VALID_SOURCES:
+        self._groupsrc = v
+        return
+    raise ValueError("Bad group source '{}'".format(v))
 
-  def encode_pair (self):
-    encoding = self._encode()
-    whole = ( str(self.groupid), encoding )
-    return whole
+  @staticmethod
+  def _parse (s):
+    words = s.split()
+    inpsrc = words[0]
+    active = (words[1] == VSC_ACTIVE) if len(words) > 1 else False
+    modeshift = (words[2] == VSC_MODESHIFT) if len(words) > 2 else False
+    return (inpsrc, active, modeshift)
 
   def encode_kv (self):
-    return self._encode()
+    words = [ self.groupsrc ]
+    words.append(VSC_ACTIVE if self.active else VSC_INACTIVE)
+    words.append(VSC_MODESHIFT) if self.modeshift else None
+    return " ".join(words)
 
 
 class Preset (object):
@@ -1911,26 +1926,19 @@ class Preset (object):
 
     self.index = index
     self.name = py_name
-    self.gsb = []
+    self.gsb = scvdf.SCVDFDict()  # map group-id:int to GroupSourceBindingValue
 
     if py_gsb:
-      # expect list of pyobject.
-      self.gsb.extend(py_gsb)
+      # expect compatible with dict.update()
+      self.gsb.update(py_gsb)
     elif 'group_source_bindings' in kwargs:
       d = kwargs['group_source_bindings']
       for (gsb_key, gsb_value) in d.items():
         self.add_gsb(gsb_key, gsb_value)
 
   def add_gsb (self, groupid, groupsrc, active=True, modeshift=False):
-    if ' ' in groupsrc:
-      # assume not parsed.
-      phrases = groupsrc.split()
-      groupsrc = phrases[0]
-      active = (phrases[1] == VSC_ACTIVE)
-      modeshift = (phrases[2] == VSC_MODESHIFT) if len(phrases)>2 else False
-    gsb = GroupSourceBinding(groupid, groupsrc, active, modeshift)
-    self.gsb.append(gsb)
-    return gsb
+    gsbv = GroupSourceBindingValue(groupsrc, active, modeshift)
+    self.gsb[int(groupid)] = gsbv
 
   def encode_pair (self):
     lop = []
@@ -1951,9 +1959,8 @@ class Preset (object):
     kv['name'] = str(self.name)
 
     kv_gsb = scvdf.SCVDFDict()
-    for elt in self.gsb:
-      gid = str(elt.groupid)
-      kv_gsb[gid] = elt.encode_kv()
+    for k,v in self.gsb.items():
+      kv_gsb[str(k)] = v.encode_kv()
     kv['group_source_bindings'] = kv_gsb
 
     return kv
