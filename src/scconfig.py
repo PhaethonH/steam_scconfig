@@ -1136,10 +1136,8 @@ class GroupBase (object):
       for (inp_name, inp_kv) in kwargs[VSC_INPUTS].items():
         self.make_input(inp_name, **inp_kv)
 
-    if py_settings:
+    if VSC_SETTINGS in kwargs:
       # Expect dictionary of pure scalars.  This might break in future?
-      self.settings.update(settings)
-    elif VSC_SETTINGS in kwargs:
       self.settings.update(kwargs[VSC_SETTINGS])
 
   def make_input (self, input_element, py_activators=None, **kwargs):
@@ -2057,7 +2055,6 @@ class Mapping (object):
     # List of Presets
     self.presets = []
     # Miscellaneous settings
-    #self.settings = EncodableDict(VSC_SETTINGS)
     self.settings = self.Settings(py_settings)
 
     if 'actions' in kwargs:
