@@ -44,32 +44,119 @@ def get_all (container, key, default_value):
     return default_value
 
 
-# Helper class for commonly recurring 'settings' field, which is all-scalar.
-class RestrictiveDict (OrderedDict):
-  """dict that is order-sensitive, filters permitted keys."""
-  _ALLOW = True
+class RestrictedDictMixin (object):
+  """dict mix-in: restrict allowable keys."""
+  # Set of keys permitted in dict.  Set to True to allow any key.
+  _ALLOW = set()
+  def __init__ (self, copyfrom=None):
+    if self._ALLOW != True:
+      if copyfrom:
+        for k in copyfrom:
+          self._ALLOW.add(k)
+    super(RestrictedDictMixin,self).__init__(copyfrom)
+  def __setitem__ (self, k, v):
+    if self._ALLOW != True:
+      if (not self._ALLOW) or (not k in self._ALLOW):
+        raise KeyError("Key not allowed: {}".format(k))
+    super(RestrictedDictMixin,self).__setitem__(k,v)
+  @classmethod
+  def _allow (cls, real_key):
+    if cls._ALLOW != True:
+      try:
+        cls._ALLOW = set(cls._ALLOW)   # Convert iterables to set.
+      except TypeError:
+        cls._ALLOW = set()      # Presumably was False, start allowing.
+      cls._ALLOW.add(real_key)
+  @classmethod
+  def _ALLOW_ALL (cls):
+    cls._ALLOW = True
+
+class AliasableDictMixin (object):
+  """dict mix-in: allow creating property that alias to a dict entry."""
+  @staticmethod
+  def _alias (real_key):
+    def getter (self):
+      return self.get(real_key, None)
+    def setter (self, val):
+      self[real_key] = val
+    def deleter (self):
+      del self[real_key]
+    return property(getter, setter, deleter)
+  @classmethod
+  def _create_alias (cls, alias_name, property_name=None):
+    try:
+      cls._allow(alias_name)
+    except AttributeError:
+      pass  # meh.
+    if property_name is None:
+      property_name = alias_name
+    setattr(cls, property_name, AliasableDictMixin._alias(alias_name))
+
+class ConstrainedDictMixin (object):
+  """dict mix-in: put constraints on values for specified keys."""
+  # Constraints on dict values.
+  # Tuples indicate an integer range, such that tuple[0] <= value <= tuple[1].
+  # List specifies the set of acceptable values.
+  # class-object contains acceptable values: class.__dict__.values().
+  # primitive type to indicate the allowable value type.
+  ## dict keys not listed in constraints are unconstrainted.
+  _CONSTRAINTS = {}
+
+  def _filtered_assign (self, k, val):
+    constraint = self._CONSTRAINTS.get(k, None)
+    if isinstance(constraint,tuple):      # integer range constraint.
+      lower, upper = constraint
+      val = int(val)
+      if (val < lower) or (upper < val):
+        raise ValueError("Value {!r} violates range constraint {}".format(val, constraint))
+    elif isinstance(constraint,list):     # any from a list.
+      if not (val in constraint):
+        raise ValueError("Value {!r} violates list constraint {}".format(val, constraint))
+    elif type(constraint) == PseudoNamespace:   # any from namespace.
+      val = int(val)
+      if not (val in constraint._nsdict.values()):
+        raise ValueError("Value {!r} violates namespace constraint {}".format(val, constraint))
+        return
+    elif constraint is None:  # no constraint.
+      pass
+    else:       # is of type.
+      if constraint == bool:
+        if val in [ '0', 0, False ]:
+          val = False
+        elif val in [ '1', 1, True ]:
+          val = True
+      else:
+        try:
+          val = int(val)
+        except TypeError:
+          pass
+      if type(val) != constraint:
+        raise ValueError("Value {!r} violates type constraint {}".format(val, constraint))
+    super(ConstrainedDictMixin,self).__setitem__(k,val)
+    #self[k] = val
+  def __setitem__ (self, k, v):
+    self._filtered_assign(k,v)
+
+class IndexDict (OrderedDict):
+  """Index-aware (VDF entry pair) dict."""
   def __init__ (self, index=None, copyfrom=None):
     if isinstance(index,dict):  # implies copyfrom currently None.
       copyfrom, index = index, None
     if copyfrom:
-      OrderedDict.__init__(self, copyfrom)
+      super(IndexDict,self).__init__(copyfrom)
     else:
-      OrderedDict.__init__(self)
+      super(IndexDict,self).__init__()
     self.index = VSC_SETTINGS if (index is None) else None
-  @staticmethod
-  def _alias (input_name):
-    def getter (self):
-      return self.get(input_name, None)
-    def setter (self, val):
-      self[input_name] = val
-    def deleter (self):
-      del self[input_name]
-    return property(getter, setter, deleter)
-  def __setitem__ (self, k, v):
-    if self._ALLOW != True:
-      if not k in self._ALLOW:
-        raise KeyError("Key not allowed: {}".format(k))
-    super(RestrictiveDict,self).__setitem__(k,v)
+
+class RestrictiveDict (RestrictedDictMixin, AliasableDictMixin, IndexDict):
+  def __init__ (self, index=None, copyfrom=None):
+    if isinstance(index,dict):  # implies copyfrom currently None.
+      copyfrom, index = index, None
+    if copyfrom:
+      RestrictedDictMixin.__init__(self, copyfrom)
+      IndexDict.__init__(self, index, copyfrom)
+    else:
+      super(IndexDict,self).__init__()
 
 
 # Convert to SCVDF from Steam Controller Config object.
@@ -166,7 +253,7 @@ VSC_INPUTS = "inputs"
 
 
 # Settings map scalar to scalar; SCVDF overloads multiple assignments to mean building an array value.
-class SettingsBase (OrderedDict):
+class SettingsBase (AliasableDictMixin, ConstrainedDictMixin, OrderedDict):
   # Constraints on settings values.
   # Tuples indicate an integer range, such that tuple[0] <= value <= tuple[1].
   # List specifies the set of acceptable values.
@@ -179,26 +266,6 @@ class SettingsBase (OrderedDict):
     super(SettingsBase,self).__init__(kwargs)
     if index is not None:
       self.index = index
-
-  def _filtered_assign (self, k, val):
-    constraint = self._CONSTRAINTS.get(k, None)
-    if isinstance(constraint,tuple):      # integer range constraint.
-      lower, upper = constraint
-      if (val < lower) or (upper < val):
-        raise ValueError("Value {} violates range constraint {}".format(val, constraint))
-    elif isinstance(constraint,list):     # any from a list.
-      if not (val in constraint):
-        raise ValueError("Value {} violates list constraint {}".format(val, constraint))
-    elif type(constraint) == PseudoNamespace:   # any from namespace.
-      if not (val in constraint._nsdict.values()):
-        raise ValueError("Value {} violates namespace constraint {}".format(val, constraint))
-        return
-    elif constraint is None:  # no constraint.
-      pass
-    else:       # is of type.
-      if type(val) != constraint:
-        raise ValueError("Value {} violates type constraint {}".format(val, constraint))
-    self[k] = val
 
   @staticmethod
   def _settings_getter (settings_key):
@@ -220,16 +287,8 @@ class SettingsBase (OrderedDict):
     return property(SettingsBase._settings_getter(settings_key),
                     SettingsBase._settings_setter(settings_key),
                     SettingsBase._settings_deleter(settings_key))
-
-  def _toVDF (self, maptype=scvdf.SCVDFDict):
-    kv = maptype()
-    for k, v in self.items():
-      try:
-        kv[k] = toVDF(v, maptype)   # recursively encode.
-      except AttributeError as e:
-        if isinstance(v, bool): v = int(v)    # cast bool to int.
-        kv[k] = str(v)
-    return kv
+#  def __setitem__ (self, k, v):
+#    return self._filtered_assign(k,v)
 
 
 
@@ -693,13 +752,22 @@ class ActivatorFullPress (ActivatorBase):
       S.REPEAT_RATE: (1, 9999),
     }
     toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
+    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)  # misspell
     delay_start = SettingsBase._new_setting(S.DELAY_START)
     delay_end = SettingsBase._new_setting(S.DELAY_END)
     haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
     cycle = SettingsBase._new_setting(S.CYCLE)
     hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
     repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
+#  Settings._create_alias(Settings.S.TOGGLE)
+#  Settings._create_alias(Settings.S.INTERRUPTIBLE, "interruptible")
+#  Settings._create_alias(Settings.S.DELAY_START)
+#  Settings._create_alias(Settings.S.DELAY_END)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.CYCLE)
+#  Settings._create_alias(Settings.S.HOLD_REPEATS)
+#  Settings._create_alias(Settings.S.REPEAT_RATE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -719,15 +787,25 @@ class ActivatorDoublePress (ActivatorBase):
       S.HOLD_REPEATS: bool,
       S.REPEAT_RATE: (1, 9999),
     }
-    double_tap_time = SettingsBase._new_setting(S.DOUBLE_TAP_TIME)
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
-    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
-    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
+    double_tap_time = SettingsBase._alias(S.DOUBLE_TAP_TIME)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    interruptible = SettingsBase._alias(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+    hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
+#  Settings._create_alias(Settings.S.DOUBLE_TAP_TIME)
+#  Settings._create_alias(Settings.S.TOGGLE)
+#  Settings._create_alias(Settings.S.INTERRUPTIBLE)
+#  Settings._create_alias(Settings.S.DELAY_START)
+#  Settings._create_alias(Settings.S.DELAY_END)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.CYCLE)
+#  Settings._create_alias(Settings.S.HOLD_REPEATS)
+#  Settings._create_alias(Settings.S.REPEAT_RATE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -747,15 +825,25 @@ class ActivatorLongPress (ActivatorBase):
       S.HOLD_REPEATS: bool,
       S.REPEAT_RATE: (1, 9999),
     }
-    long_press_time = SettingsBase._new_setting(S.LONG_PRESS_TIME)
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
-    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
-    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
+    long_press_time = SettingsBase._alias(S.LONG_PRESS_TIME)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    interruptible = SettingsBase._alias(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+    hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
+#  Settings._create_alias(Settings.S.LONG_PRESS_TIME)
+#  Settings._create_alias(Settings.S.TOGGLE)
+#  Settings._create_alias(Settings.S.INTERRUPTIBLE)
+#  Settings._create_alias(Settings.S.DELAY_START)
+#  Settings._create_alias(Settings.S.DELAY_END)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.CYCLE)
+#  Settings._create_alias(Settings.S.HOLD_REPEATS)
+#  Settings._create_alias(Settings.S.REPEAT_RATE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -771,11 +859,17 @@ class ActivatorStartPress (ActivatorBase):
       S.HAPTIC_INTENSITY: HapticIntensity,
       S.CYCLE: bool,
     }
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+#  Settings._create_alias(Settings.S.TOGGLE)
+#  Settings._create_alias(Settings.S.DELAY_START)
+#  Settings._create_alias(Settings.S.DELAY_END)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.CYCLE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -791,12 +885,19 @@ class ActivatorRelease (ActivatorBase):
       S.DELAY_END: int,     # TODO: range
       S.HAPTIC_INTENSITY: HapticIntensity,
     }
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    interruptible = SettingsBase._alias(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+#  Settings._create_alias(Settings.S.TOGGLE)
+#  Settings._create_alias(Settings.S.INTERRUPTIBLE)
+#  Settings._create_alias(Settings.S.DELAY_START)
+#  Settings._create_alias(Settings.S.DELAY_END)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.CYCLE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -837,15 +938,25 @@ class ActivatorChord (ActivatorBase):
       S.HOLD_REPEATS: bool,
       S.REPEAT_RATE: (1, 9999),
     }
-    chord_button = SettingsBase._new_setting(S.CHORD_BUTTON)
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
-    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
-    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
+    chord_button = SettingsBase._alias(S.CHORD_BUTTON)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    interruptible = SettingsBase._alias(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+    hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
+#  Settings._create_alias(Settings.S.CHORD_BUTTON)
+#  Settings._create_alias(Settings.S.TOGGLE)
+#  Settings._create_alias(Settings.S.INTERRUPTIBLE)
+#  Settings._create_alias(Settings.S.DELAY_START)
+#  Settings._create_alias(Settings.S.DELAY_END)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.CYCLE)
+#  Settings._create_alias(Settings.S.HOLD_REPEATS)
+#  Settings._create_alias(Settings.S.REPEAT_RATE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -1152,7 +1263,7 @@ class GroupBase (object):
     TouchmenuButtonFireType.TOUCH_RELEASE = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
     TouchmenuButtonFireType.MODESHIFT_END = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
 
-  class Inputs (RestrictiveDict):
+  class Inputs (RestrictedDictMixin, AliasableDictMixin, IndexDict):
     # Restrictive, to encourage subclassing.
     _ALLOW = False
 
@@ -1248,33 +1359,54 @@ class GroupAbsoluteMouse (GroupBase):
 #  @sensitivity.deleter
 #  def sensitivity (self):
 #    del self.settings[self.S.SENSITIVITY]
-    sensitivity = property(SettingsBase._settings_getter(S.SENSITIVITY),
-                            SettingsBase._settings_setter(S.SENSITIVITY),
-                            SettingsBase._settings_deleter(S.SENSITIVITY))
+#    sensitivity = property(SettingsBase._settings_getter(S.SENSITIVITY),
+#                            SettingsBase._settings_setter(S.SENSITIVITY),
+#                            SettingsBase._settings_deleter(S.SENSITIVITY))
 
-    trackball = SettingsBase._new_setting(S.TRACKBALL)
-    doubletap_beep = SettingsBase._new_setting(S.DOUBLETAP_BEEP)
-    invert_x = SettingsBase._new_setting(S.INVERT_X)
-    invert_y = SettingsBase._new_setting(S.INVERT_Y)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    rotation = SettingsBase._new_setting(S.ROTATION)
-    friction = SettingsBase._new_setting(S.FRICTION)
-    friction_vert_scale = SettingsBase._new_setting(S.FRICTION_VERT_SCALE)
-    sensitivity_vert_scale = SettingsBase._new_setting(S.SENSITIVITY_VERT_SCALE)
-    acceleration = SettingsBase._new_setting(S.ACCELERATION)
-    mouse_move_threshold = SettingsBase._new_setting(S.MOUSE_MOVE_THRESHOLD)
-    mouse_smoothing = SettingsBase._new_setting(S.MOUSE_SMOOTHING)
-    edge_spin_velocity = SettingsBase._new_setting(S.EDGE_SPIN_VELOCITY)
-    edge_spin_radius = SettingsBase._new_setting(S.EDGE_SPIN_RADIUS)
-    doubletap_max_duration = SettingsBase._new_setting(S.DOUBLETAP_MAX_DURATION)
-    mouse_dampening_trigger = SettingsBase._new_setting(S.MOUSE_DAMPENING_TRIGGER)
-    mouse_trigger_clamp_amount = SettingsBase._new_setting(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
-    gyro_axis = SettingsBase._new_setting(S.GYRO_AXIS)
-    gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
-    gyro_button_invert = SettingsBase._new_setting(S.GYRO_BUTTON_INVERT)
-    deadzone_outer_radius = SettingsBase._new_setting(S.DEADZONE_OUTER_RADIUS)
-    # alias
-    doubetape_max_duraction = doubletap_max_duration
+    sensitivity = SettingsBase._alias(S.SENSITIVITY)
+    trackball = SettingsBase._alias(S.TRACKBALL)
+    doubletap_beep = SettingsBase._alias(S.DOUBLETAP_BEEP)
+    invert_x = SettingsBase._alias(S.INVERT_X)
+    invert_y = SettingsBase._alias(S.INVERT_Y)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    rotation = SettingsBase._alias(S.ROTATION)
+    friction = SettingsBase._alias(S.FRICTION)
+    friction_vert_scale = SettingsBase._alias(S.FRICTION_VERT_SCALE)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
+    acceleration = SettingsBase._alias(S.ACCELERATION)
+    mouse_move_threshold = SettingsBase._alias(S.MOUSE_MOVE_THRESHOLD)
+    mouse_smoothing = SettingsBase._alias(S.MOUSE_SMOOTHING)
+    edge_spin_velocity = SettingsBase._alias(S.EDGE_SPIN_VELOCITY)
+    edge_spin_radius = SettingsBase._alias(S.EDGE_SPIN_RADIUS)
+    doubletap_max_duration = SettingsBase._alias(S.DOUBLETAP_MAX_DURATION)
+    mouse_dampening_trigger = SettingsBase._alias(S.MOUSE_DAMPENING_TRIGGER)
+    mouse_trigger_clamp_amount = SettingsBase._alias(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+    gyro_axis = SettingsBase._alias(S.GYRO_AXIS)
+    gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
+    gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
+    deadzone_outer_radius = SettingsBase._alias(S.DEADZONE_OUTER_RADIUS)
+#  Settings._create_alias(Settings.S.SENSITIVITY)
+#  Settings._create_alias(Settings.S.TRACKBALL)
+#  Settings._create_alias(Settings.S.DOUBLETAP_BEEP)
+#  Settings._create_alias(Settings.S.INVERT_X)
+#  Settings._create_alias(Settings.S.INVERT_Y)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.ROTATION)
+#  Settings._create_alias(Settings.S.FRICTION)
+#  Settings._create_alias(Settings.S.FRICTION_VERT_SCALE)
+#  Settings._create_alias(Settings.S.SENSITIVITY_VERT_SCALE)
+#  Settings._create_alias(Settings.S.ACCELERATION)
+#  Settings._create_alias(Settings.S.MOUSE_MOVE_THRESHOLD)
+#  Settings._create_alias(Settings.S.MOUSE_SMOOTHING)
+#  Settings._create_alias(Settings.S.EDGE_SPIN_VELOCITY)
+#  Settings._create_alias(Settings.S.EDGE_SPIN_RADIUS)
+#  Settings._create_alias(Settings.S.DOUBLETAP_MAX_DURATION, "doubletap_max_duration")
+#  Settings._create_alias(Settings.S.MOUSE_DAMPENING_TRIGGER)
+#  Settings._create_alias(Settings.S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+#  Settings._create_alias(Settings.S.GYRO_AXIS)
+#  Settings._create_alias(Settings.S.GYRO_BUTTON)
+#  Settings._create_alias(Settings.S.GYRO_BUTTON_INVERT)
+#  Settings._create_alias(Settings.S.DEADZONE_OUTER_RADIUS)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1283,9 +1415,12 @@ class GroupAbsoluteMouse (GroupBase):
     _ALLOW = {
       CLICK, DOUBLETAP, TOUCH,
       }
-    click = GroupBase.Inputs._alias(CLICK)
-    doubletap = GroupBase.Inputs._alias(DOUBLETAP)
-    touch = GroupBase.Inputs._alias(TOUCH)
+#    click = GroupBase.Inputs._alias(CLICK)
+#    doubletap = GroupBase.Inputs._alias(DOUBLETAP)
+#    touch = GroupBase.Inputs._alias(TOUCH)
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.DOUBLETAP)
+  Inputs._create_alias(Inputs.TOUCH)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'absolute_mouse', index, py_inputs, py_settings, **kwargs)
@@ -1317,17 +1452,28 @@ class GroupDpad (GroupBase):
       S.GYRO_NEUTRAL: (0, 32767),
       }
 
-    requires_click = SettingsBase._new_setting(S.REQUIRES_CLICK)
-    layout = SettingsBase._new_setting(S.LAYOUT)
-    deadzone = SettingsBase._new_setting(S.DEADZONE)
-    edge_binding_radius = SettingsBase._new_setting(S.EDGE_BINDING_RADIUS)
-    edge_binding_invert = SettingsBase._new_setting(S.EDGE_BINDING_INVERT)
-    analog_emulation_period = SettingsBase._new_setting(S.ANALOG_EMULATION_PERIOD)
-    overlap_region = SettingsBase._new_setting(S.OVERLAP_REGION)
-    gyro_button_invert = SettingsBase._new_setting(S.GYRO_BUTTON_INVERT)
-    gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
-    gyro_neutral = SettingsBase._new_setting(S.GYRO_NEUTRAL)
-    haptic_intensity_override = SettingsBase._new_setting(S.HAPTIC_INTENSITY_OVERRIDE)
+    requires_click = SettingsBase._alias(S.REQUIRES_CLICK)
+    layout = SettingsBase._alias(S.LAYOUT)
+    deadzone = SettingsBase._alias(S.DEADZONE)
+    edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
+    edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
+    analog_emulation_period = SettingsBase._alias(S.ANALOG_EMULATION_PERIOD)
+    overlap_region = SettingsBase._alias(S.OVERLAP_REGION)
+    gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
+    gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
+    gyro_neutral = SettingsBase._alias(S.GYRO_NEUTRAL)
+    haptic_intensity_override = SettingsBase._alias(S.HAPTIC_INTENSITY_OVERRIDE)
+#  Settings._create_alias(Settings.S.REQUIRES_CLICK)
+#  Settings._create_alias(Settings.S.LAYOUT)
+#  Settings._create_alias(Settings.S.DEADZONE)
+#  Settings._create_alias(Settings.S.EDGE_BINDING_RADIUS)
+#  Settings._create_alias(Settings.S.EDGE_BINDING_INVERT)
+#  Settings._create_alias(Settings.S.ANALOG_EMULATION_PERIOD)
+#  Settings._create_alias(Settings.S.OVERLAP_REGION)
+#  Settings._create_alias(Settings.S.GYRO_BUTTON_INVERT)
+#  Settings._create_alias(Settings.S.GYRO_BUTTON)
+#  Settings._create_alias(Settings.S.GYRO_NEUTRAL)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY_OVERRIDE)
 
   # Collection of inputs.
   class Inputs (GroupBase.Inputs):
@@ -1360,11 +1506,16 @@ class GroupFourButtons (GroupBase):
       S.BUTTON_SIZE: (1, 32767),
       S.BUTTON_DIST: (1, 32767),
       }
-    requires_click = SettingsBase._new_setting(S.REQUIRES_CLICK)
-    button_size = SettingsBase._new_setting(S.BUTTON_SIZE)
-    button_dist = SettingsBase._new_setting(S.BUTTON_DIST)
+    requires_click = SettingsBase._alias(S.REQUIRES_CLICK)
+    button_size = SettingsBase._alias(S.BUTTON_SIZE)
+    button_dist = SettingsBase._alias(S.BUTTON_DIST)
     # alias
     button_distance = button_dist
+#  Settings._create_alias(Settings.S.REQUIRES_CLICK)
+#  Settings._create_alias(Settings.S.BUTTON_SIZE)
+#  Settings._create_alias(Settings.S.BUTTON_DIST)
+#    # alias
+#  Settings._create_alias(Settings.S.BUTTON_DIST, "button_distance")
 
   class Inputs (GroupBase.Inputs):
     BUTTON_A = "button_a"
@@ -1411,19 +1562,32 @@ class GroupJoystickCamera (GroupBase):
       S.GYRO_BUTTON: GyroButton,
       S.GYRO_NEUTRAL: (0, 32767),
     }
-    curve_exponent = SettingsBase._new_setting(S.CURVE_EXPONENT)
-    swipe_duration = SettingsBase._new_setting(S.SWIPE_DURATION)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    output_joystick = SettingsBase._new_setting(S.OUTPUT_JOYSTICK)
-    sensitivity_vert_scale = SettingsBase._new_setting(S.SENSITIVITY_VERT_SCALE)
-    anti_deadzone = SettingsBase._new_setting(S.ANTI_DEADZONE)
-    anti_deadzone_buffer = SettingsBase._new_setting(S.ANTI_DEADZONE_BUFFER)
-    invert_x = SettingsBase._new_setting(S.INVERT_X)
-    invert_y = SettingsBase._new_setting(S.INVERT_Y)
-    joystick_smoothing = SettingsBase._new_setting(S.JOYSTICK_SMOOTHING)
-    sensitivity = SettingsBase._new_setting(S.SENSITIVITY)
-    gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
-    gyro_neutral = SettingsBase._new_setting(S.GYRO_NEUTRAL)
+    curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
+    swipe_duration = SettingsBase._alias(S.SWIPE_DURATION)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
+    anti_deadzone = SettingsBase._alias(S.ANTI_DEADZONE)
+    anti_deadzone_buffer = SettingsBase._alias(S.ANTI_DEADZONE_BUFFER)
+    invert_x = SettingsBase._alias(S.INVERT_X)
+    invert_y = SettingsBase._alias(S.INVERT_Y)
+    joystick_smoothing = SettingsBase._alias(S.JOYSTICK_SMOOTHING)
+    sensitivity = SettingsBase._alias(S.SENSITIVITY)
+    gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
+    gyro_neutral = SettingsBase._alias(S.GYRO_NEUTRAL)
+#  Settings._create_alias(Settings.S.CURVE_EXPONENT)
+#  Settings._create_alias(Settings.S.SWIPE_DURATION)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.OUTPUT_JOYSTICK)
+#  Settings._create_alias(Settings.S.SENSITIVITY_VERT_SCALE)
+#  Settings._create_alias(Settings.S.ANTI_DEADZONE)
+#  Settings._create_alias(Settings.S.ANTI_DEADZONE_BUFFER)
+#  Settings._create_alias(Settings.S.INVERT_X)
+#  Settings._create_alias(Settings.S.INVERT_Y)
+#  Settings._create_alias(Settings.S.JOYSTICK_SMOOTHING)
+#  Settings._create_alias(Settings.S.SENSITIVITY)
+#  Settings._create_alias(Settings.S.GYRO_BUTTON)
+#  Settings._create_alias(Settings.S.GYRO_NEUTRAL)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1453,13 +1617,20 @@ class GroupJoystickMouse (GroupBase):
       S.ANTI_DEADZONE_BUFFER: (0, 32767),
       S.OUTPUT_JOYSTICK: OutputJoystick,
     }
-    curve_exponent = SettingsBase._new_setting(S.CURVE_EXPONENT)
-    custom_curve_exponent = SettingsBase._new_setting(S.CUSTOM_CURVE_EXPONENT)
-    edge_binding_radius = SettingsBase._new_setting(S.EDGE_BINDING_RADIUS)
-    edge_binding_invert = SettingsBase._new_setting(S.EDGE_BINDING_INVERT)
-    anti_deadzone = SettingsBase._new_setting(S.ANTI_DEADZONE)
-    anti_deadzone_buffer = SettingsBase._new_setting(S.ANTI_DEADZONE_BUFFER)
-    output_joystick = SettingsBase._new_setting(S.OUTPUT_JOYSTICK)
+    curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
+    custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
+    edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
+    edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
+    anti_deadzone = SettingsBase._alias(S.ANTI_DEADZONE)
+    anti_deadzone_buffer = SettingsBase._alias(S.ANTI_DEADZONE_BUFFER)
+    output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
+#  Settings._create_alias(Settings.S.CURVE_EXPONENT)
+#  Settings._create_alias(Settings.S.CUSTOM_CURVE_EXPONENT)
+#  Settings._create_alias(Settings.S.EDGE_BINDING_RADIUS)
+#  Settings._create_alias(Settings.S.EDGE_BINDING_INVERT)
+#  Settings._create_alias(Settings.S.ANTI_DEADZONE)
+#  Settings._create_alias(Settings.S.ANTI_DEADZONE_BUFFER)
+#  Settings._create_alias(Settings.S.OUTPUT_JOYSTICK)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1510,27 +1681,48 @@ class GroupJoystickMove (GroupBase):
       S.GYRO_BUTTON_INVERT: bool,
       S.GYRO_LOCK_EXTENTS: bool,
     }
-    curve_exponent = SettingsBase._new_setting(S.CURVE_EXPONENT)
-    custom_curve_exponent = SettingsBase._new_setting(S.CUSTOM_CURVE_EXPONENT)
-    edge_binding_radius = SettingsBase._new_setting(S.EDGE_BINDING_RADIUS)
-    edge_binding_invert = SettingsBase._new_setting(S.EDGE_BINDING_INVERT)
-    output_joystick = SettingsBase._new_setting(S.OUTPUT_JOYSTICK)
-    anti_deadzone = SettingsBase._new_setting(S.ANTI_DEADZONE)
-    anti_deadzone_buffer = SettingsBase._new_setting(S.ANTI_DEADZONE_BUFFER)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    deadzone_inner_radius = SettingsBase._new_setting(S.DEADZONE_INNER_RADIUS)
-    deadzone_outer_radius = SettingsBase._new_setting(S.DEADZONE_OUTER_RADIUS)
-    output_axis = SettingsBase._new_setting(S.OUTPUT_AXIS)
-    gyro_lock_extents = SettingsBase._new_setting(S.GYRO_LOCK_EXTENTS)
-    invert_x = SettingsBase._new_setting(S.INVERT_X)
-    invert_y = SettingsBase._new_setting(S.INVERT_Y)
-    sensitivity = SettingsBase._new_setting(S.SENSITIVITY)
-    sensitivity_vert_scale = SettingsBase._new_setting(S.SENSITIVITY_VERT_SCALE)
-    sensitivity_horiz_scale = SettingsBase._new_setting(S.SENSITIVITY_HORIZ_SCALE)
-    gyro_neutral = SettingsBase._new_setting(S.GYRO_NEUTRAL)
-    gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
-    gyro_button_invert = SettingsBase._new_setting(S.GYRO_BUTTON_INVERT)
-    gyro_lock_extents = SettingsBase._new_setting(S.GYRO_LOCK_EXTENTS)
+    curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
+    custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
+    edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
+    edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
+    output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
+    anti_deadzone = SettingsBase._alias(S.ANTI_DEADZONE)
+    anti_deadzone_buffer = SettingsBase._alias(S.ANTI_DEADZONE_BUFFER)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    deadzone_inner_radius = SettingsBase._alias(S.DEADZONE_INNER_RADIUS)
+    deadzone_outer_radius = SettingsBase._alias(S.DEADZONE_OUTER_RADIUS)
+    output_axis = SettingsBase._alias(S.OUTPUT_AXIS)
+    gyro_lock_extents = SettingsBase._alias(S.GYRO_LOCK_EXTENTS)
+    invert_x = SettingsBase._alias(S.INVERT_X)
+    invert_y = SettingsBase._alias(S.INVERT_Y)
+    sensitivity = SettingsBase._alias(S.SENSITIVITY)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
+    sensitivity_horiz_scale = SettingsBase._alias(S.SENSITIVITY_HORIZ_SCALE)
+    gyro_neutral = SettingsBase._alias(S.GYRO_NEUTRAL)
+    gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
+    gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
+    gyro_lock_extents = SettingsBase._alias(S.GYRO_LOCK_EXTENTS)
+#  Settings._create_alias(Settings.S.CURVE_EXPONENT)
+#  Settings._create_alias(Settings.S.CUSTOM_CURVE_EXPONENT)
+#  Settings._create_alias(Settings.S.EDGE_BINDING_RADIUS)
+#  Settings._create_alias(Settings.S.EDGE_BINDING_INVERT)
+#  Settings._create_alias(Settings.S.OUTPUT_JOYSTICK)
+#  Settings._create_alias(Settings.S.ANTI_DEADZONE)
+#  Settings._create_alias(Settings.S.ANTI_DEADZONE_BUFFER)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.DEADZONE_INNER_RADIUS)
+#  Settings._create_alias(Settings.S.DEADZONE_OUTER_RADIUS)
+#  Settings._create_alias(Settings.S.OUTPUT_AXIS)
+#  Settings._create_alias(Settings.S.GYRO_LOCK_EXTENTS)
+#  Settings._create_alias(Settings.S.INVERT_X)
+#  Settings._create_alias(Settings.S.INVERT_Y)
+#  Settings._create_alias(Settings.S.SENSITIVITY)
+#  Settings._create_alias(Settings.S.SENSITIVITY_VERT_SCALE)
+#  Settings._create_alias(Settings.S.SENSITIVITY_HORIZ_SCALE)
+#  Settings._create_alias(Settings.S.GYRO_NEUTRAL)
+#  Settings._create_alias(Settings.S.GYRO_BUTTON)
+#  Settings._create_alias(Settings.S.GYRO_BUTTON_INVERT)
+#  Settings._create_alias(Settings.S.GYRO_LOCK_EXTENTS)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1575,28 +1767,50 @@ class GroupMouseJoystick (GroupBase):
       S.GYRO_AXIS: [ 0, 1],  # TODO: research enum
       S.GYRO_SENSITIVITY_SCALE: int, # TODO: research limits
     }
-    trackball = SettingsBase._new_setting(S.TRACKBALL)
-    doubletap_beep = SettingsBase._new_setting(S.DOUBLETAP_BEEP)
-    invert_x = SettingsBase._new_setting(S.INVERT_X)
-    invert_y = SettingsBase._new_setting(S.INVERT_Y)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    rotation = SettingsBase._new_setting(S.ROTATION)
-    friction = SettingsBase._new_setting(S.FRICTION)
-    sensitivity_vert_scale = SettingsBase._new_setting(S.SENSITIVITY_VERT_SCALE)
-    mouse_move_threshold = SettingsBase._new_setting(S.MOUSE_MOVE_THRESHOLD)
-    edge_spin_velocity = SettingsBase._new_setting(S.EDGE_SPIN_VELOCITY)
-    edge_spin_radius = SettingsBase._new_setting(S.EDGE_SPIN_RADIUS)
-    doubletap_max_duration = SettingsBase._new_setting(S.DOUBLETAP_MAX_DURATION)
-    mouse_dampening_trigger = SettingsBase._new_setting(S.MOUSE_DAMPENING_TRIGGER)
-    mouse_trigger_clamp_amount = SettingsBase._new_setting(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
-    mousejoystick_deadzone_x = SettingsBase._new_setting(S.MOUSEJOYSTICK_DEADZONE_X)
-    mousejoystick_deadzone_y = SettingsBase._new_setting(S.MOUSEJOYSTICK_DEADZONE_Y)
-    mousejoystick_precision = SettingsBase._new_setting(S.MOUSEJOYSTICK_PRECISION)
-    custom_curve_exponent = SettingsBase._new_setting(S.CUSTOM_CURVE_EXPONENT)
-    gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
-    gyro_button_invert = SettingsBase._new_setting(S.GYRO_BUTTON_INVERT)
-    gyro_axis = SettingsBase._new_setting(S.GYRO_AXIS)
-    gyro_sensitivity_scale = SettingsBase._new_setting(S.GYRO_SENSITIVITY_SCALE)
+    trackball = SettingsBase._alias(S.TRACKBALL)
+    doubletap_beep = SettingsBase._alias(S.DOUBLETAP_BEEP)
+    invert_x = SettingsBase._alias(S.INVERT_X)
+    invert_y = SettingsBase._alias(S.INVERT_Y)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    rotation = SettingsBase._alias(S.ROTATION)
+    friction = SettingsBase._alias(S.FRICTION)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
+    mouse_move_threshold = SettingsBase._alias(S.MOUSE_MOVE_THRESHOLD)
+    edge_spin_velocity = SettingsBase._alias(S.EDGE_SPIN_VELOCITY)
+    edge_spin_radius = SettingsBase._alias(S.EDGE_SPIN_RADIUS)
+    doubletap_max_duration = SettingsBase._alias(S.DOUBLETAP_MAX_DURATION)
+    mouse_dampening_trigger = SettingsBase._alias(S.MOUSE_DAMPENING_TRIGGER)
+    mouse_trigger_clamp_amount = SettingsBase._alias(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+    mousejoystick_deadzone_x = SettingsBase._alias(S.MOUSEJOYSTICK_DEADZONE_X)
+    mousejoystick_deadzone_y = SettingsBase._alias(S.MOUSEJOYSTICK_DEADZONE_Y)
+    mousejoystick_precision = SettingsBase._alias(S.MOUSEJOYSTICK_PRECISION)
+    custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
+    gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
+    gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
+    gyro_axis = SettingsBase._alias(S.GYRO_AXIS)
+    gyro_sensitivity_scale = SettingsBase._alias(S.GYRO_SENSITIVITY_SCALE)
+#  Settings._create_alias(Settings.S.TRACKBALL)
+#  Settings._create_alias(Settings.S.DOUBLETAP_BEEP)
+#  Settings._create_alias(Settings.S.INVERT_X)
+#  Settings._create_alias(Settings.S.INVERT_Y)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.ROTATION)
+#  Settings._create_alias(Settings.S.FRICTION)
+#  Settings._create_alias(Settings.S.SENSITIVITY_VERT_SCALE)
+#  Settings._create_alias(Settings.S.MOUSE_MOVE_THRESHOLD)
+#  Settings._create_alias(Settings.S.EDGE_SPIN_VELOCITY)
+#  Settings._create_alias(Settings.S.EDGE_SPIN_RADIUS)
+#  Settings._create_alias(Settings.S.DOUBLETAP_MAX_DURATION)
+#  Settings._create_alias(Settings.S.MOUSE_DAMPENING_TRIGGER)
+#  Settings._create_alias(Settings.S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+#  Settings._create_alias(Settings.S.MOUSEJOYSTICK_DEADZONE_X)
+#  Settings._create_alias(Settings.S.MOUSEJOYSTICK_DEADZONE_Y)
+#  Settings._create_alias(Settings.S.MOUSEJOYSTICK_PRECISION)
+#  Settings._create_alias(Settings.S.CUSTOM_CURVE_EXPONENT)
+#  Settings._create_alias(Settings.S.GYRO_BUTTON)
+#  Settings._create_alias(Settings.S.GYRO_BUTTON_INVERT)
+#  Settings._create_alias(Settings.S.GYRO_AXIS)
+#  Settings._create_alias(Settings.S.GYRO_SENSITIVITY_SCALE)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1635,18 +1849,30 @@ class GroupMouseRegion (GroupBase):
       S.MOUSE_DAMPENING_TRIGGER: MouseDampeningTrigger,
       S.MOUSE_TRIGGER_CLAMP_AMOUNT: (100, 8000),
     }
-    edge_binding_radius = SettingsBase._new_setting(S.EDGE_BINDING_RADIUS)
-    edge_binding_invert = SettingsBase._new_setting(S.EDGE_BINDING_INVERT)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    output_joystick = SettingsBase._new_setting(S.OUTPUT_JOYSTICK)
-    scale = SettingsBase._new_setting(S.SCALE)
-    position_x = SettingsBase._new_setting(S.POSITION_X)
-    position_y = SettingsBase._new_setting(S.POSITION_Y)
-    sensitivity_vert_scale = SettingsBase._new_setting(S.SENSITIVITY_VERT_SCALE)
-    sensitivity_horiz_scale = SettingsBase._new_setting(S.SENSITIVITY_HORIZ_SCALE)
-    teleport_stop = SettingsBase._new_setting(S.TELEPORT_STOP)
-    mouse_dampening_trigger = SettingsBase._new_setting(S.MOUSE_DAMPENING_TRIGGER)
-    mouse_trigger_clamp_amount = SettingsBase._new_setting(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+    edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
+    edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
+    scale = SettingsBase._alias(S.SCALE)
+    position_x = SettingsBase._alias(S.POSITION_X)
+    position_y = SettingsBase._alias(S.POSITION_Y)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
+    sensitivity_horiz_scale = SettingsBase._alias(S.SENSITIVITY_HORIZ_SCALE)
+    teleport_stop = SettingsBase._alias(S.TELEPORT_STOP)
+    mouse_dampening_trigger = SettingsBase._alias(S.MOUSE_DAMPENING_TRIGGER)
+    mouse_trigger_clamp_amount = SettingsBase._alias(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+#  Settings._create_alias(Settings.S.EDGE_BINDING_RADIUS)
+#  Settings._create_alias(Settings.S.EDGE_BINDING_INVERT)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.OUTPUT_JOYSTICK)
+#  Settings._create_alias(Settings.S.SCALE)
+#  Settings._create_alias(Settings.S.POSITION_X)
+#  Settings._create_alias(Settings.S.POSITION_Y)
+#  Settings._create_alias(Settings.S.SENSITIVITY_VERT_SCALE)
+#  Settings._create_alias(Settings.S.SENSITIVITY_HORIZ_SCALE)
+#  Settings._create_alias(Settings.S.TELEPORT_STOP)
+#  Settings._create_alias(Settings.S.MOUSE_DAMPENING_TRIGGER)
+#  Settings._create_alias(Settings.S.MOUSE_TRIGGER_CLAMP_AMOUNT)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1675,12 +1901,18 @@ class GroupRadialMenu (GroupBase):
       S.TOUCH_MENU_SCALE: (50, 150),
       S.TOUCH_MENU_SHOW_LABELS: bool,
     }
-    touchmenu_button_fire_type = SettingsBase._new_setting(S.TOUCHMENU_BUTTON_FIRE_TYPE)
-    touch_menu_opacity = SettingsBase._new_setting(S.TOUCH_MENU_OPACITY)
-    touch_menu_position_x = SettingsBase._new_setting(S.TOUCH_MENU_POSITION_X)
-    touch_menu_position_y = SettingsBase._new_setting(S.TOUCH_MENU_POSITION_Y)
-    touch_menu_scale = SettingsBase._new_setting(S.TOUCH_MENU_SCALE)
-    touch_menu_show_labels = SettingsBase._new_setting(S.TOUCH_MENU_SHOW_LABELS)
+    touchmenu_button_fire_type = SettingsBase._alias(S.TOUCHMENU_BUTTON_FIRE_TYPE)
+    touch_menu_opacity = SettingsBase._alias(S.TOUCH_MENU_OPACITY)
+    touch_menu_position_x = SettingsBase._alias(S.TOUCH_MENU_POSITION_X)
+    touch_menu_position_y = SettingsBase._alias(S.TOUCH_MENU_POSITION_Y)
+    touch_menu_scale = SettingsBase._alias(S.TOUCH_MENU_SCALE)
+    touch_menu_show_labels = SettingsBase._alias(S.TOUCH_MENU_SHOW_LABELS)
+#  Settings._create_alias(Settings.S.TOUCHMENU_BUTTON_FIRE_TYPE)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_OPACITY)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_POSITION_X)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_POSITION_Y)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_SCALE)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_SHOW_LABELS)
 
   class Inputs (GroupBase.Inputs):
     N_BUTTONS = 20
@@ -1715,12 +1947,18 @@ class GroupScrollwheel (GroupBase):
       S.SCROLL_WRAP: bool,
       S.SCROLL_FRICTION: Friction,
     }
-    scroll_angle = SettingsBase._new_setting(S.SCROLL_ANGLE)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    scroll_type = SettingsBase._new_setting(S.SCROLL_TYPE)
-    scroll_invert = SettingsBase._new_setting(S.SCROLL_INVERT)
-    scroll_wrap = SettingsBase._new_setting(S.SCROLL_WRAP)
-    scroll_friction = SettingsBase._new_setting(S.SCROLL_FRICTION)
+    scroll_angle = SettingsBase._alias(S.SCROLL_ANGLE)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    scroll_type = SettingsBase._alias(S.SCROLL_TYPE)
+    scroll_invert = SettingsBase._alias(S.SCROLL_INVERT)
+    scroll_wrap = SettingsBase._alias(S.SCROLL_WRAP)
+    scroll_friction = SettingsBase._alias(S.SCROLL_FRICTION)
+#  Settings._create_alias(Settings.S.SCROLL_ANGLE)
+#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
+#  Settings._create_alias(Settings.S.SCROLL_TYPE)
+#  Settings._create_alias(Settings.S.SCROLL_INVERT)
+#  Settings._create_alias(Settings.S.SCROLL_WRAP)
+#  Settings._create_alias(Settings.S.SCROLL_FRICTION)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1785,13 +2023,20 @@ class GroupTouchMenu (GroupBase):
       S.TOUCH_MENU_SHOW_LABELS: bool,
       S.TOUCHMENU_BUTTON_FIRE_TYPE: TouchmenuButtonFireType,
       }
-    touch_menu_button_count = SettingsBase._new_setting(S.TOUCH_MENU_BUTTON_COUNT)
-    touch_menu_opacity = SettingsBase._new_setting(S.TOUCH_MENU_OPACITY)
-    touch_menu_position_x = SettingsBase._new_setting(S.TOUCH_MENU_POSITION_X)
-    touch_menu_position_y = SettingsBase._new_setting(S.TOUCH_MENU_POSITION_Y)
-    touch_menu_scale = SettingsBase._new_setting(S.TOUCH_MENU_SCALE)
-    touch_menu_show_labels = SettingsBase._new_setting(S.TOUCH_MENU_SHOW_LABELS)
-    touchmenu_button_fire_type = SettingsBase._new_setting(S.TOUCHMENU_BUTTON_FIRE_TYPE)
+    touch_menu_button_count = SettingsBase._alias(S.TOUCH_MENU_BUTTON_COUNT)
+    touch_menu_opacity = SettingsBase._alias(S.TOUCH_MENU_OPACITY)
+    touch_menu_position_x = SettingsBase._alias(S.TOUCH_MENU_POSITION_X)
+    touch_menu_position_y = SettingsBase._alias(S.TOUCH_MENU_POSITION_Y)
+    touch_menu_scale = SettingsBase._alias(S.TOUCH_MENU_SCALE)
+    touch_menu_show_labels = SettingsBase._alias(S.TOUCH_MENU_SHOW_LABELS)
+    touchmenu_button_fire_type = SettingsBase._alias(S.TOUCHMENU_BUTTON_FIRE_TYPE)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_BUTTON_COUNT)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_OPACITY)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_POSITION_X)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_POSITION_Y)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_SCALE)
+#  Settings._create_alias(Settings.S.TOUCH_MENU_SHOW_LABELS)
+#  Settings._create_alias(Settings.S.TOUCHMENU_BUTTON_FIRE_TYPE)
 
   class Inputs (GroupBase.Inputs):
     N_BUTTONS = 16
@@ -1827,13 +2072,20 @@ class GroupTrigger (GroupBase):
       S.CURVE_EXPONENT: CurveExponent,
       S.CUSTOM_CURVE_EXPONENT: (25, 4000),
     }
-    output_trigger = SettingsBase._new_setting(S.OUTPUT_TRIGGER)
-    deadzone_outer_radius = SettingsBase._new_setting(S.DEADZONE_OUTER_RADIUS)
-    deadzone_inner_radius = SettingsBase._new_setting(S.DEADZONE_INNER_RADIUS)
-    edge_binding_radius = SettingsBase._new_setting(S.EDGE_BINDING_RADIUS)
-    adaptive_threshold = SettingsBase._new_setting(S.ADAPTIVE_THRESHOLD)
-    curve_exponent = SettingsBase._new_setting(S.CURVE_EXPONENT)
-    custom_curve_exponent = SettingsBase._new_setting(S.CUSTOM_CURVE_EXPONENT)
+    output_trigger = SettingsBase._alias(S.OUTPUT_TRIGGER)
+    deadzone_outer_radius = SettingsBase._alias(S.DEADZONE_OUTER_RADIUS)
+    deadzone_inner_radius = SettingsBase._alias(S.DEADZONE_INNER_RADIUS)
+    edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
+    adaptive_threshold = SettingsBase._alias(S.ADAPTIVE_THRESHOLD)
+    curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
+    custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
+#  Settings._create_alias(Settings.S.OUTPUT_TRIGGER)
+#  Settings._create_alias(Settings.S.DEADZONE_OUTER_RADIUS)
+#  Settings._create_alias(Settings.S.DEADZONE_INNER_RADIUS)
+#  Settings._create_alias(Settings.S.EDGE_BINDING_RADIUS)
+#  Settings._create_alias(Settings.S.ADAPTIVE_THRESHOLD)
+#  Settings._create_alias(Settings.S.CURVE_EXPONENT)
+#  Settings._create_alias(Settings.S.CUSTOM_CURVE_EXPONENT)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"

@@ -173,6 +173,7 @@ class TestSupportClasses (unittest.TestCase):
     self.assertEqual(d, { "alpha": 1 })
 
     d = TargetDict()
+    d._ALLOW = True
     d['alpha'] = 1
     d['echo'] = { "e":0, "c":1, "h":2, "o":3 }
     self.assertEqual(d['alpha'], 1)
@@ -192,6 +193,47 @@ class TestSupportClasses (unittest.TestCase):
     d['charlie'] = 30
     p = dict(list(d.items()))
     self.assertEqual(p, { "alpha": 1, "bravo": "b", "charlie": 30 })
+
+    class Restrict1 (TargetDict):
+      _ALLOW = {}
+      ALPHA = "alpha"
+      BRAVO = "bravo"
+      CHARLIE = "charlie"
+    Restrict1._create_alias(Restrict1.ALPHA)
+    Restrict1._create_alias(Restrict1.BRAVO)
+    Restrict1._create_alias(Restrict1.CHARLIE)
+
+    class Restrict2 (TargetDict):
+      _ALLOW = {}
+      ABLE = "able"
+      BAKER = "baker"
+      CHARLIE = "charlie"
+    Restrict2._create_alias(Restrict2.ABLE)
+    Restrict2._create_alias(Restrict2.BAKER)
+    Restrict2._create_alias(Restrict2.CHARLIE)
+
+    self.assertEqual(Restrict1._ALLOW, { "alpha", "bravo", "charlie" })
+    self.assertEqual(Restrict2._ALLOW, { "able", "baker", "charlie" })
+
+    r1 = Restrict1()
+    r2 = Restrict2()
+
+    r1['alpha'] = True
+    r1['bravo'] = True
+    r1['charlie'] = True
+    with self.assertRaisesRegex(KeyError, "not allowed"):
+      r1["able"] = True
+    with self.assertRaisesRegex(KeyError, "not allowed"):
+      r1["baker"] = True
+
+    r2['able'] = True
+    r2['baker'] = True
+    r2['charlie'] = True
+    with self.assertRaisesRegex(KeyError, "not allowed"):
+      r2["alpha"] = True
+    with self.assertRaisesRegex(KeyError, "not allowed"):
+      r2["bravo"] = True
+
 
 class TestScvdfComponents (unittest.TestCase):
   def test_binding (self):
