@@ -27,6 +27,10 @@ else:
 # Helper functions #
 ####################
 
+def _stringlike (x):
+  try: return callable(x.isalpha)
+  except AttributeError: return False
+
 
 # Helper function for iterating SCVDFDict values -- helps simplify iteration as: for x in get_all(dictMultivalueInstance)
 def get_all (container, key, default_value):
@@ -40,26 +44,165 @@ def get_all (container, key, default_value):
     return default_value
 
 
-# Helper class for commonly recurring 'settings' field, which is all-scalar.
-class EncodableDict (OrderedDict):
-  """Extends SCVDFDict to support .encode_kv()"""
+class RestrictedDictMixin (object):
+  """dict mix-in: restrict allowable keys."""
+  # Set of keys permitted in dict.  Set to True to allow any key.
+  _ALLOW = set()
+  def __init__ (self, copyfrom=None):
+    if self._ALLOW != True:
+      if copyfrom:
+        for k in copyfrom:
+          self._ALLOW.add(k)
+    super(RestrictedDictMixin,self).__init__(copyfrom)
+  def __setitem__ (self, k, v):
+    if self._ALLOW != True:
+      if (not self._ALLOW) or (not k in self._ALLOW):
+        raise KeyError("Key not allowed: {}".format(k))
+    super(RestrictedDictMixin,self).__setitem__(k,v)
+  @classmethod
+  def _allow (cls, real_key):
+    if cls._ALLOW != True:
+      try:
+        cls._ALLOW = set(cls._ALLOW)   # Convert iterables to set.
+      except TypeError:
+        cls._ALLOW = set()      # Presumably was False, start allowing.
+      cls._ALLOW.add(real_key)
+  @classmethod
+  def _ALLOW_ALL (cls):
+    cls._ALLOW = True
+
+class AliasableDictMixin (object):
+  """dict mix-in: allow creating property that alias to a dict entry."""
+  @staticmethod
+  def _alias (real_key):
+    def getter (self):
+      return self.get(real_key, None)
+    def setter (self, val):
+      self[real_key] = val
+    def deleter (self):
+      del self[real_key]
+    return property(getter, setter, deleter)
+  @classmethod
+  def _create_alias (cls, alias_name, property_name=None):
+    try:
+      cls._allow(alias_name)
+    except AttributeError:
+      pass  # meh.
+    if property_name is None:
+      property_name = alias_name
+    setattr(cls, property_name, AliasableDictMixin._alias(alias_name))
+
+class ConstrainedDictMixin (object):
+  """dict mix-in: put constraints on values for specified keys."""
+  # Constraints on dict values.
+  # Tuples indicate an integer range, such that tuple[0] <= value <= tuple[1].
+  # List specifies the set of acceptable values.
+  # class-object contains acceptable values: class.__dict__.values().
+  # primitive type to indicate the allowable value type.
+  ## dict keys not listed in constraints are unconstrainted.
+  _CONSTRAINTS = {}
+
+  def _constrained_assign (self, k, val):
+    constraint = self._CONSTRAINTS.get(k, None)
+    if isinstance(constraint,tuple):      # integer range constraint.
+      lower, upper = constraint
+      val = int(val)
+      if (val < lower) or (upper < val):
+        raise ValueError("Value {!r} violates range constraint {}".format(val, constraint))
+    elif isinstance(constraint,list):     # any from a list.
+      try:
+        val = int(val)      # eagerly convert to int.
+      except (ValueError,TypeError):
+        pass
+      if not (val in constraint):
+        raise ValueError("Value {!r} violates list constraint {}".format(val, constraint))
+    elif type(constraint) == PseudoNamespace:   # any from namespace.
+      try:
+        val = int(val)      # eagerly convert to int.
+      except (ValueError,TypeError):
+        pass
+      if not (val in constraint._nsdict.values()):
+        raise ValueError("Value {!r} violates namespace constraint {}".format(val, constraint))
+        return
+    elif constraint is None:  # no constraint.
+      pass
+    else:       # is of type.
+      if constraint == bool:
+        if val in [ '0', 0, False ]:
+          val = False
+        elif val in [ '1', 1, True ]:
+          val = True
+      else:
+        try:
+          val = int(val)
+        except (ValueError,TypeError):
+          pass
+      if type(val) != constraint:
+        raise ValueError("Value {!r} violates type constraint {}".format(val, constraint))
+    super(ConstrainedDictMixin,self).__setitem__(k,val)
+  def __setitem__ (self, k, v):
+    self._constrained_assign(k,v)
+
+class IndexDict (OrderedDict):
+  """Index-aware (VDF entry pair) dict."""
   def __init__ (self, index=None, copyfrom=None):
     if isinstance(index,dict):  # implies copyfrom currently None.
       copyfrom, index = index, None
     if copyfrom:
-      OrderedDict.__init__(self, copyfrom)
+      super(IndexDict,self).__init__(copyfrom)
     else:
-      OrderedDict.__init__(self)
+      super(IndexDict,self).__init__()
     self.index = VSC_SETTINGS if (index is None) else None
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
-    for k, v in self.items():
-      try:
-        kv[k] = v.encode_kv()     # recursively encode.
-      except AttributeError as e:
-        if isinstance(v, bool): v = int(v)    # cast bool to int.
-        kv[k] = str(v)
-    return kv
+
+class RestrictiveDict (RestrictedDictMixin, AliasableDictMixin, IndexDict):
+  def __init__ (self, index=None, copyfrom=None):
+    if isinstance(index,dict):  # implies copyfrom currently None.
+      copyfrom, index = index, None
+    if copyfrom:
+      RestrictedDictMixin.__init__(self, copyfrom)
+      IndexDict.__init__(self, index, copyfrom)
+    else:
+      super(IndexDict,self).__init__()
+
+
+# Convert to SCVDF from Steam Controller Config object.
+def toVDF (sccobj, maptype=scvdf.SCVDFDict):
+  # First, try delegate.
+  try:
+    sccobj._toVDF
+  except AttributeError as e:
+    pass    # else fall-through to other attempts.
+  else:
+    if callable(sccobj._toVDF):
+      return sccobj._toVDF(maptype)
+
+  # special cases.
+  if _stringlike(sccobj):
+    return sccobj           # strings returned as-is.
+  if isinstance(sccobj,bool):
+    return str(int(sccobj)) # boolean to int (in turn, to str)
+
+  # attempt dict sense.
+  try:
+    sccobj.items
+  except AttributeError as e:
+    pass    # fall-through to other attempts.
+  else:
+    d = maptype()
+    for k,v in sccobj.items():
+      d[k] = toVDF(v, maptype)    # recursively convert.
+    return d
+
+  # attempt list sense.
+  try:
+    iter(sccobj)
+  except (AttributeError, TypeError) as e:
+    pass    # fall-through to other attempts.
+  else:
+    return [ toDict(x, maptype) for x in sccobj ]
+
+  # last resort.
+  return str(sccobj)
 
 
 def filter_enum (enum_mapping, initval):
@@ -92,10 +235,6 @@ def mangle_vdfliteral (s):
   return retval
 
 
-def _stringlike (x):
-  try: return callable(x.isalpha)
-  except AttributeError: return False
-
 
 # VSC config keywords.
 VSC_KEYPRESS = "key_press"
@@ -119,72 +258,13 @@ VSC_INPUTS = "inputs"
 ##################################
 
 
-# Settings map scalar to scalar; SCVDF overloads multiple assignments to mean building an array value.
-class SettingsBase (OrderedDict):
-  # Constraints on settings values.
-  # Tuples indicate an integer range, such that tuple[0] <= value <= tuple[1].
-  # List specifies the set of acceptable values.
-  # class-object contains acceptable values: class.__dict__.values().
-  # primitive type to indicate the allowable value type.
-  ## setting keys not listed in constraints are unconstrainted.
-  _CONSTRAINTS = {}
-
-  def __init__ (self, index=None, **kwargs):
-    super(SettingsBase,self).__init__(kwargs)
-    if index is not None:
-      self.index = index
-
-  def _filtered_assign (self, k, val):
-    constraint = self._CONSTRAINTS.get(k, None)
-    if isinstance(constraint,tuple):      # integer range constraint.
-      lower, upper = constraint
-      if (val < lower) or (upper < val):
-        raise ValueError("Value {} violates range constraint {}".format(val, constraint))
-    elif isinstance(constraint,list):     # any from a list.
-      if not (val in constraint):
-        raise ValueError("Value {} violates list constraint {}".format(val, constraint))
-    elif type(constraint) == PseudoNamespace:   # any from namespace.
-      if not (val in constraint._nsdict.values()):
-        raise ValueError("Value {} violates namespace constraint {}".format(val, constraint))
-        return
-    elif constraint is None:  # no constraint.
-      pass
-    else:       # is of type.
-      if type(val) != constraint:
-        raise ValueError("Value {} violates type constraint {}".format(val, constraint))
-    self[k] = val
-
-  @staticmethod
-  def _settings_getter (settings_key):
-    def getter (self):
-      return self.get(settings_key, None)
-    return getter
-  @staticmethod
-  def _settings_setter (settings_key):
-    def setter (self, val):
-      self._filtered_assign(settings_key, val)
-    return setter
-  @staticmethod
-  def _settings_deleter (settings_key):
-    def deleter (self):
-      del self[settings_key]
-    return deleter
-  @staticmethod
-  def _new_setting (settings_key):
-    return property(SettingsBase._settings_getter(settings_key),
-                    SettingsBase._settings_setter(settings_key),
-                    SettingsBase._settings_deleter(settings_key))
-
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
-    for k, v in self.items():
-      try:
-        kv[k] = v.encode_kv()     # recursively encode.
-      except AttributeError as e:
-        if isinstance(v, bool): v = int(v)    # cast bool to int.
-        kv[k] = str(v)
-    return kv
-
+# Settings map scalar to scalar; c.f. SCVDF overloads multiple assignments to mean building an array value.
+class SettingsBase (AliasableDictMixin, ConstrainedDictMixin, OrderedDict):
+  def __init__ (self, copyfrom=None, **kwargs):
+    if copyfrom:
+      super(SettingsBase,self).__init__(copyfrom, **kwargs)
+    else:
+      super(SettingsBase,self).__init__(**kwargs)
 
 
 ###########################
@@ -621,14 +701,14 @@ Nested attributes:
     if binding:
       self.bindings.append(binding)
 
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
-    kv_bindings = scvdf.SCVDFDict()
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
+    kv_bindings = maptype()
     for binding in self.bindings:
       kv_bindings['binding'] = str(binding)
     kv['bindings'] = kv_bindings
     if self.settings:
-      kv[VSC_SETTINGS] = self.settings.encode_kv()
+      kv[VSC_SETTINGS] = toVDF(self.settings, maptype)
     return kv
 
 class ActivatorFullPress (ActivatorBase):
@@ -646,14 +726,15 @@ class ActivatorFullPress (ActivatorBase):
       S.HOLD_REPEATS: bool,
       S.REPEAT_RATE: (1, 9999),
     }
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
-    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
-    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    interruptible = SettingsBase._alias(S.INTERRUPTIBLE)  # misspell
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+    hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -673,15 +754,16 @@ class ActivatorDoublePress (ActivatorBase):
       S.HOLD_REPEATS: bool,
       S.REPEAT_RATE: (1, 9999),
     }
-    double_tap_time = SettingsBase._new_setting(S.DOUBLE_TAP_TIME)
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
-    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
-    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
+    double_tap_time = SettingsBase._alias(S.DOUBLE_TAP_TIME)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    interruptible = SettingsBase._alias(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+    hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -701,15 +783,16 @@ class ActivatorLongPress (ActivatorBase):
       S.HOLD_REPEATS: bool,
       S.REPEAT_RATE: (1, 9999),
     }
-    long_press_time = SettingsBase._new_setting(S.LONG_PRESS_TIME)
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
-    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
-    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
+    long_press_time = SettingsBase._alias(S.LONG_PRESS_TIME)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    interruptible = SettingsBase._alias(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+    hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -725,11 +808,12 @@ class ActivatorStartPress (ActivatorBase):
       S.HAPTIC_INTENSITY: HapticIntensity,
       S.CYCLE: bool,
     }
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -745,12 +829,13 @@ class ActivatorRelease (ActivatorBase):
       S.DELAY_END: int,     # TODO: range
       S.HAPTIC_INTENSITY: HapticIntensity,
     }
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    interruptible = SettingsBase._alias(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -791,15 +876,16 @@ class ActivatorChord (ActivatorBase):
       S.HOLD_REPEATS: bool,
       S.REPEAT_RATE: (1, 9999),
     }
-    chord_button = SettingsBase._new_setting(S.CHORD_BUTTON)
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
-    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
-    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
+    chord_button = SettingsBase._alias(S.CHORD_BUTTON)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    interruptible = SettingsBase._alias(S.INTERRUPTIBLE)
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+    hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
+
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
 
@@ -852,38 +938,36 @@ def Activator (activator_signal, **kwargs):
 
 
 class ControllerInput (object):
-  """An input description within a group."""
+  """An input description within a group.
+Contains:
+ * list of activators.
+"""
   def __init__ (self, input_element, py_activators=None, **kwargs):
     self.ideal_input = input_element
     self.activators = []
     if py_activators:
       # expect list of pyobject
-      self.activators.extend(py_activators)
+      for a in py_activators:
+        self.add_activator(a)
     elif 'activators' in kwargs:
       for (act_signal, act_kv) in kwargs['activators'].items():
-        self.make_activator(act_signal, **act_kv)
+        self.add_activator(act_signal, **act_kv)
   def make_activator (self, activator_signal, **kwargs):
-    activator = Activator(activator_signal, **kwargs)
+    return Activator(activator_signal, **kwargs)
+  def add_activator (self, first, **kwargs):
+    if isinstance(first, ActivatorBase):
+      activator = first
+    else:
+      activator = self.make_activator(first, **kwargs)
     self.activators.append(activator)
     return activator
-  def encode_pair (self):
-    lop = []
-    kv_activators = []
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
+    kv_activators = maptype()
     if self.activators:
       for activator in self.activators:
-        kv_activators.append( activator.encode_pair() )
-    lop.append( ('activators', kv_activators) )
-
-    whole = ( self.ideal_input, lop )
-    return whole
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
-    kv_activators = scvdf.SCVDFDict()
-    if self.activators:
-      for activator in self.activators:
-        #kv_activators.append( activator.encode_pair() )
         signal = activator.signal
-        kv_activators[signal] = activator.encode_kv()
+        kv_activators[signal] = toVDF(activator, maptype)
     kv['activators'] = kv_activators
     return kv
 
@@ -1114,6 +1198,10 @@ class GroupBase (object):
     TouchmenuButtonFireType.TOUCH_RELEASE = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
     TouchmenuButtonFireType.MODESHIFT_END = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
 
+  class Inputs (RestrictedDictMixin, AliasableDictMixin, IndexDict):
+    # Restrictive, to encourage subclassing.
+    _ALLOW = False
+
   def __init__ (self, py_mode=None, index=None, py_inputs=None, py_settings=None, **kwargs):
     if index is None:
       if 'id' in kwargs:
@@ -1128,7 +1216,8 @@ class GroupBase (object):
 
     self.index = index
     self.mode = py_mode
-    self.inputs = EncodableDict(VSC_INPUTS)
+    # Subclass-specific Inputs(), tailored to Group*-specific constraints.
+    self.inputs = self.Inputs(py_mode)
     self.settings = self.Settings(py_settings)
 
     if py_inputs:
@@ -1137,7 +1226,7 @@ class GroupBase (object):
     elif VSC_INPUTS in kwargs:
       # expect dict within ControllerConfig
       for (inp_name, inp_kv) in kwargs[VSC_INPUTS].items():
-        self.make_input(inp_name, **inp_kv)
+        self.add_input(self.make_input(inp_name, **inp_kv))
 
     if VSC_SETTINGS in kwargs:
       # Expect dictionary of pure scalars.  This might break in future?
@@ -1146,27 +1235,31 @@ class GroupBase (object):
   def make_input (self, input_element, py_activators=None, **kwargs):
     '''Factory for 'input' node.'''
     inp = ControllerInput(input_element, py_activators=py_activators, **kwargs)
-    self.inputs[input_element] = inp
     return inp
 
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
+  def add_input (self, first, py_activators=None, **kwargs):
+    """Attach an Input instance."""
+    if isinstance(first, ControllerInput):
+      inp = first
+      inp_name = first.ideal_input
+    else:
+      inp = self.make_input(first, py_activators, **kwargs)
+      inp_name = first
+    self.inputs[inp_name] = inp
+    return inp
+
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     kv['id'] = str(self.index)
     kv['mode'] = str(self.mode)
     # Always generate ['inputs']
-    kv[VSC_INPUTS] = self.inputs.encode_kv()
+    kv[VSC_INPUTS] = toVDF(self.inputs, maptype)
     if self.settings:
-      kv[VSC_SETTINGS] = self.settings.encode_kv()
+      kv[VSC_SETTINGS] = toVDF(self.settings, maptype)
     return kv
 
-class GroupAbsoluteMouse (GroupBase):
-  CLICK = "click"
-  DOUBLETAP = "doubletap"
-  TOUCH = "toucH"
-  INPUTS = set([
-    CLICK, DOUBLETAP, TOUCH
-    ])
 
+class GroupAbsoluteMouse (GroupBase):
   class Settings (GroupBase.Settings):
     # Values for 'friction.
     Friction = PseudoNamespace(
@@ -1211,49 +1304,49 @@ class GroupAbsoluteMouse (GroupBase):
 #  @sensitivity.deleter
 #  def sensitivity (self):
 #    del self.settings[self.S.SENSITIVITY]
-    sensitivity = property(SettingsBase._settings_getter(S.SENSITIVITY),
-                            SettingsBase._settings_setter(S.SENSITIVITY),
-                            SettingsBase._settings_deleter(S.SENSITIVITY))
+#    sensitivity = property(SettingsBase._settings_getter(S.SENSITIVITY),
+#                            SettingsBase._settings_setter(S.SENSITIVITY),
+#                            SettingsBase._settings_deleter(S.SENSITIVITY))
 
-    trackball = SettingsBase._new_setting(S.TRACKBALL)
-    doubletap_beep = SettingsBase._new_setting(S.DOUBLETAP_BEEP)
-    invert_x = SettingsBase._new_setting(S.INVERT_X)
-    invert_y = SettingsBase._new_setting(S.INVERT_Y)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    rotation = SettingsBase._new_setting(S.ROTATION)
-    friction = SettingsBase._new_setting(S.FRICTION)
-    friction_vert_scale = SettingsBase._new_setting(S.FRICTION_VERT_SCALE)
-    sensitivity_vert_scale = SettingsBase._new_setting(S.SENSITIVITY_VERT_SCALE)
-    acceleration = SettingsBase._new_setting(S.ACCELERATION)
-    mouse_move_threshold = SettingsBase._new_setting(S.MOUSE_MOVE_THRESHOLD)
-    mouse_smoothing = SettingsBase._new_setting(S.MOUSE_SMOOTHING)
-    edge_spin_velocity = SettingsBase._new_setting(S.EDGE_SPIN_VELOCITY)
-    edge_spin_radius = SettingsBase._new_setting(S.EDGE_SPIN_RADIUS)
-    doubletap_max_duration = SettingsBase._new_setting(S.DOUBLETAP_MAX_DURATION)
-    mouse_dampening_trigger = SettingsBase._new_setting(S.MOUSE_DAMPENING_TRIGGER)
-    mouse_trigger_clamp_amount = SettingsBase._new_setting(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
-    gyro_axis = SettingsBase._new_setting(S.GYRO_AXIS)
-    gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
-    gyro_button_invert = SettingsBase._new_setting(S.GYRO_BUTTON_INVERT)
-    deadzone_outer_radius = SettingsBase._new_setting(S.DEADZONE_OUTER_RADIUS)
-    # alias
-    doubetape_max_duraction = doubletap_max_duration
+    sensitivity = SettingsBase._alias(S.SENSITIVITY)
+    trackball = SettingsBase._alias(S.TRACKBALL)
+    doubletap_beep = SettingsBase._alias(S.DOUBLETAP_BEEP)
+    invert_x = SettingsBase._alias(S.INVERT_X)
+    invert_y = SettingsBase._alias(S.INVERT_Y)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    rotation = SettingsBase._alias(S.ROTATION)
+    friction = SettingsBase._alias(S.FRICTION)
+    friction_vert_scale = SettingsBase._alias(S.FRICTION_VERT_SCALE)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
+    acceleration = SettingsBase._alias(S.ACCELERATION)
+    mouse_move_threshold = SettingsBase._alias(S.MOUSE_MOVE_THRESHOLD)
+    mouse_smoothing = SettingsBase._alias(S.MOUSE_SMOOTHING)
+    edge_spin_velocity = SettingsBase._alias(S.EDGE_SPIN_VELOCITY)
+    edge_spin_radius = SettingsBase._alias(S.EDGE_SPIN_RADIUS)
+    doubletap_max_duration = SettingsBase._alias(S.DOUBLETAP_MAX_DURATION)
+    mouse_dampening_trigger = SettingsBase._alias(S.MOUSE_DAMPENING_TRIGGER)
+    mouse_trigger_clamp_amount = SettingsBase._alias(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+    gyro_axis = SettingsBase._alias(S.GYRO_AXIS)
+    gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
+    gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
+    deadzone_outer_radius = SettingsBase._alias(S.DEADZONE_OUTER_RADIUS)
+
+  class Inputs (GroupBase.Inputs):
+    CLICK = "click"
+    DOUBLETAP = "doubletap"
+    TOUCH = "touch"
+    _ALLOW = {
+      CLICK, DOUBLETAP, TOUCH,
+      }
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.DOUBLETAP)
+  Inputs._create_alias(Inputs.TOUCH)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'absolute_mouse', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupDpad (GroupBase):
-  DPAD_NORTH = 'dpad_north'
-  DPAD_WEST = 'dpad_west'
-  DPAD_EAST = 'dpad_east'
-  DPAD_SOUTH = 'dpad_south'
-  DPAD_CLICK = 'dpad_click'
-  DPAD_EDGE = 'dpad_edge'
-  INPUTS = set([
-    DPAD_NORTH, DPAD_WEST, DPAD_EAST, DPAD_SOUTH, DPAD_CLICK, DPAD_EDGE
-    ])
-
   class Settings (GroupBase.Settings):
     Layout = PseudoNamespace(
       FOUR_WAY = 0,
@@ -1279,31 +1372,42 @@ class GroupDpad (GroupBase):
       S.GYRO_NEUTRAL: (0, 32767),
       }
 
-    requires_click = SettingsBase._new_setting(S.REQUIRES_CLICK)
-    layout = SettingsBase._new_setting(S.LAYOUT)
-    deadzone = SettingsBase._new_setting(S.DEADZONE)
-    edge_binding_radius = SettingsBase._new_setting(S.EDGE_BINDING_RADIUS)
-    edge_binding_invert = SettingsBase._new_setting(S.EDGE_BINDING_INVERT)
-    analog_emulation_period = SettingsBase._new_setting(S.ANALOG_EMULATION_PERIOD)
-    overlap_region = SettingsBase._new_setting(S.OVERLAP_REGION)
-    gyro_button_invert = SettingsBase._new_setting(S.GYRO_BUTTON_INVERT)
-    gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
-    gyro_neutral = SettingsBase._new_setting(S.GYRO_NEUTRAL)
-    haptic_intensity_override = SettingsBase._new_setting(S.HAPTIC_INTENSITY_OVERRIDE)
+    requires_click = SettingsBase._alias(S.REQUIRES_CLICK)
+    layout = SettingsBase._alias(S.LAYOUT)
+    deadzone = SettingsBase._alias(S.DEADZONE)
+    edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
+    edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
+    analog_emulation_period = SettingsBase._alias(S.ANALOG_EMULATION_PERIOD)
+    overlap_region = SettingsBase._alias(S.OVERLAP_REGION)
+    gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
+    gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
+    gyro_neutral = SettingsBase._alias(S.GYRO_NEUTRAL)
+    haptic_intensity_override = SettingsBase._alias(S.HAPTIC_INTENSITY_OVERRIDE)
+
+  # Collection of inputs.
+  class Inputs (GroupBase.Inputs):
+    DPAD_NORTH = 'dpad_north'
+    DPAD_WEST = 'dpad_west'
+    DPAD_EAST = 'dpad_east'
+    DPAD_SOUTH = 'dpad_south'
+    CLICK = 'click'
+    EDGE = 'edge'
+    _ALLOW = {
+      DPAD_NORTH, DPAD_SOUTH, DPAD_EAST, DPAD_WEST,
+      CLICK, EDGE,
+      }
+  Inputs._create_alias(Inputs.DPAD_NORTH, 'dpad_up')
+  Inputs._create_alias(Inputs.DPAD_SOUTH, 'dpad_down')
+  Inputs._create_alias(Inputs.DPAD_WEST, 'dpad_left')
+  Inputs._create_alias(Inputs.DPAD_EAST, 'dpad_right')
+  Inputs._create_alias(Inputs.CLICK, 'click')
+  Inputs._create_alias(Inputs.EDGE, 'edge')
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'dpad', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupFourButtons (GroupBase):
-  BUTTON_A = 'down'
-  BUTTON_B = 'right'
-  BUTTON_X = 'left'
-  BUTTON_Y = 'right'
-  INPUTS = set([
-    BUTTON_A, BUTTON_B, BUTTON_X, BUTTON_Y
-    ])
-
   class Settings (GroupBase.Settings):
     S = GroupBase.Settings._VSC_KEYS
     _CONSTRAINTS = {
@@ -1311,11 +1415,24 @@ class GroupFourButtons (GroupBase):
       S.BUTTON_SIZE: (1, 32767),
       S.BUTTON_DIST: (1, 32767),
       }
-    requires_click = SettingsBase._new_setting(S.REQUIRES_CLICK)
-    button_size = SettingsBase._new_setting(S.BUTTON_SIZE)
-    button_dist = SettingsBase._new_setting(S.BUTTON_DIST)
+    requires_click = SettingsBase._alias(S.REQUIRES_CLICK)
+    button_size = SettingsBase._alias(S.BUTTON_SIZE)
+    button_dist = SettingsBase._alias(S.BUTTON_DIST)
     # alias
     button_distance = button_dist
+
+  class Inputs (GroupBase.Inputs):
+    BUTTON_A = "button_a"
+    BUTTON_B = "button_b"
+    BUTTON_X = "button_x"
+    BUTTON_Y = "button_y"
+    _ALLOW = {
+      BUTTON_A, BUTTON_B, BUTTON_X, BUTTON_Y,
+      }
+  Inputs._create_alias(Inputs.BUTTON_A)
+  Inputs._create_alias(Inputs.BUTTON_B)
+  Inputs._create_alias(Inputs.BUTTON_X)
+  Inputs._create_alias(Inputs.BUTTON_Y)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'four_buttons', index, py_inputs, py_settings, **kwargs)
@@ -1349,29 +1466,32 @@ class GroupJoystickCamera (GroupBase):
       S.GYRO_BUTTON: GyroButton,
       S.GYRO_NEUTRAL: (0, 32767),
     }
-    curve_exponent = SettingsBase._new_setting(S.CURVE_EXPONENT)
-    swipe_duration = SettingsBase._new_setting(S.SWIPE_DURATION)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    output_joystick = SettingsBase._new_setting(S.OUTPUT_JOYSTICK)
-    sensitivity_vert_scale = SettingsBase._new_setting(S.SENSITIVITY_VERT_SCALE)
-    anti_deadzone = SettingsBase._new_setting(S.ANTI_DEADZONE)
-    anti_deadzone_buffer = SettingsBase._new_setting(S.ANTI_DEADZONE_BUFFER)
-    invert_x = SettingsBase._new_setting(S.INVERT_X)
-    invert_y = SettingsBase._new_setting(S.INVERT_Y)
-    joystick_smoothing = SettingsBase._new_setting(S.JOYSTICK_SMOOTHING)
-    sensitivity = SettingsBase._new_setting(S.SENSITIVITY)
-    gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
-    gyro_neutral = SettingsBase._new_setting(S.GYRO_NEUTRAL)
+    curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
+    swipe_duration = SettingsBase._alias(S.SWIPE_DURATION)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
+    anti_deadzone = SettingsBase._alias(S.ANTI_DEADZONE)
+    anti_deadzone_buffer = SettingsBase._alias(S.ANTI_DEADZONE_BUFFER)
+    invert_x = SettingsBase._alias(S.INVERT_X)
+    invert_y = SettingsBase._alias(S.INVERT_Y)
+    joystick_smoothing = SettingsBase._alias(S.JOYSTICK_SMOOTHING)
+    sensitivity = SettingsBase._alias(S.SENSITIVITY)
+    gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
+    gyro_neutral = SettingsBase._alias(S.GYRO_NEUTRAL)
+
+  class Inputs (GroupBase.Inputs):
+    CLICK = "click"
+    _ALLOW = {
+      CLICK,
+      }
+  Inputs._create_alias(Inputs.CLICK)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'joystick_camera', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupJoystickMouse (GroupBase):
-  CLICK = "click"
-  EDGE = "edge"
-  INPUTS = set([ CLICK, EDGE ])
-
   class Settings (GroupBase.Settings):
     CurveExponent = GroupBase.Settings.CurveExponent
     OutputJoystick = PseudoNamespace(
@@ -1388,13 +1508,22 @@ class GroupJoystickMouse (GroupBase):
       S.ANTI_DEADZONE_BUFFER: (0, 32767),
       S.OUTPUT_JOYSTICK: OutputJoystick,
     }
-    curve_exponent = SettingsBase._new_setting(S.CURVE_EXPONENT)
-    custom_curve_exponent = SettingsBase._new_setting(S.CUSTOM_CURVE_EXPONENT)
-    edge_binding_radius = SettingsBase._new_setting(S.EDGE_BINDING_RADIUS)
-    edge_binding_invert = SettingsBase._new_setting(S.EDGE_BINDING_INVERT)
-    anti_deadzone = SettingsBase._new_setting(S.ANTI_DEADZONE)
-    anti_deadzone_buffer = SettingsBase._new_setting(S.ANTI_DEADZONE_BUFFER)
-    output_joystick = SettingsBase._new_setting(S.OUTPUT_JOYSTICK)
+    curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
+    custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
+    edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
+    edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
+    anti_deadzone = SettingsBase._alias(S.ANTI_DEADZONE)
+    anti_deadzone_buffer = SettingsBase._alias(S.ANTI_DEADZONE_BUFFER)
+    output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
+
+  class Inputs (GroupBase.Inputs):
+    CLICK = "click"
+    EDGE = "edge"
+    _ALLOW = {
+      CLICK, EDGE,
+      }
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.EDGE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'joystick_mouse', index, py_inputs, py_settings, **kwargs)
@@ -1436,27 +1565,36 @@ class GroupJoystickMove (GroupBase):
       S.GYRO_BUTTON_INVERT: bool,
       S.GYRO_LOCK_EXTENTS: bool,
     }
-    curve_exponent = SettingsBase._new_setting(S.CURVE_EXPONENT)
-    custom_curve_exponent = SettingsBase._new_setting(S.CUSTOM_CURVE_EXPONENT)
-    edge_binding_radius = SettingsBase._new_setting(S.EDGE_BINDING_RADIUS)
-    edge_binding_invert = SettingsBase._new_setting(S.EDGE_BINDING_INVERT)
-    output_joystick = SettingsBase._new_setting(S.OUTPUT_JOYSTICK)
-    anti_deadzone = SettingsBase._new_setting(S.ANTI_DEADZONE)
-    anti_deadzone_buffer = SettingsBase._new_setting(S.ANTI_DEADZONE_BUFFER)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    deadzone_inner_radius = SettingsBase._new_setting(S.DEADZONE_INNER_RADIUS)
-    deadzone_outer_radius = SettingsBase._new_setting(S.DEADZONE_OUTER_RADIUS)
-    output_axis = SettingsBase._new_setting(S.OUTPUT_AXIS)
-    gyro_lock_extents = SettingsBase._new_setting(S.GYRO_LOCK_EXTENTS)
-    invert_x = SettingsBase._new_setting(S.INVERT_X)
-    invert_y = SettingsBase._new_setting(S.INVERT_Y)
-    sensitivity = SettingsBase._new_setting(S.SENSITIVITY)
-    sensitivity_vert_scale = SettingsBase._new_setting(S.SENSITIVITY_VERT_SCALE)
-    sensitivity_horiz_scale = SettingsBase._new_setting(S.SENSITIVITY_HORIZ_SCALE)
-    gyro_neutral = SettingsBase._new_setting(S.GYRO_NEUTRAL)
-    gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
-    gyro_button_invert = SettingsBase._new_setting(S.GYRO_BUTTON_INVERT)
-    gyro_lock_extents = SettingsBase._new_setting(S.GYRO_LOCK_EXTENTS)
+    curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
+    custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
+    edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
+    edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
+    output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
+    anti_deadzone = SettingsBase._alias(S.ANTI_DEADZONE)
+    anti_deadzone_buffer = SettingsBase._alias(S.ANTI_DEADZONE_BUFFER)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    deadzone_inner_radius = SettingsBase._alias(S.DEADZONE_INNER_RADIUS)
+    deadzone_outer_radius = SettingsBase._alias(S.DEADZONE_OUTER_RADIUS)
+    output_axis = SettingsBase._alias(S.OUTPUT_AXIS)
+    gyro_lock_extents = SettingsBase._alias(S.GYRO_LOCK_EXTENTS)
+    invert_x = SettingsBase._alias(S.INVERT_X)
+    invert_y = SettingsBase._alias(S.INVERT_Y)
+    sensitivity = SettingsBase._alias(S.SENSITIVITY)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
+    sensitivity_horiz_scale = SettingsBase._alias(S.SENSITIVITY_HORIZ_SCALE)
+    gyro_neutral = SettingsBase._alias(S.GYRO_NEUTRAL)
+    gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
+    gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
+    gyro_lock_extents = SettingsBase._alias(S.GYRO_LOCK_EXTENTS)
+
+  class Inputs (GroupBase.Inputs):
+    CLICK = "click"
+    EDGE = "edge"
+    _ALLOW = {
+      CLICK, EDGE,
+      }
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.EDGE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'joystick_move', index, py_inputs, py_settings, **kwargs)
@@ -1492,39 +1630,43 @@ class GroupMouseJoystick (GroupBase):
       S.GYRO_AXIS: [ 0, 1],  # TODO: research enum
       S.GYRO_SENSITIVITY_SCALE: int, # TODO: research limits
     }
-    trackball = SettingsBase._new_setting(S.TRACKBALL)
-    doubletap_beep = SettingsBase._new_setting(S.DOUBLETAP_BEEP)
-    invert_x = SettingsBase._new_setting(S.INVERT_X)
-    invert_y = SettingsBase._new_setting(S.INVERT_Y)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    rotation = SettingsBase._new_setting(S.ROTATION)
-    friction = SettingsBase._new_setting(S.FRICTION)
-    sensitivity_vert_scale = SettingsBase._new_setting(S.SENSITIVITY_VERT_SCALE)
-    mouse_move_threshold = SettingsBase._new_setting(S.MOUSE_MOVE_THRESHOLD)
-    edge_spin_velocity = SettingsBase._new_setting(S.EDGE_SPIN_VELOCITY)
-    edge_spin_radius = SettingsBase._new_setting(S.EDGE_SPIN_RADIUS)
-    doubletap_max_duration = SettingsBase._new_setting(S.DOUBLETAP_MAX_DURATION)
-    mouse_dampening_trigger = SettingsBase._new_setting(S.MOUSE_DAMPENING_TRIGGER)
-    mouse_trigger_clamp_amount = SettingsBase._new_setting(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
-    mousejoystick_deadzone_x = SettingsBase._new_setting(S.MOUSEJOYSTICK_DEADZONE_X)
-    mousejoystick_deadzone_y = SettingsBase._new_setting(S.MOUSEJOYSTICK_DEADZONE_Y)
-    mousejoystick_precision = SettingsBase._new_setting(S.MOUSEJOYSTICK_PRECISION)
-    custom_curve_exponent = SettingsBase._new_setting(S.CUSTOM_CURVE_EXPONENT)
-    gyro_button = SettingsBase._new_setting(S.GYRO_BUTTON)
-    gyro_button_invert = SettingsBase._new_setting(S.GYRO_BUTTON_INVERT)
-    gyro_axis = SettingsBase._new_setting(S.GYRO_AXIS)
-    gyro_sensitivity_scale = SettingsBase._new_setting(S.GYRO_SENSITIVITY_SCALE)
+    trackball = SettingsBase._alias(S.TRACKBALL)
+    doubletap_beep = SettingsBase._alias(S.DOUBLETAP_BEEP)
+    invert_x = SettingsBase._alias(S.INVERT_X)
+    invert_y = SettingsBase._alias(S.INVERT_Y)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    rotation = SettingsBase._alias(S.ROTATION)
+    friction = SettingsBase._alias(S.FRICTION)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
+    mouse_move_threshold = SettingsBase._alias(S.MOUSE_MOVE_THRESHOLD)
+    edge_spin_velocity = SettingsBase._alias(S.EDGE_SPIN_VELOCITY)
+    edge_spin_radius = SettingsBase._alias(S.EDGE_SPIN_RADIUS)
+    doubletap_max_duration = SettingsBase._alias(S.DOUBLETAP_MAX_DURATION)
+    mouse_dampening_trigger = SettingsBase._alias(S.MOUSE_DAMPENING_TRIGGER)
+    mouse_trigger_clamp_amount = SettingsBase._alias(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+    mousejoystick_deadzone_x = SettingsBase._alias(S.MOUSEJOYSTICK_DEADZONE_X)
+    mousejoystick_deadzone_y = SettingsBase._alias(S.MOUSEJOYSTICK_DEADZONE_Y)
+    mousejoystick_precision = SettingsBase._alias(S.MOUSEJOYSTICK_PRECISION)
+    custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
+    gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
+    gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
+    gyro_axis = SettingsBase._alias(S.GYRO_AXIS)
+    gyro_sensitivity_scale = SettingsBase._alias(S.GYRO_SENSITIVITY_SCALE)
+
+  class Inputs (GroupBase.Inputs):
+    CLICK = "click"
+    EDGE = "edge"
+    _ALLOW = {
+      CLICK, EDGE,
+      }
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.EDGE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'mouse_joystick', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupMouseRegion (GroupBase):
-  CLICK = "click"
-  EDGE = "edge"
-  TOUCH = "touch"
-  INPUTS = set([ CLICK, EDGE, TOUCH ])
-
   class Settings (GroupBase.Settings):
     HapticIntensity = GroupBase.Settings.HapticIntensity
     MouseDampeningTrigger = GroupBase.Settings.MouseDampeningTrigger
@@ -1548,28 +1690,35 @@ class GroupMouseRegion (GroupBase):
       S.MOUSE_DAMPENING_TRIGGER: MouseDampeningTrigger,
       S.MOUSE_TRIGGER_CLAMP_AMOUNT: (100, 8000),
     }
-    edge_binding_radius = SettingsBase._new_setting(S.EDGE_BINDING_RADIUS)
-    edge_binding_invert = SettingsBase._new_setting(S.EDGE_BINDING_INVERT)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    output_joystick = SettingsBase._new_setting(S.OUTPUT_JOYSTICK)
-    scale = SettingsBase._new_setting(S.SCALE)
-    position_x = SettingsBase._new_setting(S.POSITION_X)
-    position_y = SettingsBase._new_setting(S.POSITION_Y)
-    sensitivity_vert_scale = SettingsBase._new_setting(S.SENSITIVITY_VERT_SCALE)
-    sensitivity_horiz_scale = SettingsBase._new_setting(S.SENSITIVITY_HORIZ_SCALE)
-    teleport_stop = SettingsBase._new_setting(S.TELEPORT_STOP)
-    mouse_dampening_trigger = SettingsBase._new_setting(S.MOUSE_DAMPENING_TRIGGER)
-    mouse_trigger_clamp_amount = SettingsBase._new_setting(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+    edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
+    edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
+    scale = SettingsBase._alias(S.SCALE)
+    position_x = SettingsBase._alias(S.POSITION_X)
+    position_y = SettingsBase._alias(S.POSITION_Y)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
+    sensitivity_horiz_scale = SettingsBase._alias(S.SENSITIVITY_HORIZ_SCALE)
+    teleport_stop = SettingsBase._alias(S.TELEPORT_STOP)
+    mouse_dampening_trigger = SettingsBase._alias(S.MOUSE_DAMPENING_TRIGGER)
+    mouse_trigger_clamp_amount = SettingsBase._alias(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
+
+  class Inputs (GroupBase.Inputs):
+    CLICK = "click"
+    EDGE = "edge"
+    TOUCH = "touch"
+    _ALLOW = {
+      CLICK, EDGE, TOUCH,
+      }
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.EDGE)
+  Inputs._create_alias(Inputs.TOUCH)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'mouse_region', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupRadialMenu (GroupBase):
-  CLICK = "click"
-  # touch_menu_button_%d  0..15
-  INPUTS = set([ CLICK, ])
-
   class Settings (GroupBase.Settings):
     TouchmenuButtonFireType = GroupBase.Settings.TouchmenuButtonFireType
     S = GroupBase.Settings._VSC_KEYS
@@ -1581,24 +1730,28 @@ class GroupRadialMenu (GroupBase):
       S.TOUCH_MENU_SCALE: (50, 150),
       S.TOUCH_MENU_SHOW_LABELS: bool,
     }
-    touchmenu_button_fire_type = SettingsBase._new_setting(S.TOUCHMENU_BUTTON_FIRE_TYPE)
-    touch_menu_opacity = SettingsBase._new_setting(S.TOUCH_MENU_OPACITY)
-    touch_menu_position_x = SettingsBase._new_setting(S.TOUCH_MENU_POSITION_X)
-    touch_menu_position_y = SettingsBase._new_setting(S.TOUCH_MENU_POSITION_Y)
-    touch_menu_scale = SettingsBase._new_setting(S.TOUCH_MENU_SCALE)
-    touch_menu_show_labels = SettingsBase._new_setting(S.TOUCH_MENU_SHOW_LABELS)
+    touchmenu_button_fire_type = SettingsBase._alias(S.TOUCHMENU_BUTTON_FIRE_TYPE)
+    touch_menu_opacity = SettingsBase._alias(S.TOUCH_MENU_OPACITY)
+    touch_menu_position_x = SettingsBase._alias(S.TOUCH_MENU_POSITION_X)
+    touch_menu_position_y = SettingsBase._alias(S.TOUCH_MENU_POSITION_Y)
+    touch_menu_scale = SettingsBase._alias(S.TOUCH_MENU_SCALE)
+    touch_menu_show_labels = SettingsBase._alias(S.TOUCH_MENU_SHOW_LABELS)
+
+  class Inputs (GroupBase.Inputs):
+    N_BUTTONS = 20
+    CLICK = "click"
+    _ALLOW = set( [CLICK] + [
+      "touch_menu_button_%d" % d for d in range(0,N_BUTTONS+1) ] )
+  Inputs._create_alias(Inputs.CLICK)
+  for d in range(0, Inputs.N_BUTTONS):
+    symbol = "touch_menu_button_%d" % d
+    Inputs._create_alias(symbol)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'radial_menu', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupScrollwheel (GroupBase):
-  CLICK = "click"
-  SCROLL_CLOCKWISE = "scroll_clockwise"
-  SCROLL_COUNTERCLOCKWISE = "scroll_counterclockwise"
-  # scroll_wheel_list_%d  0..9
-  INPUTS = set([ CLICK, SCROLL_CLOCKWISE, SCROLL_COUNTERCLOCKWISE ])
-
   class Settings (GroupBase.Settings):
     Friction = GroupBase.Settings.Friction
     HapticIntensity = GroupBase.Settings.HapticIntensity
@@ -1616,24 +1769,41 @@ class GroupScrollwheel (GroupBase):
       S.SCROLL_WRAP: bool,
       S.SCROLL_FRICTION: Friction,
     }
-    scroll_angle = SettingsBase._new_setting(S.SCROLL_ANGLE)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    scroll_type = SettingsBase._new_setting(S.SCROLL_TYPE)
-    scroll_invert = SettingsBase._new_setting(S.SCROLL_INVERT)
-    scroll_wrap = SettingsBase._new_setting(S.SCROLL_WRAP)
-    scroll_friction = SettingsBase._new_setting(S.SCROLL_FRICTION)
+    scroll_angle = SettingsBase._alias(S.SCROLL_ANGLE)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    scroll_type = SettingsBase._alias(S.SCROLL_TYPE)
+    scroll_invert = SettingsBase._alias(S.SCROLL_INVERT)
+    scroll_wrap = SettingsBase._alias(S.SCROLL_WRAP)
+    scroll_friction = SettingsBase._alias(S.SCROLL_FRICTION)
+
+  class Inputs (GroupBase.Inputs):
+    CLICK = "click"
+    SCROLL_CLOCKWISE = "scroll_clockwise"
+    SCROLL_COUNTERCLOCKWISE = "scroll_counterclockwise"
+    _ALLOW = {
+      CLICK, SCROLL_CLOCKWISE, SCROLL_COUNTERCLOCKWISE
+      }
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.SCROLL_CLOCKWISE)
+  Inputs._create_alias(Inputs.SCROLL_COUNTERCLOCKWISE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'scrollwheel', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupSingleButton (GroupBase):
-  CLICK = "click"
-  TOUCH = "touch"
-  INPUTS = set([ CLICK, TOUCH ])
+  class Inputs (GroupBase.Inputs):
+    CLICK = "click"
+    TOUCH = "touch"
+    _ALLOW = {
+      CLICK, TOUCH,
+      }
+    click = GroupBase.Inputs._alias(CLICK)
+    touch = GroupBase.Inputs._alias(TOUCH)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'single_button', index, py_inputs, py_settings, **kwargs)
+
 
 class GroupSwitches (GroupBase):
   BUTTON_ESCAPE = "button_escape"
@@ -1642,20 +1812,18 @@ class GroupSwitches (GroupBase):
   RIGHT_BUMPER = "right_bumper"
   BUTTON_BACK_LEFT = "button_back_left"
   BUTTON_BACK_RIGHT = "button_back_right"
-  RIGHT_TRIGGER_MODESHIFT = "right_trigger_modeshift"
-  RIGHT_TRIGGER_THRESHOLD_MODESHIFT = "right_trigger_threshold_modeshift"
-  LEFT_TRIGGER_MODESHIFT = "left_trigger_modeshift"
-  LEFT_TRIGGER_THRESHOLD_MODESHIFT = "left_trigger_threshold_modeshift"
-  LEFT_CLICK_MODESHIFT = "left_click_modeshift"
-  RIGHT_CLICK_MODESHIFT = "right_click_modeshift"
-  LEFT_STICK_CLICK_MODESHIFT = "left_stick_click_modeshift"
-  BUTTON_A_MODESHIFT = "button_a_modeshift"
-  BUTTON_B_MODESHIFT = "button_b_modeshift"
-  BUTTON_X_MODESHIFT = "button_x_modeshift"
-  BUTTON_Y_MODESHIFT = "button_y_modeshift"
+  LEFT_GRIP = BUTTON_BACK_LEFT
+  RIGHT_GRIP = BUTTON_BACK_RIGHT
+  LEFT_CLICK = "left_click"   # LT full pull
+  RIGHT_CLICK = "right_click" # RT full pull
+
+  # TODO: find out what may go in here.
+  class Inputs (GroupBase.Inputs):
+    _ALLOW = True
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'switches', index, py_inputs, py_settings, **kwargs)
+
 
 class GroupTouchMenu (GroupBase):
   # touch_menu_button_%d  0..15
@@ -1671,23 +1839,26 @@ class GroupTouchMenu (GroupBase):
       S.TOUCH_MENU_SHOW_LABELS: bool,
       S.TOUCHMENU_BUTTON_FIRE_TYPE: TouchmenuButtonFireType,
       }
-    touch_menu_button_count = SettingsBase._new_setting(S.TOUCH_MENU_BUTTON_COUNT)
-    touch_menu_opacity = SettingsBase._new_setting(S.TOUCH_MENU_OPACITY)
-    touch_menu_position_x = SettingsBase._new_setting(S.TOUCH_MENU_POSITION_X)
-    touch_menu_position_y = SettingsBase._new_setting(S.TOUCH_MENU_POSITION_Y)
-    touch_menu_scale = SettingsBase._new_setting(S.TOUCH_MENU_SCALE)
-    touch_menu_show_labels = SettingsBase._new_setting(S.TOUCH_MENU_SHOW_LABELS)
-    touchmenu_button_fire_type = SettingsBase._new_setting(S.TOUCHMENU_BUTTON_FIRE_TYPE)
+    touch_menu_button_count = SettingsBase._alias(S.TOUCH_MENU_BUTTON_COUNT)
+    touch_menu_opacity = SettingsBase._alias(S.TOUCH_MENU_OPACITY)
+    touch_menu_position_x = SettingsBase._alias(S.TOUCH_MENU_POSITION_X)
+    touch_menu_position_y = SettingsBase._alias(S.TOUCH_MENU_POSITION_Y)
+    touch_menu_scale = SettingsBase._alias(S.TOUCH_MENU_SCALE)
+    touch_menu_show_labels = SettingsBase._alias(S.TOUCH_MENU_SHOW_LABELS)
+    touchmenu_button_fire_type = SettingsBase._alias(S.TOUCHMENU_BUTTON_FIRE_TYPE)
+
+  class Inputs (GroupBase.Inputs):
+    N_BUTTONS = 16
+    _ALLOW = set([ "touch_menu_button_%d" % d for d in range(0, N_BUTTONS+1)])
+  for d in range(0, Inputs.N_BUTTONS+1):
+    symbol = "touch_menu_button_%d"
+    Inputs._create_alias(symbol)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'touch_menu', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupTrigger (GroupBase):
-  CLICK = "click"
-  EDGE = "edge"
-  INPUTS = set([ CLICK, EDGE ])
-
   class Settings (GroupBase.Settings):
     AdaptiveThreshold = PseudoNamespace(
       SIMPLE_THRESHOLD = 0,
@@ -1709,13 +1880,22 @@ class GroupTrigger (GroupBase):
       S.CURVE_EXPONENT: CurveExponent,
       S.CUSTOM_CURVE_EXPONENT: (25, 4000),
     }
-    output_trigger = SettingsBase._new_setting(S.OUTPUT_TRIGGER)
-    deadzone_outer_radius = SettingsBase._new_setting(S.DEADZONE_OUTER_RADIUS)
-    deadzone_inner_radius = SettingsBase._new_setting(S.DEADZONE_INNER_RADIUS)
-    edge_binding_radius = SettingsBase._new_setting(S.EDGE_BINDING_RADIUS)
-    adaptive_threshold = SettingsBase._new_setting(S.ADAPTIVE_THRESHOLD)
-    curve_exponent = SettingsBase._new_setting(S.CURVE_EXPONENT)
-    custom_curve_exponent = SettingsBase._new_setting(S.CUSTOM_CURVE_EXPONENT)
+    output_trigger = SettingsBase._alias(S.OUTPUT_TRIGGER)
+    deadzone_outer_radius = SettingsBase._alias(S.DEADZONE_OUTER_RADIUS)
+    deadzone_inner_radius = SettingsBase._alias(S.DEADZONE_INNER_RADIUS)
+    edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
+    adaptive_threshold = SettingsBase._alias(S.ADAPTIVE_THRESHOLD)
+    curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
+    custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
+
+  class Inputs (GroupBase.Inputs):
+    CLICK = "click"
+    EDGE = "edge"
+    _ALLOW = {
+      CLICK, EDGE,
+      }
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.EDGE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'trigger', index, py_inputs, py_settings, **kwargs)
@@ -1860,8 +2040,8 @@ The native actions bypass the entire notion of physical devices (keyboard, mouse
     self.legacy = py_legacy
     self.parent_set_name = py_parent
 
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     kv['title'] = str(self.title)
     kv['legacy_set'] = str(int(bool(self.legacy)))
     if self.tier == 1:
@@ -1930,7 +2110,7 @@ class GroupSourceBindingValue (object):
     modeshift = (words[2] == VSC_MODESHIFT) if len(words) > 2 else False
     return (inpsrc, active, modeshift)
 
-  def encode_kv (self):
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
     words = [ self.groupsrc ]
     words.append(VSC_ACTIVE if self.active else VSC_INACTIVE)
     words.append(VSC_MODESHIFT) if self.modeshift else None
@@ -1946,7 +2126,7 @@ class Preset (object):
 
     self.index = index
     self.name = py_name
-    self.gsb = scvdf.SCVDFDict()  # map group-id:int to GroupSourceBindingValue
+    self.gsb = scvdf.SCVDFDict()  # map group-id:str to GroupSourceBindingValue
 
     if py_gsb:
       # expect compatible with dict.update()
@@ -1958,29 +2138,16 @@ class Preset (object):
 
   def add_gsb (self, groupid, groupsrc, active=True, modeshift=False):
     gsbv = GroupSourceBindingValue(groupsrc, active, modeshift)
-    self.gsb[int(groupid)] = gsbv
+    self.gsb[str(groupid)] = gsbv
 
-  def encode_pair (self):
-    lop = []
-    lop.append( ('id', str(self.index)) )
-    lop.append( ('name', str(self.name)) )
-
-    kv_gsb = []
-    for elt in self.gsb:
-      kv_gsb.append(elt.encode_pair())
-    lop.append( ('group_source_bindings', kv_gsb) )
-
-    whole = ('preset', lop)
-    return whole
-
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     kv['id'] = str(self.index)
     kv['name'] = str(self.name)
 
-    kv_gsb = scvdf.SCVDFDict()
+    kv_gsb = maptype()
     for k,v in self.gsb.items():
-      kv_gsb[str(k)] = v.encode_kv()
+      kv_gsb[str(k)] = toVDF(v, maptype)
     kv['group_source_bindings'] = kv_gsb
 
     return kv
@@ -2016,10 +2183,10 @@ class Mapping (object):
       )
     _CONSTRAINTS = {
     }
-    left_trackpad_mode = SettingsBase._new_setting(_VSC_KEYS.LEFT_TRACKPAD_MODE)
-    right_trackpad_mode = SettingsBase._new_setting(_VSC_KEYS.RIGHT_TRACKPAD_MODE)
-    action_set_trigger_cursor_show = SettingsBase._new_setting(_VSC_KEYS.ACTION_SET_TRIGGER_CURSOR_SHOW)
-    action_set_trigger_cursor_hide = SettingsBase._new_setting(_VSC_KEYS.ACTION_SET_TRIGGER_CURSOR_HIDE)
+    left_trackpad_mode = SettingsBase._alias(_VSC_KEYS.LEFT_TRACKPAD_MODE)
+    right_trackpad_mode = SettingsBase._alias(_VSC_KEYS.RIGHT_TRACKPAD_MODE)
+    action_set_trigger_cursor_show = SettingsBase._alias(_VSC_KEYS.ACTION_SET_TRIGGER_CURSOR_SHOW)
+    action_set_trigger_cursor_hide = SettingsBase._alias(_VSC_KEYS.ACTION_SET_TRIGGER_CURSOR_HIDE)
 
   def __init__ (self, py_version=None, py_revision=None, py_title=None, py_description=None, py_creator=None, py_controller_type=None, py_timestamp=None, py_settings=None, **kwargs):
     if py_version is None:
@@ -2062,19 +2229,19 @@ class Mapping (object):
 
     if 'actions' in kwargs:
       for obj_name, obj_kv in kwargs['actions'].items():
-        self.make_action_set(obj_name, **obj_kv)
+        self.add_action_set(obj_name, **obj_kv)
 
     if 'action_layers' in kwargs:
       for obj_name, obj_kv in kwargs['action_layers'].items():
-        self.make_action_layer(obj_name, **obj_kv)
+        self.add_action_layer(obj_name, **obj_kv)
 
     if 'group' in kwargs:
       for grp_kv in get_all(kwargs, 'group', []):
-        self.make_group(**grp_kv)
+        self.add_group(**grp_kv)
 
     if 'preset' in kwargs:
       for preset_kv in get_all(kwargs, 'preset', []):
-        self.make_preset(**preset_kv)
+        self.add_preset(**preset_kv)
 
     if VSC_SETTINGS in kwargs:
       self.settings.update(kwargs[VSC_SETTINGS])
@@ -2087,6 +2254,13 @@ class Mapping (object):
       # TODO: auto-index
       groupid = -1
     group = Group(groupid, py_mode, **kwargs)
+    return group
+
+  def add_group (self, first=None, py_mode=None, **kwargs):
+    if isinstance(first, GroupBase):
+      group = first
+    else:
+      group = self.make_group(first, py_mode, **kwargs)
     self.groups.append(group)
     return group
 
@@ -2104,52 +2278,43 @@ class Mapping (object):
         # TODO: derive from autosequence.
         py_name = py_name
     preset = Preset(presetid, py_name, **kwargs)
+    return preset
+
+  def add_preset (self, first=None, py_name=None, **kwargs):
+    if isinstance(first, Preset):
+      preset = first
+    else:
+      preset = self.make_preset(first, py_name, **kwargs)
     self.presets.append(preset)
     return preset
 
-
   def make_action_set (self, index=None, py_title=None, py_legacy=None, **kwargs):
     actset = ActionSet(index, py_title, py_legacy, **kwargs)
+    return actset
+
+  def add_action_set (self, first, py_title=None, py_legacy=None, **kwargs):
+    if isinstance(first, ActionSet):
+      actset = first
+    else:
+      actset = self.make_action_set(first, py_title, py_legacy, **kwargs)
     self.actions.append(actset)
     return actset
 
   def make_action_layer (self, index=None, py_title=None, py_legacy=None, py_parent=None, **kwargs):
     layer = ActionLayer(index, py_title, py_legacy, py_parent, **kwargs)
-    self.layers.append(layer)
     return layer
 
-  def encode_pair (self):
-    lop = []
-    lop.append( ('version', str(self.version)) )
-    lop.append( ('revision', str(self.revision)) )
-    lop.append( ('title', str(self.title)) )
-    lop.append( ('description', str(self.description)) )
-    lop.append( ('creator', str(self.creator)) )
-    lop.append( ('controller_type', str(self.controller_type)) )
-    lop.append( ('Timestamp', str(self.timestamp)) )
+  def add_action_layer (self, first, py_title=None, py_legacy=None, py_parent=None, **kwargs):
+    if isinstance(first, ActionLayer):
+      actset = first
+    else:
+      actset = self.make_action_layer(first, py_title, py_legacy, py_parent, **kwargs)
+    self.layers.append(actset)
+    return actset
 
-    for grp in self.groups:
-      lop.append( grp.encode_pair() )
-    for preset in self.presets:
-      lop.append( preset.encode_pair() )
-    if self.settings:
-      lop.append( self.settings.encode_pair() )
-
-    whole = ('controller_mappings', lop)
-    return whole
-
-  def _encode_overlays (self, overlay_store, gensym=0):
-    """Helper function to encode the overlays: Action Set, Action Layer."""
-    kv = scvdf.SCVDFDict()
-    for obj in overlay_store:
-      pair_name = obj.index
-      pair_val = obj.encode_kv()
-      kv[pair_name] = pair_val
-    return kv
-
-  def encode_kv (self):
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
     """Encode object to list of pairs (scvdf)."""
-    kv = scvdf.SCVDFDict()
+    kv = maptype()
     kv['version'] = str(self.version)
     kv['revision'] = str(self.revision)
     kv['title'] = str(self.title)
@@ -2157,6 +2322,14 @@ class Mapping (object):
     kv['creator'] = str(self.creator)
     kv['controller_type'] = str(self.controller_type)
     kv['Timestamp'] = str(self.timestamp)
+
+    self._gensym = 0
+    def _encode_overlays (overlay_store):
+      """Helper function to encode the overlays: Action Set, Action Layer."""
+      kv = maptype()
+      for obj in overlay_store:
+        kv[obj.index] = toVDF(obj, maptype)
+      return kv
 
     # Alright, this gets weird.
 ## 'internal' refers to internal to Steam Client and therefore not available for direct inspection;
@@ -2183,19 +2356,19 @@ class Mapping (object):
 #  * 'actions', 'action_layers': The overlays are in no particular order (as per nature of mapping type), but may be iterated in the proper sequence by sorting their names.
 
     if self.actions:
-      kv['actions'] = self._encode_overlays(self.actions)
+      kv['actions'] = _encode_overlays(self.actions)
 
     if self.layers:
-      kv['action_layers'] = self._encode_overlays(self.layers)
+      kv['action_layers'] = _encode_overlays(self.layers)
 
     for grp in self.groups:
-      kv['group'] = grp.encode_kv()
+      kv['group'] = toVDF(grp, maptype)
 
     for preset in self.presets:
-      kv['preset'] = preset.encode_kv()
+      kv['preset'] = toVDF(preset, maptype)
 
     if self.settings:
-      kv[VSC_SETTINGS] = self.settings.encode_kv()
+      kv[VSC_SETTINGS] = toVDF(self.settings, maptype)
     else:
       kv[VSC_SETTINGS] = {}
 
@@ -2217,22 +2390,26 @@ See ControllerConfigFactory for instantiating from a dict or SCVDFDict.
       if not isinstance(conmaps, list):
         conmaps = [ conmaps ]
       for cm_kv in conmaps:
-        self.make_mapping(**cm_kv)
+        self.add_mapping(**cm_kv)
 
   def make_mapping (self, py_version=3, **kwargs):
     mapping = Mapping(py_version, **kwargs)
+    return mapping
+  def add_mapping (self, first=None, **kwargs):
+    if isinstance(first, Mapping):
+      mapping = first
+    else:
+      if first is None:
+        mapping = self.make_mapping(**kwargs)
+      else:
+        mapping = self.make_mapping(first, **kwargs)
     self.mappings.append(mapping)
     return mapping
 
-  def encode_pair  (self):
-    lop = []
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     for m in self.mappings:
-      lop.append( m.encode_pair() )
-    return lop
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
-    for m in self.mappings:
-      kv['controller_mappings'] = m.encode_kv()
+      kv['controller_mappings'] = toVDF(m, maptype)
     return kv
 
 

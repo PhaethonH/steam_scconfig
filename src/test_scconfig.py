@@ -164,6 +164,77 @@ except AttributeError:
   # py2
   unittest.TestCase.assertRaisesRegex = unittest.TestCase.assertRaisesRegexp
 
+
+class TestSupportClasses (unittest.TestCase):
+  def test_restrictive_dict (self):
+    TargetDict = scconfig.RestrictiveDict
+    src = { "alpha": 1 }
+    d = TargetDict(src)
+    self.assertEqual(d, { "alpha": 1 })
+
+    d = TargetDict()
+    d._ALLOW = True
+    d['alpha'] = 1
+    d['echo'] = { "e":0, "c":1, "h":2, "o":3 }
+    self.assertEqual(d['alpha'], 1)
+    self.assertEqual(d['echo'], { "e":0, "c":1, "h":2, "o":3 })
+
+    d = TargetDict()
+    d._ALLOW = { "alpha", "bravo", "charlie" }
+    d['alpha'] = 1
+    d['bravo'] = "b"
+    d['charlie'] = [10,20,30]
+    with self.assertRaisesRegex(KeyError, "not allowed"):
+      d['delta'] = True
+
+    p = dict(list(d.items()))
+    self.assertEqual(p, { "alpha": 1, "bravo": "b", "charlie": [10,20,30] })
+
+    d['charlie'] = 30
+    p = dict(list(d.items()))
+    self.assertEqual(p, { "alpha": 1, "bravo": "b", "charlie": 30 })
+
+    class Restrict1 (TargetDict):
+      _ALLOW = {}
+      ALPHA = "alpha"
+      BRAVO = "bravo"
+      CHARLIE = "charlie"
+    Restrict1._create_alias(Restrict1.ALPHA)
+    Restrict1._create_alias(Restrict1.BRAVO)
+    Restrict1._create_alias(Restrict1.CHARLIE)
+
+    class Restrict2 (TargetDict):
+      _ALLOW = {}
+      ABLE = "able"
+      BAKER = "baker"
+      CHARLIE = "charlie"
+    Restrict2._create_alias(Restrict2.ABLE)
+    Restrict2._create_alias(Restrict2.BAKER)
+    Restrict2._create_alias(Restrict2.CHARLIE)
+
+    self.assertEqual(Restrict1._ALLOW, { "alpha", "bravo", "charlie" })
+    self.assertEqual(Restrict2._ALLOW, { "able", "baker", "charlie" })
+
+    r1 = Restrict1()
+    r2 = Restrict2()
+
+    r1['alpha'] = True
+    r1['bravo'] = True
+    r1['charlie'] = True
+    with self.assertRaisesRegex(KeyError, "not allowed"):
+      r1["able"] = True
+    with self.assertRaisesRegex(KeyError, "not allowed"):
+      r1["baker"] = True
+
+    r2['able'] = True
+    r2['baker'] = True
+    r2['charlie'] = True
+    with self.assertRaisesRegex(KeyError, "not allowed"):
+      r2["alpha"] = True
+    with self.assertRaisesRegex(KeyError, "not allowed"):
+      r2["bravo"] = True
+
+
 class TestScvdfComponents (unittest.TestCase):
   def test_binding (self):
     b = scconfig.Binding("key_press ESCAPE, Open Menu")
@@ -237,17 +308,33 @@ class TestScvdfComponents (unittest.TestCase):
       g.settings.deadzone = 99999
     self.assertEqual(g.settings.deadzone, 32000)
 
-    kv = g.settings.encode_kv()
+    kv = scconfig.toVDF(g.settings)
     self.assertEqual(kv, { "requires_click": "0", "layout": "1", "deadzone": "32000" })
 
     s = g.settings
-    s.__class__.check_of_list = s._new_setting("check_of_list")
+    s.__class__.check_of_list = s._alias("check_of_list")
     s._CONSTRAINTS['check_of_list'] = [ 'foo', 'bar', 'quux' ]
     self.assertEqual(s.check_of_list, None)
     with self.assertRaisesRegex(ValueError, 'Value.*constraint.*\['):
       s.check_of_list = 42
     s.check_of_list ='bar'
     self.assertEqual(s.check_of_list, 'bar')
+
+  def test_inputs (self):
+    # Test accessing and mutating input elements of a group.
+    g = scconfig.GroupDpad()
+    self.assertEqual(g.inputs.__class__, scconfig.GroupDpad.Inputs)
+    i = g.inputs.dpad_up
+    self.assertEqual(i, None)
+    # Test assigning invalid key => error.
+    with self.assertRaises(KeyError):
+      g.inputs['dpad_nope'] = None
+    # Test making with almost-but-still-invalid key => error.
+    with self.assertRaises(KeyError):
+      g.add_input("dpad_up")
+    g.add_input("dpad_north")
+    i = g.inputs.dpad_up
+    self.assertEqual(type(i), scconfig.ControllerInput)
 
   def test_activator (self):
     a = scconfig.ActivatorFullPress()
@@ -264,7 +351,7 @@ class TestScvdfComponents (unittest.TestCase):
     with self.assertRaisesRegex(ValueError, 'Value.*constraint.*[0-9]'):
       a.settings.repeat_rate = False
 
-    d = a.encode_kv()
+    d = scconfig.toVDF(a)
     self.assertEqual(d, {
       "bindings": {},
       "settings": {
@@ -275,14 +362,16 @@ class TestScvdfComponents (unittest.TestCase):
 
 
 class TestScconfigEncoding (unittest.TestCase):
+  WRITE_FILES = False
+
   def hash_and_dump (self, configobj, cksum, f=None):
-    kvs = configobj.encode_kv()
+    kvs = scconfig.toVDF(configobj)
     fulldump_kvs = scvdf.dumps(kvs)
     #print(fulldump_kvs)
     fulldump_hashable = bytevector(fulldump_kvs)
     hasher = hashlib.new("md5")
     hasher.update(fulldump_hashable)
-    if f:
+    if self.WRITE_FILES and f:
       do_close = False
       try:
         f.write
@@ -298,7 +387,7 @@ class TestScconfigEncoding (unittest.TestCase):
     self.buffer = True
     config = scconfig.ControllerConfig()
 
-    mapping = config.make_mapping()
+    mapping = config.add_mapping()
     mapping.version = '3'
     mapping.revision = '2'
     mapping.title = 'Defaults1'
@@ -310,82 +399,82 @@ class TestScconfigEncoding (unittest.TestCase):
     mapping.settings['left_trackpad_mode'] = 0
     mapping.settings['right_trackpad_mode'] = 0
 
-    group0 = mapping.make_group(0, "four_buttons")
-    inp = group0.make_input("button_a")
-    activator = inp.make_activator("Full_Press")
+    group0 = mapping.add_group(0, "four_buttons")
+    inp = group0.add_input("button_a")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button A")
-    inp = group0.make_input("button_b")
-    activator = inp.make_activator("Full_Press")
+    inp = group0.add_input("button_b")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button B")
-    inp = group0.make_input("button_x")
-    activator = inp.make_activator("Full_Press")
+    inp = group0.add_input("button_x")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button X")
-    inp = group0.make_input("button_y")
-    activator = inp.make_activator("Full_Press")
+    inp = group0.add_input("button_y")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button Y")
 
-    group1 = mapping.make_group(1, "dpad")
-    inp = group1.make_input("dpad_north")
-    activator = inp.make_activator("Full_Press")
+    group1 = mapping.add_group(1, "dpad")
+    inp = group1.add_input("dpad_north")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding('xinput_button dpad_up')
-    inp = group1.make_input("dpad_south")
-    activator = inp.make_activator("Full_Press")
+    inp = group1.add_input("dpad_south")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding('xinput_button dpad_down')
-    inp = group1.make_input("dpad_east")
-    activator = inp.make_activator("Full_Press")
+    inp = group1.add_input("dpad_east")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding('xinput_button dpad_right')
-    inp = group1.make_input("dpad_west")
-    activator = inp.make_activator("Full_Press")
+    inp = group1.add_input("dpad_west")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding('xinput_button dpad_left')
     group1.settings['deadzone'] = 5000
 
-    group2 = mapping.make_group(2, "joystick_camera")
-    inp = group2.make_input("click")
-    activator = inp.make_activator("Full_Press")
+    group2 = mapping.add_group(2, "joystick_camera")
+    inp = group2.add_input("click")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button JOYSTICK_RIGHT")
     activator.settings['haptic_intensity'] = 1
 
-    group3 = mapping.make_group(3, "joystick_move")
-    inp = group3.make_input("click")
-    activator = inp.make_activator("Full_Press")
+    group3 = mapping.add_group(3, "joystick_move")
+    inp = group3.add_input("click")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button JOYSTICK_LEFT")
     activator.settings['haptic_intensity'] = 2
 
-    group4 = mapping.make_group(4, "trigger")
-    inp = group4.make_input("click")
-    activator = inp.make_activator("Full_Press")
+    group4 = mapping.add_group(4, "trigger")
+    inp = group4.add_input("click")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button TRIGGER_LEFT")
     activator.settings['haptic_intensity'] = 2
     group4.settings['output_trigger'] = 1
 
-    group5 = mapping.make_group(5, "trigger")
-    inp = group5.make_input("click")
-    activator = inp.make_activator("Full_Press")
+    group5 = mapping.add_group(5, "trigger")
+    inp = group5.add_input("click")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button TRIGGER_RIGHT")
     activator.settings['haptic_intensity'] = 2
     group5.settings['output_trigger'] = 2
 
-    group6 = mapping.make_group(6, "switches")
-    inp = group6.make_input('button_escape')
-    activator = inp.make_activator("Full_Press")
+    group6 = mapping.add_group(6, "switches")
+    inp = group6.add_input('button_escape')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button start")
-    inp = group6.make_input('button_menu')
-    activator = inp.make_activator("Full_Press")
+    inp = group6.add_input('button_menu')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button select")
-    inp = group6.make_input('left_bumper')
-    activator = inp.make_activator("Full_Press")
+    inp = group6.add_input('left_bumper')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button shoulder_left")
-    inp = group6.make_input('right_bumper')
-    activator = inp.make_activator("Full_Press")
+    inp = group6.add_input('right_bumper')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button shoulder_right")
-    inp = group6.make_input('button_back_left')
-    activator = inp.make_activator("Full_Press")
+    inp = group6.add_input('button_back_left')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button a")
-    inp = group6.make_input('button_back_right')
-    activator = inp.make_activator("Full_Press")
+    inp = group6.add_input('button_back_right')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button x")
 
-    preset0 = mapping.make_preset(0, "Default")
+    preset0 = mapping.add_preset(0, "Default")
     preset0.add_gsb(6, 'switch', True, False)
     preset0.add_gsb(0, 'button_diamond', True, False)
     preset0.add_gsb(1, 'left_trackpad', True, False)
@@ -405,14 +494,14 @@ class TestScconfigEncoding (unittest.TestCase):
 #    hasher = hashlib.new("md5")
 #    hasher.update(fulldump)
 #    self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
-    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc")
+    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc", "out1.txt")
 
   def test_loading0 (self):
     kv = scvdf.SCVDFDict()
     kv.update(PRESET_DEFAULTS1)
     config = scconfig.ControllerConfigFactory.make_from_dict(kv)
 
-    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc")
+    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc", "out2.txt")
 
   def test_loading1 (self):
     f = open("../examples/com³-wip3_0.vdf", "rt")
@@ -420,7 +509,7 @@ class TestScconfigEncoding (unittest.TestCase):
     f.close()
     config = scconfig.ControllerConfigFactory.make_from_dict(pydict)
 
-    self.hash_and_dump(config, "01dc2f4e9b6c8f86e2d1678c2763540d")
+    self.hash_and_dump(config, "01dc2f4e9b6c8f86e2d1678c2763540d", "out3.txt")
 
   def test_loading2 (self):
     f = open("../examples/led_sets1_0.vdf", "rt")
@@ -428,7 +517,7 @@ class TestScconfigEncoding (unittest.TestCase):
     f.close()
     config = scconfig.ControllerConfigFactory.make_from_dict(pydict)
 
-    self.hash_and_dump(config, "1bd70090976c6d218cf6273ba3e26a12")
+    self.hash_and_dump(config, "1bd70090976c6d218cf6273ba3e26a12", "out4.txt")
 
 
 if __name__ == "__main__":

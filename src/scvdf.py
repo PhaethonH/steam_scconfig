@@ -652,6 +652,11 @@ def _toLOS (iterlop, accumulator=None, indent=""):
     accumulator.append(indent)
     accumulator.append('"{}"'.format(k))
 
+    if type(v) == bool:
+        v = '1' if v else '0'
+    elif type(v) == int:
+        v = str(v)
+
     # Encode value part of pair.
     if _stringlike(v):
       # one-line k/v, separator then value
