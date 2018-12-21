@@ -312,7 +312,7 @@ class TestScvdfComponents (unittest.TestCase):
     self.assertEqual(kv, { "requires_click": "0", "layout": "1", "deadzone": "32000" })
 
     s = g.settings
-    s.__class__.check_of_list = s._new_setting("check_of_list")
+    s.__class__.check_of_list = s._alias("check_of_list")
     s._CONSTRAINTS['check_of_list'] = [ 'foo', 'bar', 'quux' ]
     self.assertEqual(s.check_of_list, None)
     with self.assertRaisesRegex(ValueError, 'Value.*constraint.*\['):

@@ -102,7 +102,7 @@ class ConstrainedDictMixin (object):
   ## dict keys not listed in constraints are unconstrainted.
   _CONSTRAINTS = {}
 
-  def _filtered_assign (self, k, val):
+  def _constrained_assign (self, k, val):
     constraint = self._CONSTRAINTS.get(k, None)
     if isinstance(constraint,tuple):      # integer range constraint.
       lower, upper = constraint
@@ -110,10 +110,17 @@ class ConstrainedDictMixin (object):
       if (val < lower) or (upper < val):
         raise ValueError("Value {!r} violates range constraint {}".format(val, constraint))
     elif isinstance(constraint,list):     # any from a list.
+      try:
+        val = int(val)      # eagerly convert to int.
+      except (ValueError,TypeError):
+        pass
       if not (val in constraint):
         raise ValueError("Value {!r} violates list constraint {}".format(val, constraint))
     elif type(constraint) == PseudoNamespace:   # any from namespace.
-      val = int(val)
+      try:
+        val = int(val)      # eagerly convert to int.
+      except (ValueError,TypeError):
+        pass
       if not (val in constraint._nsdict.values()):
         raise ValueError("Value {!r} violates namespace constraint {}".format(val, constraint))
         return
@@ -128,14 +135,13 @@ class ConstrainedDictMixin (object):
       else:
         try:
           val = int(val)
-        except TypeError:
+        except (ValueError,TypeError):
           pass
       if type(val) != constraint:
         raise ValueError("Value {!r} violates type constraint {}".format(val, constraint))
     super(ConstrainedDictMixin,self).__setitem__(k,val)
-    #self[k] = val
   def __setitem__ (self, k, v):
-    self._filtered_assign(k,v)
+    self._constrained_assign(k,v)
 
 class IndexDict (OrderedDict):
   """Index-aware (VDF entry pair) dict."""
@@ -252,44 +258,13 @@ VSC_INPUTS = "inputs"
 ##################################
 
 
-# Settings map scalar to scalar; SCVDF overloads multiple assignments to mean building an array value.
+# Settings map scalar to scalar; c.f. SCVDF overloads multiple assignments to mean building an array value.
 class SettingsBase (AliasableDictMixin, ConstrainedDictMixin, OrderedDict):
-  # Constraints on settings values.
-  # Tuples indicate an integer range, such that tuple[0] <= value <= tuple[1].
-  # List specifies the set of acceptable values.
-  # class-object contains acceptable values: class.__dict__.values().
-  # primitive type to indicate the allowable value type.
-  ## setting keys not listed in constraints are unconstrainted.
-  _CONSTRAINTS = {}
-
-  def __init__ (self, index=None, **kwargs):
-    super(SettingsBase,self).__init__(kwargs)
-    if index is not None:
-      self.index = index
-
-  @staticmethod
-  def _settings_getter (settings_key):
-    def getter (self):
-      return self.get(settings_key, None)
-    return getter
-  @staticmethod
-  def _settings_setter (settings_key):
-    def setter (self, val):
-      self._filtered_assign(settings_key, val)
-    return setter
-  @staticmethod
-  def _settings_deleter (settings_key):
-    def deleter (self):
-      del self[settings_key]
-    return deleter
-  @staticmethod
-  def _new_setting (settings_key):
-    return property(SettingsBase._settings_getter(settings_key),
-                    SettingsBase._settings_setter(settings_key),
-                    SettingsBase._settings_deleter(settings_key))
-#  def __setitem__ (self, k, v):
-#    return self._filtered_assign(k,v)
-
+  def __init__ (self, copyfrom=None, **kwargs):
+    if copyfrom:
+      super(SettingsBase,self).__init__(copyfrom, **kwargs)
+    else:
+      super(SettingsBase,self).__init__(**kwargs)
 
 
 ###########################
@@ -751,14 +726,14 @@ class ActivatorFullPress (ActivatorBase):
       S.HOLD_REPEATS: bool,
       S.REPEAT_RATE: (1, 9999),
     }
-    toggle = SettingsBase._new_setting(S.TOGGLE)
-    interruptible = SettingsBase._new_setting(S.INTERRUPTIBLE)  # misspell
-    delay_start = SettingsBase._new_setting(S.DELAY_START)
-    delay_end = SettingsBase._new_setting(S.DELAY_END)
-    haptic_intensity = SettingsBase._new_setting(S.HAPTIC_INTENSITY)
-    cycle = SettingsBase._new_setting(S.CYCLE)
-    hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
-    repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
+    toggle = SettingsBase._alias(S.TOGGLE)
+    interruptible = SettingsBase._alias(S.INTERRUPTIBLE)  # misspell
+    delay_start = SettingsBase._alias(S.DELAY_START)
+    delay_end = SettingsBase._alias(S.DELAY_END)
+    haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
+    cycle = SettingsBase._alias(S.CYCLE)
+    hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
+    repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
 
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
@@ -2192,10 +2167,10 @@ class Mapping (object):
       )
     _CONSTRAINTS = {
     }
-    left_trackpad_mode = SettingsBase._new_setting(_VSC_KEYS.LEFT_TRACKPAD_MODE)
-    right_trackpad_mode = SettingsBase._new_setting(_VSC_KEYS.RIGHT_TRACKPAD_MODE)
-    action_set_trigger_cursor_show = SettingsBase._new_setting(_VSC_KEYS.ACTION_SET_TRIGGER_CURSOR_SHOW)
-    action_set_trigger_cursor_hide = SettingsBase._new_setting(_VSC_KEYS.ACTION_SET_TRIGGER_CURSOR_HIDE)
+    left_trackpad_mode = SettingsBase._alias(_VSC_KEYS.LEFT_TRACKPAD_MODE)
+    right_trackpad_mode = SettingsBase._alias(_VSC_KEYS.RIGHT_TRACKPAD_MODE)
+    action_set_trigger_cursor_show = SettingsBase._alias(_VSC_KEYS.ACTION_SET_TRIGGER_CURSOR_SHOW)
+    action_set_trigger_cursor_hide = SettingsBase._alias(_VSC_KEYS.ACTION_SET_TRIGGER_CURSOR_HIDE)
 
   def __init__ (self, py_version=None, py_revision=None, py_title=None, py_description=None, py_creator=None, py_controller_type=None, py_timestamp=None, py_settings=None, **kwargs):
     if py_version is None:
