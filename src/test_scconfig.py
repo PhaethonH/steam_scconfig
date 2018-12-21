@@ -326,11 +326,13 @@ class TestScvdfComponents (unittest.TestCase):
     self.assertEqual(g.inputs.__class__, scconfig.GroupDpad.Inputs)
     i = g.inputs.dpad_up
     self.assertEqual(i, None)
+    # Test assigning invalid key => error.
     with self.assertRaises(KeyError):
       g.inputs['dpad_nope'] = None
+    # Test making with almost-but-still-invalid key => error.
     with self.assertRaises(KeyError):
-      g.make_input("dpad_up")
-    g.make_input("dpad_north")
+      g.add_input("dpad_up")
+    g.add_input("dpad_north")
     i = g.inputs.dpad_up
     self.assertEqual(type(i), scconfig.ControllerInput)
 
@@ -385,7 +387,7 @@ class TestScconfigEncoding (unittest.TestCase):
     self.buffer = True
     config = scconfig.ControllerConfig()
 
-    mapping = config.make_mapping()
+    mapping = config.add_mapping()
     mapping.version = '3'
     mapping.revision = '2'
     mapping.title = 'Defaults1'
@@ -397,82 +399,82 @@ class TestScconfigEncoding (unittest.TestCase):
     mapping.settings['left_trackpad_mode'] = 0
     mapping.settings['right_trackpad_mode'] = 0
 
-    group0 = mapping.make_group(0, "four_buttons")
-    inp = group0.make_input("button_a")
-    activator = inp.make_activator("Full_Press")
+    group0 = mapping.add_group(0, "four_buttons")
+    inp = group0.add_input("button_a")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button A")
-    inp = group0.make_input("button_b")
-    activator = inp.make_activator("Full_Press")
+    inp = group0.add_input("button_b")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button B")
-    inp = group0.make_input("button_x")
-    activator = inp.make_activator("Full_Press")
+    inp = group0.add_input("button_x")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button X")
-    inp = group0.make_input("button_y")
-    activator = inp.make_activator("Full_Press")
+    inp = group0.add_input("button_y")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button Y")
 
-    group1 = mapping.make_group(1, "dpad")
-    inp = group1.make_input("dpad_north")
-    activator = inp.make_activator("Full_Press")
+    group1 = mapping.add_group(1, "dpad")
+    inp = group1.add_input("dpad_north")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding('xinput_button dpad_up')
-    inp = group1.make_input("dpad_south")
-    activator = inp.make_activator("Full_Press")
+    inp = group1.add_input("dpad_south")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding('xinput_button dpad_down')
-    inp = group1.make_input("dpad_east")
-    activator = inp.make_activator("Full_Press")
+    inp = group1.add_input("dpad_east")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding('xinput_button dpad_right')
-    inp = group1.make_input("dpad_west")
-    activator = inp.make_activator("Full_Press")
+    inp = group1.add_input("dpad_west")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding('xinput_button dpad_left')
     group1.settings['deadzone'] = 5000
 
-    group2 = mapping.make_group(2, "joystick_camera")
-    inp = group2.make_input("click")
-    activator = inp.make_activator("Full_Press")
+    group2 = mapping.add_group(2, "joystick_camera")
+    inp = group2.add_input("click")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button JOYSTICK_RIGHT")
     activator.settings['haptic_intensity'] = 1
 
-    group3 = mapping.make_group(3, "joystick_move")
-    inp = group3.make_input("click")
-    activator = inp.make_activator("Full_Press")
+    group3 = mapping.add_group(3, "joystick_move")
+    inp = group3.add_input("click")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button JOYSTICK_LEFT")
     activator.settings['haptic_intensity'] = 2
 
-    group4 = mapping.make_group(4, "trigger")
-    inp = group4.make_input("click")
-    activator = inp.make_activator("Full_Press")
+    group4 = mapping.add_group(4, "trigger")
+    inp = group4.add_input("click")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button TRIGGER_LEFT")
     activator.settings['haptic_intensity'] = 2
     group4.settings['output_trigger'] = 1
 
-    group5 = mapping.make_group(5, "trigger")
-    inp = group5.make_input("click")
-    activator = inp.make_activator("Full_Press")
+    group5 = mapping.add_group(5, "trigger")
+    inp = group5.add_input("click")
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button TRIGGER_RIGHT")
     activator.settings['haptic_intensity'] = 2
     group5.settings['output_trigger'] = 2
 
-    group6 = mapping.make_group(6, "switches")
-    inp = group6.make_input('button_escape')
-    activator = inp.make_activator("Full_Press")
+    group6 = mapping.add_group(6, "switches")
+    inp = group6.add_input('button_escape')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button start")
-    inp = group6.make_input('button_menu')
-    activator = inp.make_activator("Full_Press")
+    inp = group6.add_input('button_menu')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button select")
-    inp = group6.make_input('left_bumper')
-    activator = inp.make_activator("Full_Press")
+    inp = group6.add_input('left_bumper')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button shoulder_left")
-    inp = group6.make_input('right_bumper')
-    activator = inp.make_activator("Full_Press")
+    inp = group6.add_input('right_bumper')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button shoulder_right")
-    inp = group6.make_input('button_back_left')
-    activator = inp.make_activator("Full_Press")
+    inp = group6.add_input('button_back_left')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button a")
-    inp = group6.make_input('button_back_right')
-    activator = inp.make_activator("Full_Press")
+    inp = group6.add_input('button_back_right')
+    activator = inp.add_activator("Full_Press")
     activator.add_binding("xinput_button x")
 
-    preset0 = mapping.make_preset(0, "Default")
+    preset0 = mapping.add_preset(0, "Default")
     preset0.add_gsb(6, 'switch', True, False)
     preset0.add_gsb(0, 'button_diamond', True, False)
     preset0.add_gsb(1, 'left_trackpad', True, False)
@@ -499,7 +501,7 @@ class TestScconfigEncoding (unittest.TestCase):
     kv.update(PRESET_DEFAULTS1)
     config = scconfig.ControllerConfigFactory.make_from_dict(kv)
 
-    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc", "out2'.txt")
+    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc", "out2.txt")
 
   def test_loading1 (self):
     f = open("../examples/com³-wip3_0.vdf", "rt")

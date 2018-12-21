@@ -947,12 +947,18 @@ Contains:
     self.activators = []
     if py_activators:
       # expect list of pyobject
-      self.activators.extend(py_activators)
+      for a in py_activators:
+        self.add_activator(a)
     elif 'activators' in kwargs:
       for (act_signal, act_kv) in kwargs['activators'].items():
-        self.make_activator(act_signal, **act_kv)
+        self.add_activator(act_signal, **act_kv)
   def make_activator (self, activator_signal, **kwargs):
-    activator = Activator(activator_signal, **kwargs)
+    return Activator(activator_signal, **kwargs)
+  def add_activator (self, first, **kwargs):
+    if isinstance(first, ActivatorBase):
+      activator = first
+    else:
+      activator = self.make_activator(first, **kwargs)
     self.activators.append(activator)
     return activator
   def _toVDF (self, maptype=scvdf.SCVDFDict):
@@ -1220,7 +1226,7 @@ class GroupBase (object):
     elif VSC_INPUTS in kwargs:
       # expect dict within ControllerConfig
       for (inp_name, inp_kv) in kwargs[VSC_INPUTS].items():
-        self.make_input(inp_name, **inp_kv)
+        self.add_input(self.make_input(inp_name, **inp_kv))
 
     if VSC_SETTINGS in kwargs:
       # Expect dictionary of pure scalars.  This might break in future?
@@ -1229,7 +1235,17 @@ class GroupBase (object):
   def make_input (self, input_element, py_activators=None, **kwargs):
     '''Factory for 'input' node.'''
     inp = ControllerInput(input_element, py_activators=py_activators, **kwargs)
-    self.inputs[input_element] = inp
+    return inp
+
+  def add_input (self, first, py_activators=None, **kwargs):
+    """Attach an Input instance."""
+    if isinstance(first, ControllerInput):
+      inp = first
+      inp_name = first.ideal_input
+    else:
+      inp = self.make_input(first, py_activators, **kwargs)
+      inp_name = first
+    self.inputs[inp_name] = inp
     return inp
 
   def _toVDF (self, maptype=scvdf.SCVDFDict):
@@ -2213,19 +2229,19 @@ class Mapping (object):
 
     if 'actions' in kwargs:
       for obj_name, obj_kv in kwargs['actions'].items():
-        self.make_action_set(obj_name, **obj_kv)
+        self.add_action_set(obj_name, **obj_kv)
 
     if 'action_layers' in kwargs:
       for obj_name, obj_kv in kwargs['action_layers'].items():
-        self.make_action_layer(obj_name, **obj_kv)
+        self.add_action_layer(obj_name, **obj_kv)
 
     if 'group' in kwargs:
       for grp_kv in get_all(kwargs, 'group', []):
-        self.make_group(**grp_kv)
+        self.add_group(**grp_kv)
 
     if 'preset' in kwargs:
       for preset_kv in get_all(kwargs, 'preset', []):
-        self.make_preset(**preset_kv)
+        self.add_preset(**preset_kv)
 
     if VSC_SETTINGS in kwargs:
       self.settings.update(kwargs[VSC_SETTINGS])
@@ -2238,6 +2254,13 @@ class Mapping (object):
       # TODO: auto-index
       groupid = -1
     group = Group(groupid, py_mode, **kwargs)
+    return group
+
+  def add_group (self, first=None, py_mode=None, **kwargs):
+    if isinstance(first, GroupBase):
+      group = first
+    else:
+      group = self.make_group(first, py_mode, **kwargs)
     self.groups.append(group)
     return group
 
@@ -2255,18 +2278,39 @@ class Mapping (object):
         # TODO: derive from autosequence.
         py_name = py_name
     preset = Preset(presetid, py_name, **kwargs)
+    return preset
+
+  def add_preset (self, first=None, py_name=None, **kwargs):
+    if isinstance(first, Preset):
+      preset = first
+    else:
+      preset = self.make_preset(first, py_name, **kwargs)
     self.presets.append(preset)
     return preset
 
   def make_action_set (self, index=None, py_title=None, py_legacy=None, **kwargs):
     actset = ActionSet(index, py_title, py_legacy, **kwargs)
+    return actset
+
+  def add_action_set (self, first, py_title=None, py_legacy=None, **kwargs):
+    if isinstance(first, ActionSet):
+      actset = first
+    else:
+      actset = self.make_action_set(first, py_title, py_legacy, **kwargs)
     self.actions.append(actset)
     return actset
 
   def make_action_layer (self, index=None, py_title=None, py_legacy=None, py_parent=None, **kwargs):
     layer = ActionLayer(index, py_title, py_legacy, py_parent, **kwargs)
-    self.layers.append(layer)
     return layer
+
+  def add_action_layer (self, first, py_title=None, py_legacy=None, py_parent=None, **kwargs):
+    if isinstance(first, ActionLayer):
+      actset = first
+    else:
+      actset = self.make_action_layer(first, py_title, py_legacy, py_parent, **kwargs)
+    self.layers.append(actset)
+    return actset
 
   def _toVDF (self, maptype=scvdf.SCVDFDict):
     """Encode object to list of pairs (scvdf)."""
@@ -2346,10 +2390,19 @@ See ControllerConfigFactory for instantiating from a dict or SCVDFDict.
       if not isinstance(conmaps, list):
         conmaps = [ conmaps ]
       for cm_kv in conmaps:
-        self.make_mapping(**cm_kv)
+        self.add_mapping(**cm_kv)
 
   def make_mapping (self, py_version=3, **kwargs):
     mapping = Mapping(py_version, **kwargs)
+    return mapping
+  def add_mapping (self, first=None, **kwargs):
+    if isinstance(first, Mapping):
+      mapping = first
+    else:
+      if first is None:
+        mapping = self.make_mapping(**kwargs)
+      else:
+        mapping = self.make_mapping(first, **kwargs)
     self.mappings.append(mapping)
     return mapping
 
