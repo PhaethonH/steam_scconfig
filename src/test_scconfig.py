@@ -164,6 +164,35 @@ except AttributeError:
   # py2
   unittest.TestCase.assertRaisesRegex = unittest.TestCase.assertRaisesRegexp
 
+
+class TestSupportClasses (unittest.TestCase):
+  def test_restrictive_dict (self):
+    TargetDict = scconfig.RestrictiveDict
+    src = { "alpha": 1 }
+    d = TargetDict(src)
+    self.assertEqual(d, { "alpha": 1 })
+
+    d = TargetDict()
+    d['alpha'] = 1
+    d['echo'] = { "e":0, "c":1, "h":2, "o":3 }
+    self.assertEqual(d['alpha'], 1)
+    self.assertEqual(d['echo'], { "e":0, "c":1, "h":2, "o":3 })
+
+    d = TargetDict()
+    d._ALLOW = { "alpha", "bravo", "charlie" }
+    d['alpha'] = 1
+    d['bravo'] = "b"
+    d['charlie'] = [10,20,30]
+    with self.assertRaisesRegex(KeyError, "not allowed"):
+      d['delta'] = True
+
+    p = dict(list(d.items()))
+    self.assertEqual(p, { "alpha": 1, "bravo": "b", "charlie": [10,20,30] })
+
+    d['charlie'] = 30
+    p = dict(list(d.items()))
+    self.assertEqual(p, { "alpha": 1, "bravo": "b", "charlie": 30 })
+
 class TestScvdfComponents (unittest.TestCase):
   def test_binding (self):
     b = scconfig.Binding("key_press ESCAPE, Open Menu")
