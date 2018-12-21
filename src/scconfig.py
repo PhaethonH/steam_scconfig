@@ -1347,9 +1347,6 @@ class GroupAbsoluteMouse (GroupBase):
     _ALLOW = {
       CLICK, DOUBLETAP, TOUCH,
       }
-#    click = GroupBase.Inputs._alias(CLICK)
-#    doubletap = GroupBase.Inputs._alias(DOUBLETAP)
-#    touch = GroupBase.Inputs._alias(TOUCH)
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.DOUBLETAP)
   Inputs._create_alias(Inputs.TOUCH)
@@ -1408,12 +1405,12 @@ class GroupDpad (GroupBase):
       DPAD_NORTH, DPAD_SOUTH, DPAD_EAST, DPAD_WEST,
       CLICK, EDGE,
       }
-    dpad_up = GroupBase.Inputs._alias(DPAD_NORTH)
-    dpad_down = GroupBase.Inputs._alias(DPAD_SOUTH)
-    dpad_left = GroupBase.Inputs._alias(DPAD_WEST)
-    dpad_right = GroupBase.Inputs._alias(DPAD_EAST)
-    dpad_click = GroupBase.Inputs._alias(CLICK)
-    dpad_edge = GroupBase.Inputs._alias(EDGE)
+  Inputs._create_alias(Inputs.DPAD_NORTH, 'dpad_up')
+  Inputs._create_alias(Inputs.DPAD_SOUTH, 'dpad_down')
+  Inputs._create_alias(Inputs.DPAD_WEST, 'dpad_left')
+  Inputs._create_alias(Inputs.DPAD_EAST, 'dpad_right')
+  Inputs._create_alias(Inputs.CLICK, 'click')
+  Inputs._create_alias(Inputs.EDGE, 'edge')
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'dpad', index, py_inputs, py_settings, **kwargs)
@@ -1441,10 +1438,10 @@ class GroupFourButtons (GroupBase):
     _ALLOW = {
       BUTTON_A, BUTTON_B, BUTTON_X, BUTTON_Y,
       }
-    button_a = GroupBase.Inputs._alias(BUTTON_A)
-    button_b = GroupBase.Inputs._alias(BUTTON_B)
-    button_x = GroupBase.Inputs._alias(BUTTON_X)
-    button_y = GroupBase.Inputs._alias(BUTTON_Y)
+  Inputs._create_alias(Inputs.BUTTON_A)
+  Inputs._create_alias(Inputs.BUTTON_B)
+  Inputs._create_alias(Inputs.BUTTON_X)
+  Inputs._create_alias(Inputs.BUTTON_Y)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'four_buttons', index, py_inputs, py_settings, **kwargs)
@@ -1497,7 +1494,7 @@ class GroupJoystickCamera (GroupBase):
     _ALLOW = {
       CLICK,
       }
-    click = GroupBase.Inputs._alias(CLICK)
+  Inputs._create_alias(Inputs.CLICK)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'joystick_camera', index, py_inputs, py_settings, **kwargs)
@@ -1534,8 +1531,8 @@ class GroupJoystickMouse (GroupBase):
     _ALLOW = {
       CLICK, EDGE,
       }
-    click = GroupBase.Inputs._alias(CLICK)
-    edge = GroupBase.Inputs._alias(EDGE)
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.EDGE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'joystick_mouse', index, py_inputs, py_settings, **kwargs)
@@ -1605,8 +1602,8 @@ class GroupJoystickMove (GroupBase):
     _ALLOW = {
       CLICK, EDGE,
       }
-    click = GroupBase.Inputs._alias(CLICK)
-    edge = GroupBase.Inputs._alias(EDGE)
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.EDGE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'joystick_move', index, py_inputs, py_settings, **kwargs)
@@ -1671,8 +1668,8 @@ class GroupMouseJoystick (GroupBase):
     _ALLOW = {
       CLICK, EDGE,
       }
-    click = GroupBase.Inputs._alias(CLICK)
-    edge = GroupBase.Inputs._alias(EDGE)
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.EDGE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'mouse_joystick', index, py_inputs, py_settings, **kwargs)
@@ -1722,9 +1719,9 @@ class GroupMouseRegion (GroupBase):
     _ALLOW = {
       CLICK, EDGE, TOUCH,
       }
-    click = GroupBase.Inputs._alias(CLICK)
-    edge = GroupBase.Inputs._alias(EDGE)
-    touch = GroupBase.Inputs._alias(TOUCH)
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.EDGE)
+  Inputs._create_alias(Inputs.TOUCH)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'mouse_region', index, py_inputs, py_settings, **kwargs)
@@ -1754,11 +1751,10 @@ class GroupRadialMenu (GroupBase):
     CLICK = "click"
     _ALLOW = set( [CLICK] + [
       "touch_menu_button_%d" % d for d in range(0,N_BUTTONS+1) ] )
-    click = GroupBase.Inputs._alias(CLICK)
+  Inputs._create_alias(Inputs.CLICK)
   for d in range(0, Inputs.N_BUTTONS):
     symbol = "touch_menu_button_%d" % d
-    property_ = GroupBase.Inputs._alias(symbol)
-    setattr(Inputs, symbol, property_)
+    Inputs._create_alias(symbol)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'radial_menu', index, py_inputs, py_settings, **kwargs)
@@ -1796,9 +1792,9 @@ class GroupScrollwheel (GroupBase):
     _ALLOW = {
       CLICK, SCROLL_CLOCKWISE, SCROLL_COUNTERCLOCKWISE
       }
-    click = GroupBase.Inputs._alias(CLICK)
-    scroll_clockwise = GroupBase.Inputs._alias(SCROLL_CLOCKWISE)
-    scroll_counterclockwise = GroupBase.Inputs._alias(SCROLL_COUNTERCLOCKWISE)
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.SCROLL_CLOCKWISE)
+  Inputs._create_alias(Inputs.SCROLL_COUNTERCLOCKWISE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'scrollwheel', index, py_inputs, py_settings, **kwargs)
@@ -1865,8 +1861,7 @@ class GroupTouchMenu (GroupBase):
     _ALLOW = set([ "touch_menu_button_%d" % d for d in range(0, N_BUTTONS+1)])
   for d in range(0, Inputs.N_BUTTONS+1):
     symbol = "touch_menu_button_%d"
-    property_ = GroupBase.Inputs._alias(symbol)
-    setattr(Inputs, symbol, property_)
+    Inputs._create_alias(symbol)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'touch_menu', index, py_inputs, py_settings, **kwargs)
@@ -1908,8 +1903,8 @@ class GroupTrigger (GroupBase):
     _ALLOW = {
       CLICK, EDGE,
       }
-    click = GroupBase.Inputs._alias(CLICK)
-    edge = GroupBase.Inputs._alias(EDGE)
+  Inputs._create_alias(Inputs.CLICK)
+  Inputs._create_alias(Inputs.EDGE)
 
   def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     GroupBase.__init__(self, 'trigger', index, py_inputs, py_settings, **kwargs)
