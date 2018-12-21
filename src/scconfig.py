@@ -27,6 +27,10 @@ else:
 # Helper functions #
 ####################
 
+def _stringlike (x):
+  try: return callable(x.isalpha)
+  except AttributeError: return False
+
 
 # Helper function for iterating SCVDFDict values -- helps simplify iteration as: for x in get_all(dictMultivalueInstance)
 def get_all (container, key, default_value):
@@ -42,7 +46,7 @@ def get_all (container, key, default_value):
 
 # Helper class for commonly recurring 'settings' field, which is all-scalar.
 class EncodableDict (OrderedDict):
-  """Extends SCVDFDict to support .encode_kv()"""
+  """Extends OrderedDic to store .index"""
   def __init__ (self, index=None, copyfrom=None):
     if isinstance(index,dict):  # implies copyfrom currently None.
       copyfrom, index = index, None
@@ -51,15 +55,46 @@ class EncodableDict (OrderedDict):
     else:
       OrderedDict.__init__(self)
     self.index = VSC_SETTINGS if (index is None) else None
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
-    for k, v in self.items():
-      try:
-        kv[k] = v.encode_kv()     # recursively encode.
-      except AttributeError as e:
-        if isinstance(v, bool): v = int(v)    # cast bool to int.
-        kv[k] = str(v)
-    return kv
+
+
+# Convert to SCVDF from Steam Controller Config object.
+def toVDF (sccobj, maptype=scvdf.SCVDFDict):
+  # First, try delegate.
+  try:
+    sccobj._toVDF
+  except AttributeError as e:
+    pass    # else fall-through to other attempts.
+  else:
+    if callable(sccobj._toVDF):
+      return sccobj._toVDF(maptype)
+
+  # special cases.
+  if _stringlike(sccobj):
+    return sccobj           # strings returned as-is.
+  if isinstance(sccobj,bool):
+    return str(int(sccobj)) # boolean to int (in turn, to str)
+
+  # attempt dict sense.
+  try:
+    sccobj.items
+  except AttributeError as e:
+    pass    # fall-through to other attempts.
+  else:
+    d = maptype()
+    for k,v in sccobj.items():
+      d[k] = toVDF(v, maptype)    # recursively convert.
+    return d
+
+  # attempt list sense.
+  try:
+    iter(sccobj)
+  except (AttributeError, TypeError) as e:
+    pass    # fall-through to other attempts.
+  else:
+    return [ toDict(x, maptype) for x in sccobj ]
+
+  # last resort.
+  return str(sccobj)
 
 
 def filter_enum (enum_mapping, initval):
@@ -91,10 +126,6 @@ def mangle_vdfliteral (s):
   retval = s.replace('"', "'").replace("//", "/").replace(",", ";")
   return retval
 
-
-def _stringlike (x):
-  try: return callable(x.isalpha)
-  except AttributeError: return False
 
 
 # VSC config keywords.
@@ -175,11 +206,11 @@ class SettingsBase (OrderedDict):
                     SettingsBase._settings_setter(settings_key),
                     SettingsBase._settings_deleter(settings_key))
 
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     for k, v in self.items():
       try:
-        kv[k] = v.encode_kv()     # recursively encode.
+        kv[k] = toVDF(v, maptype)   # recursively encode.
       except AttributeError as e:
         if isinstance(v, bool): v = int(v)    # cast bool to int.
         kv[k] = str(v)
@@ -621,14 +652,14 @@ Nested attributes:
     if binding:
       self.bindings.append(binding)
 
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     kv_bindings = scvdf.SCVDFDict()
     for binding in self.bindings:
       kv_bindings['binding'] = str(binding)
     kv['bindings'] = kv_bindings
     if self.settings:
-      kv[VSC_SETTINGS] = self.settings.encode_kv()
+      kv[VSC_SETTINGS] = toVDF(self.settings, maptype)
     return kv
 
 class ActivatorFullPress (ActivatorBase):
@@ -869,24 +900,13 @@ Contains:
     activator = Activator(activator_signal, **kwargs)
     self.activators.append(activator)
     return activator
-  def encode_pair (self):
-    lop = []
-    kv_activators = []
-    if self.activators:
-      for activator in self.activators:
-        kv_activators.append( activator.encode_pair() )
-    lop.append( ('activators', kv_activators) )
-
-    whole = ( self.ideal_input, lop )
-    return whole
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     kv_activators = scvdf.SCVDFDict()
     if self.activators:
       for activator in self.activators:
-        #kv_activators.append( activator.encode_pair() )
         signal = activator.signal
-        kv_activators[signal] = activator.encode_kv()
+        kv_activators[signal] = toVDF(activator, maptype)
     kv['activators'] = kv_activators
     return kv
 
@@ -1180,14 +1200,14 @@ class GroupBase (object):
     self.inputs[input_element] = inp
     return inp
 
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     kv['id'] = str(self.index)
     kv['mode'] = str(self.mode)
     # Always generate ['inputs']
-    kv[VSC_INPUTS] = self.inputs.encode_kv()
+    kv[VSC_INPUTS] = toVDF(self.inputs, maptype)
     if self.settings:
-      kv[VSC_SETTINGS] = self.settings.encode_kv()
+      kv[VSC_SETTINGS] = toVDF(self.settings, maptype)
     return kv
 
 
@@ -1975,8 +1995,8 @@ The native actions bypass the entire notion of physical devices (keyboard, mouse
     self.legacy = py_legacy
     self.parent_set_name = py_parent
 
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     kv['title'] = str(self.title)
     kv['legacy_set'] = str(int(bool(self.legacy)))
     if self.tier == 1:
@@ -2045,7 +2065,7 @@ class GroupSourceBindingValue (object):
     modeshift = (words[2] == VSC_MODESHIFT) if len(words) > 2 else False
     return (inpsrc, active, modeshift)
 
-  def encode_kv (self):
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
     words = [ self.groupsrc ]
     words.append(VSC_ACTIVE if self.active else VSC_INACTIVE)
     words.append(VSC_MODESHIFT) if self.modeshift else None
@@ -2075,27 +2095,14 @@ class Preset (object):
     gsbv = GroupSourceBindingValue(groupsrc, active, modeshift)
     self.gsb[str(groupid)] = gsbv
 
-  def encode_pair (self):
-    lop = []
-    lop.append( ('id', str(self.index)) )
-    lop.append( ('name', str(self.name)) )
-
-    kv_gsb = []
-    for elt in self.gsb:
-      kv_gsb.append(elt.encode_pair())
-    lop.append( ('group_source_bindings', kv_gsb) )
-
-    whole = ('preset', lop)
-    return whole
-
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     kv['id'] = str(self.index)
     kv['name'] = str(self.name)
 
-    kv_gsb = scvdf.SCVDFDict()
+    kv_gsb = maptype()
     for k,v in self.gsb.items():
-      kv_gsb[str(k)] = v.encode_kv()
+      kv_gsb[str(k)] = toVDF(v, maptype)
     kv['group_source_bindings'] = kv_gsb
 
     return kv
@@ -2222,7 +2229,6 @@ class Mapping (object):
     self.presets.append(preset)
     return preset
 
-
   def make_action_set (self, index=None, py_title=None, py_legacy=None, **kwargs):
     actset = ActionSet(index, py_title, py_legacy, **kwargs)
     self.actions.append(actset)
@@ -2233,38 +2239,9 @@ class Mapping (object):
     self.layers.append(layer)
     return layer
 
-  def encode_pair (self):
-    lop = []
-    lop.append( ('version', str(self.version)) )
-    lop.append( ('revision', str(self.revision)) )
-    lop.append( ('title', str(self.title)) )
-    lop.append( ('description', str(self.description)) )
-    lop.append( ('creator', str(self.creator)) )
-    lop.append( ('controller_type', str(self.controller_type)) )
-    lop.append( ('Timestamp', str(self.timestamp)) )
-
-    for grp in self.groups:
-      lop.append( grp.encode_pair() )
-    for preset in self.presets:
-      lop.append( preset.encode_pair() )
-    if self.settings:
-      lop.append( self.settings.encode_pair() )
-
-    whole = ('controller_mappings', lop)
-    return whole
-
-  def _encode_overlays (self, overlay_store, gensym=0):
-    """Helper function to encode the overlays: Action Set, Action Layer."""
-    kv = scvdf.SCVDFDict()
-    for obj in overlay_store:
-      pair_name = obj.index
-      pair_val = obj.encode_kv()
-      kv[pair_name] = pair_val
-    return kv
-
-  def encode_kv (self):
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
     """Encode object to list of pairs (scvdf)."""
-    kv = scvdf.SCVDFDict()
+    kv = maptype()
     kv['version'] = str(self.version)
     kv['revision'] = str(self.revision)
     kv['title'] = str(self.title)
@@ -2272,6 +2249,14 @@ class Mapping (object):
     kv['creator'] = str(self.creator)
     kv['controller_type'] = str(self.controller_type)
     kv['Timestamp'] = str(self.timestamp)
+
+    self._gensym = 0
+    def _encode_overlays (overlay_store):
+      """Helper function to encode the overlays: Action Set, Action Layer."""
+      kv = maptype()
+      for obj in overlay_store:
+        kv[obj.index] = toVDF(obj, maptype)
+      return kv
 
     # Alright, this gets weird.
 ## 'internal' refers to internal to Steam Client and therefore not available for direct inspection;
@@ -2298,19 +2283,19 @@ class Mapping (object):
 #  * 'actions', 'action_layers': The overlays are in no particular order (as per nature of mapping type), but may be iterated in the proper sequence by sorting their names.
 
     if self.actions:
-      kv['actions'] = self._encode_overlays(self.actions)
+      kv['actions'] = _encode_overlays(self.actions)
 
     if self.layers:
-      kv['action_layers'] = self._encode_overlays(self.layers)
+      kv['action_layers'] = _encode_overlays(self.layers)
 
     for grp in self.groups:
-      kv['group'] = grp.encode_kv()
+      kv['group'] = toVDF(grp, maptype)
 
     for preset in self.presets:
-      kv['preset'] = preset.encode_kv()
+      kv['preset'] = toVDF(preset, maptype)
 
     if self.settings:
-      kv[VSC_SETTINGS] = self.settings.encode_kv()
+      kv[VSC_SETTINGS] = toVDF(self.settings, maptype)
     else:
       kv[VSC_SETTINGS] = {}
 
@@ -2339,15 +2324,10 @@ See ControllerConfigFactory for instantiating from a dict or SCVDFDict.
     self.mappings.append(mapping)
     return mapping
 
-  def encode_pair  (self):
-    lop = []
+  def _toVDF (self, maptype=scvdf.SCVDFDict):
+    kv = maptype()
     for m in self.mappings:
-      lop.append( m.encode_pair() )
-    return lop
-  def encode_kv (self):
-    kv = scvdf.SCVDFDict()
-    for m in self.mappings:
-      kv['controller_mappings'] = m.encode_kv()
+      kv['controller_mappings'] = toVDF(m, maptype)
     return kv
 
 

@@ -237,7 +237,7 @@ class TestScvdfComponents (unittest.TestCase):
       g.settings.deadzone = 99999
     self.assertEqual(g.settings.deadzone, 32000)
 
-    kv = g.settings.encode_kv()
+    kv = scconfig.toVDF(g.settings)
     self.assertEqual(kv, { "requires_click": "0", "layout": "1", "deadzone": "32000" })
 
     s = g.settings
@@ -278,7 +278,7 @@ class TestScvdfComponents (unittest.TestCase):
     with self.assertRaisesRegex(ValueError, 'Value.*constraint.*[0-9]'):
       a.settings.repeat_rate = False
 
-    d = a.encode_kv()
+    d = scconfig.toVDF(a)
     self.assertEqual(d, {
       "bindings": {},
       "settings": {
@@ -289,14 +289,16 @@ class TestScvdfComponents (unittest.TestCase):
 
 
 class TestScconfigEncoding (unittest.TestCase):
+  WRITE_FILES = False
+
   def hash_and_dump (self, configobj, cksum, f=None):
-    kvs = configobj.encode_kv()
+    kvs = scconfig.toVDF(configobj)
     fulldump_kvs = scvdf.dumps(kvs)
     #print(fulldump_kvs)
     fulldump_hashable = bytevector(fulldump_kvs)
     hasher = hashlib.new("md5")
     hasher.update(fulldump_hashable)
-    if f:
+    if self.WRITE_FILES and f:
       do_close = False
       try:
         f.write
@@ -419,14 +421,14 @@ class TestScconfigEncoding (unittest.TestCase):
 #    hasher = hashlib.new("md5")
 #    hasher.update(fulldump)
 #    self.assertEqual(hasher.hexdigest(), "99d8c4ded89ec867519792db86d3bffc")
-    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc")
+    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc", "out1.txt")
 
   def test_loading0 (self):
     kv = scvdf.SCVDFDict()
     kv.update(PRESET_DEFAULTS1)
     config = scconfig.ControllerConfigFactory.make_from_dict(kv)
 
-    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc")
+    self.hash_and_dump(config, "99d8c4ded89ec867519792db86d3bffc", "out2'.txt")
 
   def test_loading1 (self):
     f = open("../examples/com³-wip3_0.vdf", "rt")
@@ -434,7 +436,7 @@ class TestScconfigEncoding (unittest.TestCase):
     f.close()
     config = scconfig.ControllerConfigFactory.make_from_dict(pydict)
 
-    self.hash_and_dump(config, "01dc2f4e9b6c8f86e2d1678c2763540d")
+    self.hash_and_dump(config, "01dc2f4e9b6c8f86e2d1678c2763540d", "out3.txt")
 
   def test_loading2 (self):
     f = open("../examples/led_sets1_0.vdf", "rt")
@@ -442,7 +444,7 @@ class TestScconfigEncoding (unittest.TestCase):
     f.close()
     config = scconfig.ControllerConfigFactory.make_from_dict(pydict)
 
-    self.hash_and_dump(config, "1bd70090976c6d218cf6273ba3e26a12")
+    self.hash_and_dump(config, "1bd70090976c6d218cf6273ba3e26a12", "out4.txt")
 
 
 if __name__ == "__main__":
