@@ -759,14 +759,6 @@ class ActivatorFullPress (ActivatorBase):
     cycle = SettingsBase._new_setting(S.CYCLE)
     hold_repeats = SettingsBase._new_setting(S.HOLD_REPEATS)
     repeat_rate = SettingsBase._new_setting(S.REPEAT_RATE)
-#  Settings._create_alias(Settings.S.TOGGLE)
-#  Settings._create_alias(Settings.S.INTERRUPTIBLE, "interruptible")
-#  Settings._create_alias(Settings.S.DELAY_START)
-#  Settings._create_alias(Settings.S.DELAY_END)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.CYCLE)
-#  Settings._create_alias(Settings.S.HOLD_REPEATS)
-#  Settings._create_alias(Settings.S.REPEAT_RATE)
 
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
@@ -796,15 +788,6 @@ class ActivatorDoublePress (ActivatorBase):
     cycle = SettingsBase._alias(S.CYCLE)
     hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
     repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
-#  Settings._create_alias(Settings.S.DOUBLE_TAP_TIME)
-#  Settings._create_alias(Settings.S.TOGGLE)
-#  Settings._create_alias(Settings.S.INTERRUPTIBLE)
-#  Settings._create_alias(Settings.S.DELAY_START)
-#  Settings._create_alias(Settings.S.DELAY_END)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.CYCLE)
-#  Settings._create_alias(Settings.S.HOLD_REPEATS)
-#  Settings._create_alias(Settings.S.REPEAT_RATE)
 
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
@@ -834,15 +817,6 @@ class ActivatorLongPress (ActivatorBase):
     cycle = SettingsBase._alias(S.CYCLE)
     hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
     repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
-#  Settings._create_alias(Settings.S.LONG_PRESS_TIME)
-#  Settings._create_alias(Settings.S.TOGGLE)
-#  Settings._create_alias(Settings.S.INTERRUPTIBLE)
-#  Settings._create_alias(Settings.S.DELAY_START)
-#  Settings._create_alias(Settings.S.DELAY_END)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.CYCLE)
-#  Settings._create_alias(Settings.S.HOLD_REPEATS)
-#  Settings._create_alias(Settings.S.REPEAT_RATE)
 
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
@@ -864,11 +838,6 @@ class ActivatorStartPress (ActivatorBase):
     delay_end = SettingsBase._alias(S.DELAY_END)
     haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
     cycle = SettingsBase._alias(S.CYCLE)
-#  Settings._create_alias(Settings.S.TOGGLE)
-#  Settings._create_alias(Settings.S.DELAY_START)
-#  Settings._create_alias(Settings.S.DELAY_END)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.CYCLE)
 
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
@@ -891,12 +860,6 @@ class ActivatorRelease (ActivatorBase):
     delay_end = SettingsBase._alias(S.DELAY_END)
     haptic_intensity = SettingsBase._alias(S.HAPTIC_INTENSITY)
     cycle = SettingsBase._alias(S.CYCLE)
-#  Settings._create_alias(Settings.S.TOGGLE)
-#  Settings._create_alias(Settings.S.INTERRUPTIBLE)
-#  Settings._create_alias(Settings.S.DELAY_START)
-#  Settings._create_alias(Settings.S.DELAY_END)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.CYCLE)
 
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
@@ -947,15 +910,6 @@ class ActivatorChord (ActivatorBase):
     cycle = SettingsBase._alias(S.CYCLE)
     hold_repeats = SettingsBase._alias(S.HOLD_REPEATS)
     repeat_rate = SettingsBase._alias(S.REPEAT_RATE)
-#  Settings._create_alias(Settings.S.CHORD_BUTTON)
-#  Settings._create_alias(Settings.S.TOGGLE)
-#  Settings._create_alias(Settings.S.INTERRUPTIBLE)
-#  Settings._create_alias(Settings.S.DELAY_START)
-#  Settings._create_alias(Settings.S.DELAY_END)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.CYCLE)
-#  Settings._create_alias(Settings.S.HOLD_REPEATS)
-#  Settings._create_alias(Settings.S.REPEAT_RATE)
 
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     ActivatorBase.__init__(self, py_bindings, py_settings, **kwargs)
@@ -1385,28 +1339,6 @@ class GroupAbsoluteMouse (GroupBase):
     gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
     gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
     deadzone_outer_radius = SettingsBase._alias(S.DEADZONE_OUTER_RADIUS)
-#  Settings._create_alias(Settings.S.SENSITIVITY)
-#  Settings._create_alias(Settings.S.TRACKBALL)
-#  Settings._create_alias(Settings.S.DOUBLETAP_BEEP)
-#  Settings._create_alias(Settings.S.INVERT_X)
-#  Settings._create_alias(Settings.S.INVERT_Y)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.ROTATION)
-#  Settings._create_alias(Settings.S.FRICTION)
-#  Settings._create_alias(Settings.S.FRICTION_VERT_SCALE)
-#  Settings._create_alias(Settings.S.SENSITIVITY_VERT_SCALE)
-#  Settings._create_alias(Settings.S.ACCELERATION)
-#  Settings._create_alias(Settings.S.MOUSE_MOVE_THRESHOLD)
-#  Settings._create_alias(Settings.S.MOUSE_SMOOTHING)
-#  Settings._create_alias(Settings.S.EDGE_SPIN_VELOCITY)
-#  Settings._create_alias(Settings.S.EDGE_SPIN_RADIUS)
-#  Settings._create_alias(Settings.S.DOUBLETAP_MAX_DURATION, "doubletap_max_duration")
-#  Settings._create_alias(Settings.S.MOUSE_DAMPENING_TRIGGER)
-#  Settings._create_alias(Settings.S.MOUSE_TRIGGER_CLAMP_AMOUNT)
-#  Settings._create_alias(Settings.S.GYRO_AXIS)
-#  Settings._create_alias(Settings.S.GYRO_BUTTON)
-#  Settings._create_alias(Settings.S.GYRO_BUTTON_INVERT)
-#  Settings._create_alias(Settings.S.DEADZONE_OUTER_RADIUS)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1463,17 +1395,6 @@ class GroupDpad (GroupBase):
     gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
     gyro_neutral = SettingsBase._alias(S.GYRO_NEUTRAL)
     haptic_intensity_override = SettingsBase._alias(S.HAPTIC_INTENSITY_OVERRIDE)
-#  Settings._create_alias(Settings.S.REQUIRES_CLICK)
-#  Settings._create_alias(Settings.S.LAYOUT)
-#  Settings._create_alias(Settings.S.DEADZONE)
-#  Settings._create_alias(Settings.S.EDGE_BINDING_RADIUS)
-#  Settings._create_alias(Settings.S.EDGE_BINDING_INVERT)
-#  Settings._create_alias(Settings.S.ANALOG_EMULATION_PERIOD)
-#  Settings._create_alias(Settings.S.OVERLAP_REGION)
-#  Settings._create_alias(Settings.S.GYRO_BUTTON_INVERT)
-#  Settings._create_alias(Settings.S.GYRO_BUTTON)
-#  Settings._create_alias(Settings.S.GYRO_NEUTRAL)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY_OVERRIDE)
 
   # Collection of inputs.
   class Inputs (GroupBase.Inputs):
@@ -1511,11 +1432,6 @@ class GroupFourButtons (GroupBase):
     button_dist = SettingsBase._alias(S.BUTTON_DIST)
     # alias
     button_distance = button_dist
-#  Settings._create_alias(Settings.S.REQUIRES_CLICK)
-#  Settings._create_alias(Settings.S.BUTTON_SIZE)
-#  Settings._create_alias(Settings.S.BUTTON_DIST)
-#    # alias
-#  Settings._create_alias(Settings.S.BUTTON_DIST, "button_distance")
 
   class Inputs (GroupBase.Inputs):
     BUTTON_A = "button_a"
@@ -1575,19 +1491,6 @@ class GroupJoystickCamera (GroupBase):
     sensitivity = SettingsBase._alias(S.SENSITIVITY)
     gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
     gyro_neutral = SettingsBase._alias(S.GYRO_NEUTRAL)
-#  Settings._create_alias(Settings.S.CURVE_EXPONENT)
-#  Settings._create_alias(Settings.S.SWIPE_DURATION)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.OUTPUT_JOYSTICK)
-#  Settings._create_alias(Settings.S.SENSITIVITY_VERT_SCALE)
-#  Settings._create_alias(Settings.S.ANTI_DEADZONE)
-#  Settings._create_alias(Settings.S.ANTI_DEADZONE_BUFFER)
-#  Settings._create_alias(Settings.S.INVERT_X)
-#  Settings._create_alias(Settings.S.INVERT_Y)
-#  Settings._create_alias(Settings.S.JOYSTICK_SMOOTHING)
-#  Settings._create_alias(Settings.S.SENSITIVITY)
-#  Settings._create_alias(Settings.S.GYRO_BUTTON)
-#  Settings._create_alias(Settings.S.GYRO_NEUTRAL)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1624,13 +1527,6 @@ class GroupJoystickMouse (GroupBase):
     anti_deadzone = SettingsBase._alias(S.ANTI_DEADZONE)
     anti_deadzone_buffer = SettingsBase._alias(S.ANTI_DEADZONE_BUFFER)
     output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
-#  Settings._create_alias(Settings.S.CURVE_EXPONENT)
-#  Settings._create_alias(Settings.S.CUSTOM_CURVE_EXPONENT)
-#  Settings._create_alias(Settings.S.EDGE_BINDING_RADIUS)
-#  Settings._create_alias(Settings.S.EDGE_BINDING_INVERT)
-#  Settings._create_alias(Settings.S.ANTI_DEADZONE)
-#  Settings._create_alias(Settings.S.ANTI_DEADZONE_BUFFER)
-#  Settings._create_alias(Settings.S.OUTPUT_JOYSTICK)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1702,27 +1598,6 @@ class GroupJoystickMove (GroupBase):
     gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
     gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
     gyro_lock_extents = SettingsBase._alias(S.GYRO_LOCK_EXTENTS)
-#  Settings._create_alias(Settings.S.CURVE_EXPONENT)
-#  Settings._create_alias(Settings.S.CUSTOM_CURVE_EXPONENT)
-#  Settings._create_alias(Settings.S.EDGE_BINDING_RADIUS)
-#  Settings._create_alias(Settings.S.EDGE_BINDING_INVERT)
-#  Settings._create_alias(Settings.S.OUTPUT_JOYSTICK)
-#  Settings._create_alias(Settings.S.ANTI_DEADZONE)
-#  Settings._create_alias(Settings.S.ANTI_DEADZONE_BUFFER)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.DEADZONE_INNER_RADIUS)
-#  Settings._create_alias(Settings.S.DEADZONE_OUTER_RADIUS)
-#  Settings._create_alias(Settings.S.OUTPUT_AXIS)
-#  Settings._create_alias(Settings.S.GYRO_LOCK_EXTENTS)
-#  Settings._create_alias(Settings.S.INVERT_X)
-#  Settings._create_alias(Settings.S.INVERT_Y)
-#  Settings._create_alias(Settings.S.SENSITIVITY)
-#  Settings._create_alias(Settings.S.SENSITIVITY_VERT_SCALE)
-#  Settings._create_alias(Settings.S.SENSITIVITY_HORIZ_SCALE)
-#  Settings._create_alias(Settings.S.GYRO_NEUTRAL)
-#  Settings._create_alias(Settings.S.GYRO_BUTTON)
-#  Settings._create_alias(Settings.S.GYRO_BUTTON_INVERT)
-#  Settings._create_alias(Settings.S.GYRO_LOCK_EXTENTS)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1789,28 +1664,6 @@ class GroupMouseJoystick (GroupBase):
     gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
     gyro_axis = SettingsBase._alias(S.GYRO_AXIS)
     gyro_sensitivity_scale = SettingsBase._alias(S.GYRO_SENSITIVITY_SCALE)
-#  Settings._create_alias(Settings.S.TRACKBALL)
-#  Settings._create_alias(Settings.S.DOUBLETAP_BEEP)
-#  Settings._create_alias(Settings.S.INVERT_X)
-#  Settings._create_alias(Settings.S.INVERT_Y)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.ROTATION)
-#  Settings._create_alias(Settings.S.FRICTION)
-#  Settings._create_alias(Settings.S.SENSITIVITY_VERT_SCALE)
-#  Settings._create_alias(Settings.S.MOUSE_MOVE_THRESHOLD)
-#  Settings._create_alias(Settings.S.EDGE_SPIN_VELOCITY)
-#  Settings._create_alias(Settings.S.EDGE_SPIN_RADIUS)
-#  Settings._create_alias(Settings.S.DOUBLETAP_MAX_DURATION)
-#  Settings._create_alias(Settings.S.MOUSE_DAMPENING_TRIGGER)
-#  Settings._create_alias(Settings.S.MOUSE_TRIGGER_CLAMP_AMOUNT)
-#  Settings._create_alias(Settings.S.MOUSEJOYSTICK_DEADZONE_X)
-#  Settings._create_alias(Settings.S.MOUSEJOYSTICK_DEADZONE_Y)
-#  Settings._create_alias(Settings.S.MOUSEJOYSTICK_PRECISION)
-#  Settings._create_alias(Settings.S.CUSTOM_CURVE_EXPONENT)
-#  Settings._create_alias(Settings.S.GYRO_BUTTON)
-#  Settings._create_alias(Settings.S.GYRO_BUTTON_INVERT)
-#  Settings._create_alias(Settings.S.GYRO_AXIS)
-#  Settings._create_alias(Settings.S.GYRO_SENSITIVITY_SCALE)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1861,18 +1714,6 @@ class GroupMouseRegion (GroupBase):
     teleport_stop = SettingsBase._alias(S.TELEPORT_STOP)
     mouse_dampening_trigger = SettingsBase._alias(S.MOUSE_DAMPENING_TRIGGER)
     mouse_trigger_clamp_amount = SettingsBase._alias(S.MOUSE_TRIGGER_CLAMP_AMOUNT)
-#  Settings._create_alias(Settings.S.EDGE_BINDING_RADIUS)
-#  Settings._create_alias(Settings.S.EDGE_BINDING_INVERT)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.OUTPUT_JOYSTICK)
-#  Settings._create_alias(Settings.S.SCALE)
-#  Settings._create_alias(Settings.S.POSITION_X)
-#  Settings._create_alias(Settings.S.POSITION_Y)
-#  Settings._create_alias(Settings.S.SENSITIVITY_VERT_SCALE)
-#  Settings._create_alias(Settings.S.SENSITIVITY_HORIZ_SCALE)
-#  Settings._create_alias(Settings.S.TELEPORT_STOP)
-#  Settings._create_alias(Settings.S.MOUSE_DAMPENING_TRIGGER)
-#  Settings._create_alias(Settings.S.MOUSE_TRIGGER_CLAMP_AMOUNT)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -1907,12 +1748,6 @@ class GroupRadialMenu (GroupBase):
     touch_menu_position_y = SettingsBase._alias(S.TOUCH_MENU_POSITION_Y)
     touch_menu_scale = SettingsBase._alias(S.TOUCH_MENU_SCALE)
     touch_menu_show_labels = SettingsBase._alias(S.TOUCH_MENU_SHOW_LABELS)
-#  Settings._create_alias(Settings.S.TOUCHMENU_BUTTON_FIRE_TYPE)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_OPACITY)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_POSITION_X)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_POSITION_Y)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_SCALE)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_SHOW_LABELS)
 
   class Inputs (GroupBase.Inputs):
     N_BUTTONS = 20
@@ -1953,12 +1788,6 @@ class GroupScrollwheel (GroupBase):
     scroll_invert = SettingsBase._alias(S.SCROLL_INVERT)
     scroll_wrap = SettingsBase._alias(S.SCROLL_WRAP)
     scroll_friction = SettingsBase._alias(S.SCROLL_FRICTION)
-#  Settings._create_alias(Settings.S.SCROLL_ANGLE)
-#  Settings._create_alias(Settings.S.HAPTIC_INTENSITY)
-#  Settings._create_alias(Settings.S.SCROLL_TYPE)
-#  Settings._create_alias(Settings.S.SCROLL_INVERT)
-#  Settings._create_alias(Settings.S.SCROLL_WRAP)
-#  Settings._create_alias(Settings.S.SCROLL_FRICTION)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
@@ -2030,13 +1859,6 @@ class GroupTouchMenu (GroupBase):
     touch_menu_scale = SettingsBase._alias(S.TOUCH_MENU_SCALE)
     touch_menu_show_labels = SettingsBase._alias(S.TOUCH_MENU_SHOW_LABELS)
     touchmenu_button_fire_type = SettingsBase._alias(S.TOUCHMENU_BUTTON_FIRE_TYPE)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_BUTTON_COUNT)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_OPACITY)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_POSITION_X)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_POSITION_Y)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_SCALE)
-#  Settings._create_alias(Settings.S.TOUCH_MENU_SHOW_LABELS)
-#  Settings._create_alias(Settings.S.TOUCHMENU_BUTTON_FIRE_TYPE)
 
   class Inputs (GroupBase.Inputs):
     N_BUTTONS = 16
@@ -2079,13 +1901,6 @@ class GroupTrigger (GroupBase):
     adaptive_threshold = SettingsBase._alias(S.ADAPTIVE_THRESHOLD)
     curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
     custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
-#  Settings._create_alias(Settings.S.OUTPUT_TRIGGER)
-#  Settings._create_alias(Settings.S.DEADZONE_OUTER_RADIUS)
-#  Settings._create_alias(Settings.S.DEADZONE_INNER_RADIUS)
-#  Settings._create_alias(Settings.S.EDGE_BINDING_RADIUS)
-#  Settings._create_alias(Settings.S.ADAPTIVE_THRESHOLD)
-#  Settings._create_alias(Settings.S.CURVE_EXPONENT)
-#  Settings._create_alias(Settings.S.CUSTOM_CURVE_EXPONENT)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
