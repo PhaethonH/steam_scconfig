@@ -519,6 +519,14 @@ class TestScconfigEncoding (unittest.TestCase):
 
     self.hash_and_dump(config, "1bd70090976c6d218cf6273ba3e26a12", "out4.txt")
 
+  def test_loading3 (self):
+    f = open("../examples/team fortress 2 defaults_0.vdf", "rt")
+    pydict = scvdf.load(f, scvdf.SCVDFDict)
+    f.close()
+    config = scconfig.ControllerConfigFactory.make_from_dict(pydict)
+
+    self.hash_and_dump(config, "a324245c4ef0629027646297cf4f93a7", "out5.txt")
+
 
 if __name__ == "__main__":
   unittest.main()
