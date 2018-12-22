@@ -22,6 +22,29 @@ else:
   class PseudoNamespace (types.SimpleNamespace):
     _nsdict = property(lambda self: self.__dict__)
 
+r"""
+General compositional hierarchy of Scconfig:
+
+Mapping: # top-level object, "controller-mapping"
+  Settings      # controller-level settings (4)
+  Localization  # collection of Localization
+  ActionSet:    # collection of ActionSet
+  ActionLayer   # collection of ActionLayer
+  Group:        # collection of Group
+    ControllerInput:
+      Activator:
+        .bindings     # collection of Binding
+          Binding:
+            Evgen
+            IconInfo
+        Settings  # activator-level settings.
+    Settings    # group-level settingss.
+  Preset:
+    gsb:        # collection of GroupSourceBinding
+      GroupSourceBindingValue
+
+"""
+
 
 ####################
 # Helper functions #
@@ -55,10 +78,16 @@ class RestrictedDictMixin (object):
           self._ALLOW.add(k)
     super(RestrictedDictMixin,self).__init__(copyfrom)
   def __setitem__ (self, k, v):
+    lookup_key = k
     if self._ALLOW != True:
-      if (not self._ALLOW) or (not k in self._ALLOW):
-        raise KeyError("Key not allowed: {}".format(k))
-    super(RestrictedDictMixin,self).__setitem__(k,v)
+      if (not self._ALLOW) or (not lookup_key in self._ALLOW):
+        try:
+          lookup_key = k.lower()
+        except Exception:
+          pass
+      if (not self._ALLOW) or (not lookup_key in self._ALLOW):
+        raise KeyError("Key not allowed: {!r}".format(k))
+    super(RestrictedDictMixin,self).__setitem__(lookup_key, v)
   @classmethod
   def _allow (cls, real_key):
     if cls._ALLOW != True:
@@ -1219,6 +1248,7 @@ class GroupBase (object):
     # Subclass-specific Inputs(), tailored to Group*-specific constraints.
     self.inputs = self.Inputs(py_mode)
     self.settings = self.Settings(py_settings)
+    self.gameactions = scvdf.SCVDFDict()
 
     if py_inputs:
       # Expect dictionary of key to pyobjects.
@@ -1231,6 +1261,9 @@ class GroupBase (object):
     if VSC_SETTINGS in kwargs:
       # Expect dictionary of pure scalars.  This might break in future?
       self.settings.update(kwargs[VSC_SETTINGS])
+
+    if 'gameactions' in kwargs:
+      self.gameactions = scvdf.SCVDFDict(kwargs['gameactions'])
 
   def make_input (self, input_element, py_activators=None, **kwargs):
     '''Factory for 'input' node.'''
@@ -1256,6 +1289,8 @@ class GroupBase (object):
     kv[VSC_INPUTS] = toVDF(self.inputs, maptype)
     if self.settings:
       kv[VSC_SETTINGS] = toVDF(self.settings, maptype)
+    if self.gameactions:
+      kv['gameactions'] = toVDF(self.gameactions, maptype)
     return kv
 
 
@@ -1832,7 +1867,7 @@ class GroupTouchMenu (GroupBase):
     S = GroupBase.Settings._VSC_KEYS
     _CONSTRAINTS = {
       S.TOUCH_MENU_BUTTON_COUNT: [ 2, 4, 7, 9, 12, 13, 16 ], 
-      S.TOUCH_MENU_OPACITY: bool,
+      S.TOUCH_MENU_OPACITY: int,  # TODO: find range.
       S.TOUCH_MENU_POSITION_X: (0, 100),
       S.TOUCH_MENU_POSITION_Y: (0, 100),
       S.TOUCH_MENU_SCALE: (50, 150),
@@ -2039,6 +2074,13 @@ The native actions bypass the entire notion of physical devices (keyboard, mouse
     self.tier = tier
     self.legacy = py_legacy
     self.parent_set_name = py_parent
+    self.stickpadgyro = scvdf.SCVDFDict()   # Native IGA - list of available stick/pad/gyro binds.
+    self.button = scvdf.SCVDFDict()         # Native IGA - list of available button bindings.
+
+    if 'StickPadGyro' in kwargs:
+      self.stickpadgyro = scvdf.SCVDFDict(kwargs['StickPadGyro'])
+    if 'Button' in kwargs:
+      self.button = scvdf.SCVDFDict(kwargs['Button'])
 
   def _toVDF (self, maptype=scvdf.SCVDFDict):
     kv = maptype()
@@ -2048,6 +2090,10 @@ The native actions bypass the entire notion of physical devices (keyboard, mouse
       kv['set_layer'] = "1"
     if self.parent_set_name:
       kv['parent_set_name'] = self.parent_set_name
+    if self.stickpadgyro:
+      kv['StickPadGyro'] = toVDF(self.stickpadgyro, maptype)
+    if self.button:
+      kv['Button'] = toVDF(self.button, maptype)
     return kv
 
 
@@ -2079,6 +2125,7 @@ class GroupSourceBindingValue (object):
     RIGHT_TRIGGER = 'right_trigger',
     JOYSTICK = 'joystick',
     RIGHT_JOYSTICK = 'right_joystick',
+    GYRO = 'gyro',
     )
   VALID_SOURCES = list(ValidSources.__dict__.values())
 
@@ -2216,6 +2263,8 @@ class Mapping (object):
     self.creator = py_creator
     self.controller_type = py_controller_type
     self.timestamp = py_timestamp
+    # Map of localizations
+    self.localizations = OrderedDict()
     # List of Action Sets
     self.actions = []
     # List of Action Layers
@@ -2226,6 +2275,9 @@ class Mapping (object):
     self.presets = []
     # Miscellaneous settings
     self.settings = self.Settings(py_settings)
+
+    if 'localization' in kwargs:
+      self.localizations.update(kwargs['localization'])
 
     if 'actions' in kwargs:
       for obj_name, obj_kv in kwargs['actions'].items():
@@ -2360,6 +2412,11 @@ class Mapping (object):
 
     if self.layers:
       kv['action_layers'] = _encode_overlays(self.layers)
+    else:
+      kv['action_layers'] = {}
+
+    if self.localizations:
+      kv['localization'] = toVDF(self.localizations, maptype)
 
     for grp in self.groups:
       kv['group'] = toVDF(grp, maptype)
