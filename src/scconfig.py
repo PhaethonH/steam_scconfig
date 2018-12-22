@@ -2268,7 +2268,7 @@ class Mapping (object):
     # List of Action Sets
     self.actions = []
     # List of Action Layers
-    self.layers = []
+    self.layers = None
     # List of Groups
     self.groups = []
     # List of Presets
@@ -2284,6 +2284,7 @@ class Mapping (object):
         self.add_action_set(obj_name, **obj_kv)
 
     if 'action_layers' in kwargs:
+      self.layers = []
       for obj_name, obj_kv in kwargs['action_layers'].items():
         self.add_action_layer(obj_name, **obj_kv)
 
@@ -2361,6 +2362,8 @@ class Mapping (object):
       actset = first
     else:
       actset = self.make_action_layer(first, py_title, py_legacy, py_parent, **kwargs)
+    if self.layers is None:
+      self.layers = []
     self.layers.append(actset)
     return actset
 
@@ -2410,10 +2413,11 @@ class Mapping (object):
     if self.actions:
       kv['actions'] = _encode_overlays(self.actions)
 
-    if self.layers:
-      kv['action_layers'] = _encode_overlays(self.layers)
-    else:
-      kv['action_layers'] = {}
+    if self.layers is not None:
+      if self.layers:
+        kv['action_layers'] = _encode_overlays(self.layers)
+      else:
+        kv['action_layers'] = {}
 
     if self.localizations:
       kv['localization'] = toVDF(self.localizations, maptype)
