@@ -178,6 +178,19 @@ repeat_spec: '/' INTEGER |
              'r' INTEGER
 
 """
+class Srcsym (object):
+  #srcsym_re = r"([/+-_=:&])?([LR][TBGPSJ]|GY|BQ|BK|ST)\.([neswabxyudlrcet]|[0-9][0-9])"
+  srcsym_re = r"([/+-_=:&])?([LR][TBGPSJ]|GY|BQ|BK|ST)(\.([neswabxyudlrcet]|[0-9][0-9]))?"
+  def __init__ (self):
+    pass
+
+  @staticmethod
+  def parse (s):
+    srcsymre = re.compile(Srcsym.srcsym_re)
+    matches = srcsymre.match(s)
+    print("matches", matches.groups())
+
+
 evsym_re = """([-/+_=:\&]?)""" + """(<[A-Za-z_][A-Za-z0-9_]*>|\[[A-Za-z_][A-Za-z0-9_]*\]|\([A-Za-z_][A-Za-z0-9_]*\)|{[^}]*})"""
 evsymmod_re = """([t%]|[i|]|[c^]|[s:][0-9]+|[d@][0-9]+[+,][0-9]+|[h~][0-9]*|[r/][0-9]+)"""
 
@@ -201,5 +214,7 @@ class CfgMaker (object):
 
 
 
-Evsym.parse("+(B):1000~2%^@0,200/100")
-Evsym.parse("+(B)s1000h2tcd0,200/100")
+#Evsym.parse("+(B):1000~2%^@0,200/100")
+#Evsym.parse("+(B)s1000h2tcd0,200/100")
+Srcsym.parse("BQ")
+Srcsym.parse("+BQ.d")
