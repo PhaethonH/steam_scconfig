@@ -178,43 +178,47 @@ repeat_spec: '/' INTEGER |
              'r' INTEGER
 
 """
+
 class Srcsym (object):
-  #srcsym_re = r"([/+-_=:&])?([LR][TBGPSJ]|GY|BQ|BK|ST)\.([neswabxyudlrcet]|[0-9][0-9])"
-  srcsym_re = r"([/+-_=:&])?([LR][TBGPSJ]|GY|BQ|BK|ST)(\.([neswabxyudlrcet]|[0-9][0-9]))?"
+  REGEX = r"([/+-_=:&])?([LR][TBGPSJ]|GY|BQ|BK|ST)(\.([neswabxyudlrcet]|[0-9][0-9]))?"
   def __init__ (self):
     pass
 
   @staticmethod
   def parse (s):
-    srcsymre = re.compile(Srcsym.srcsym_re)
+    srcsymre = re.compile(Srcsym.REGEX)
     matches = srcsymre.match(s)
     print("matches", matches.groups())
 
 
-evsym_re = """([-/+_=:\&]?)""" + """(<[A-Za-z_][A-Za-z0-9_]*>|\[[A-Za-z_][A-Za-z0-9_]*\]|\([A-Za-z_][A-Za-z0-9_]*\)|{[^}]*})"""
-evsymmod_re = """([t%]|[i|]|[c^]|[s:][0-9]+|[d@][0-9]+[+,][0-9]+|[h~][0-9]*|[r/][0-9]+)"""
-
 class Evsym (object):
   """Event symbol."""
+  REGEX_SIGNAL = """([-/+_=:\&]?)"""
+  REGEX_EVENT = """(<[A-Za-z_][A-Za-z0-9_]*>|\[[A-Za-z_][A-Za-z0-9_]*\]|\([A-Za-z_][A-Za-z0-9_]*\)|{[^}]*})"""
+  REGEX_FROBS = """([t%]|[i|]|[c^]|[s:][0-9]+|[d@][0-9]+[+,][0-9]+|[h~][0-9]*|[r/][0-9]+)"""
+
+  REGEX_MAIN = REGEX_SIGNAL + REGEX_EVENT + "(" + REGEX_FROBS + "*)"
+
   def __init__ (self):
     pass
 
   @staticmethod
   def parse (s):
-    evsymre = re.compile(evsym_re)
-    matches = evsymre.match(s)
-    #print("matches = {} / {}".format(matches, matches.groups()))
-    #print("rest: {}".format(s[matches.end(0):]))
-    modre = re.compile(evsymmod_re)
-    m2 = modre.findall(s[matches.end(0):])
-    print("m2", m2)
+    evsymre = re.compile(Evsym.REGEX_MAIN)
+    evsyms = evsymre.match(s)
+    print("matches = {} / {}".format(evsyms, evsyms.groups()))
+    frobre = re.compile(Evsym.REGEX_FROBS)
+    frobs = frobre.findall( evsyms.group(3) )
+    print("m2", frobs)
 
 class CfgMaker (object):
   pass
 
 
 
-#Evsym.parse("+(B):1000~2%^@0,200/100")
-#Evsym.parse("+(B)s1000h2tcd0,200/100")
-Srcsym.parse("BQ")
-Srcsym.parse("+BQ.d")
+Evsym.parse("(B)")
+Evsym.parse("+(B):1000~2%^@0,200/100")
+Evsym.parse("+(B)s1000h2tcd0,200/100")
+Evsym.parse("_(B)s1000h2tcd0,200/100")
+#Srcsym.parse("BQ")
+#Srcsym.parse("+BQ.d")
