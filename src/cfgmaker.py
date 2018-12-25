@@ -185,14 +185,21 @@ class Srcspec (object):
     pass
 
   @staticmethod
-  def parse (s):
+  def _parse (s):
     srcsymre = re.compile(Srcspec.REGEX)
     matches = srcsymre.match(s)
-    actsig = matches.group(1)
-    srcsym = matches.group(2)
-    subpart = matches.group(4)
-    return (actsig, srcsym, subpart)
+    if matches:
+      actsig = matches.group(1)
+      srcsym = matches.group(2)
+      subpart = matches.group(4)
+      return (actsig, srcsym, subpart)
+    else:
+      return None
 
+  @staticmethod
+  def parse (s):
+    actsig, srcsym, subpart = Srcspec._parse(s)
+    return Srcspec(actsig, srcsym, subpart)
 
 
 class Evsym (object):
