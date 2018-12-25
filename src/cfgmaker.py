@@ -297,7 +297,27 @@ class Evfrob (object):
 
   @staticmethod
   def parse (s):
-    pass
+    re_frobs = re.compile(Evfrob.REGEX_FROB)
+    matches = re_frobs.findall(s)
+    specific, toggle, interrupt, delay_start, delay_end, haptic, cycle, repeat = (None,)*8
+    for s in matches:
+      if s[0] in "t%":
+        toggle = True
+      if s[0] in "i^":
+        interrupt = True
+      if s[0] in "c|":
+        cycle = True
+      if s[0] in "s:":
+        specific = int(s[1:])
+      if s[0] in "d@":
+        parts = s[1:].split(",")
+        delay_start = int(parts[0])
+        delay_end = int(parts[1])
+      if s[0] in "h~":
+        haptic = int(s[1:])
+      if s[0] in "r/":
+        repeat = int(s[1:])
+    return Evfrob(specific, toggle, interrupt, delay_start, delay_end, haptic, cycle, repeat)
 
 class Evspec (object):
   """Event specification: combine Evsym and Evfrob."""
@@ -314,6 +334,15 @@ class Evspec (object):
     self.actsig = actsig
     self.evsyms = evsyms
     self.evfrob = evfrob
+
+  def __str__ (self):
+    evsymspec = "".join(map(str, self.evsyms))
+    retval = """{}{}{}""".format(
+      self.actsig if self.actsig else "",
+      evsymspec,
+      str(self.evfrob),
+      )
+    return retval
 
   def __repr__ (self):
     evsymspec = "".join(map(str, self.evsyms))
@@ -354,7 +383,7 @@ class Evspec (object):
     evsyms = [ Evsym.parse(s) for s in matches_evsym ] if matches_evsym else None
 #    evfrobs = [ Evfrob(s) for s in matches_evfrob[1:] ] if matches_evfrob else None
 #    evfrobs = Evfrob(matches_evfrob[1])
-    evfrobs = Evfrob(evfrobspec)
+    evfrobs = Evfrob.parse(evfrobspec)
 
     return Evspec(signal, evsyms, evfrobs)
 
