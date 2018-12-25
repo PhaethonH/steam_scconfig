@@ -179,46 +179,137 @@ repeat_spec: '/' INTEGER |
 
 """
 
-class Srcsym (object):
+class Srcspec (object):
   REGEX = r"([/+-_=:&])?([LR][TBGPSJ]|GY|BQ|BK|ST)(\.([neswabxyudlrcet]|[0-9][0-9]))?"
   def __init__ (self):
     pass
 
   @staticmethod
   def parse (s):
-    srcsymre = re.compile(Srcsym.REGEX)
+    srcsymre = re.compile(Srcspec.REGEX)
     matches = srcsymre.match(s)
-    print("matches", matches.groups())
+    actsig = matches.group(1)
+    srcsym = matches.group(2)
+    subpart = matches.group(4)
+    return (actsig, srcsym, subpart)
+
 
 
 class Evsym (object):
-  """Event symbol."""
-  REGEX_SIGNAL = """([-/+_=:\&]?)"""
-  REGEX_EVENT = """(<[A-Za-z_][A-Za-z0-9_]*>|\[[A-Za-z_][A-Za-z0-9_]*\]|\([A-Za-z_][A-Za-z0-9_]*\)|{[^}]*})"""
-  REGEX_FROBS = """([t%]|[i|]|[c^]|[s:][0-9]+|[d@][0-9]+[+,][0-9]+|[h~][0-9]*|[r/][0-9]+)"""
+  """'bindings' fork in 'activator'."""
+  def __init__ (self, evtype=None, evcode=None, actsig=None):
+    self.actsig = actsig  # explicit Activator owner.
+    self.evtype = evtype  # EventSym physical device
+    self.evcode = evcode  # EventSym code
 
-  REGEX_MAIN = REGEX_SIGNAL + REGEX_EVENT + "(" + REGEX_FROBS + "*)"
-
-  def __init__ (self):
-    pass
+  REGEX_SYM = """(<[A-Za-z_][A-Za-z0-9_]*>|\[[A-Za-z_][A-Za-z0-9_]*\]|\([A-Za-z_][A-Za-z0-9_]*\)|{[^}]*})"""
 
   @staticmethod
   def parse (s):
-    evsymre = re.compile(Evsym.REGEX_MAIN)
+    specs = re.compile(REGEX_EVENT)
+    matches = specs.findall(s)
+
+class Evfrob (object):
+  """'setting' fork in 'activator'."""
+  REGEX_FROB = """([t%]|[i^]|[c|]|[s:][0-9]+|[d@][0-9]+[+,][0-9]+|[h~][0-9]*|[r/][0-9]+)"""
+  def __init__ (self, specific=None, toggle=None, interrupt=None, delay_start=None, delay_end=None, haptic=None, cycle=None, repeat=None):
+    self.specific = specific
+    self.toggle = toggle
+    self.interrupt = interrupt
+    self.delay_start = delay_start
+    self.delay_end = delay_end
+    self.haptic = haptic
+    self.cycle = cycle
+    self.repeat = repeat
+
+  def __str__ (self):
+    parts = []
+    if self.specific:
+      parts.append(":{}".format(self.specific))
+    if self.toggle:
+      parts.append("%")
+    if self.interrupt:
+      parts.append("^")
+    if self.delay_start or self.delay_end:
+      parts.append("@{},{}".format(self.delay_start, self.delay_end))
+    if self.haptic:
+      parts.append("~{}".format(self.haptic))
+    if self.cycle:
+      parts.append("|")
+    if self.repeat:
+      parts.append("/{}".format(self.repeat))
+    return "".join(parts)
+
+  def __repr__ (self):
+    return "{}(specific={!r}, toggle={!r}, interrupt={!r}, delay_start={!r}, delay_end={!r}, haptic={!r}, cycle={!r}, repeat={!r}".format(
+      self.__class__.__name__,
+      self.toggle,
+      self.interrupt,
+      self.delay_start, self.delay_end,
+      self.haptic,
+      self.cycle,
+      self.repeat)
+
+  @staticmethod
+  def parse (s):
+    pass
+
+class Evspec (object):
+  """Event specification: combine Evsym and Evfrob."""
+  REGEX_SIGNAL = """([-/+_=:\&])"""
+  REGEX_SYM = Evsym.REGEX_SYM
+  REGEX_FROB = Evfrob.REGEX_FROB
+
+#  REGEX_MAIN = REGEX_SIGNAL + "?" + \
+#               "(" + REGEX_SYM + "+)" + \
+#               "(" + REGEX_FROBS + "+)?"
+  REGEX_MAIN = "{}?({}+)({}+)?".format(REGEX_SIGNAL, REGEX_SYM, REGEX_FROB)
+
+  def __init__ (self, actsig=None, evsyms=None, evfrob=None):
+    self.actsig = actsig
+    self.evsyms = evsyms
+    self.evfrob = evfrob
+
+  def __repr__ (self):
+    evsymspec = "".join(self.evsyms)
+    evfrobspec = "".join(self.evfrob)
+    retval = """{}(actsig={!s}, evsyms='{!s}', evfrob='{!s}')""".format(
+      self.__class__.__name__,
+      self.actsig,
+      self.evsyms,  # list of Evsym
+      self.evfrob,  # list of Evfrob
+      )
+    return retval
+
+  @staticmethod
+  def _parse (s):
+    evsymre = re.compile(Evspec.REGEX_MAIN)
     evsyms = evsymre.match(s)
-    print("matches = {} / {}".format(evsyms, evsyms.groups()))
-    frobre = re.compile(Evsym.REGEX_FROBS)
-    frobs = frobre.findall( evsyms.group(3) )
-    print("m2", frobs)
+
+    signal = evsyms.group(1)
+    evsymspec = evsyms.group(2)
+    evfrobspec = evsyms.group(4)
+
+    #evsym = Evsym(evsymspec)
+    #evfrob = Evfrob(evfrobspec)
+    return (signal, evsymspec, evfrobspec)
+
+  @staticmethod
+  def parse (s):
+    signal, evsymspec, evfrobspec = Evspec._parse(s)
+
+    re_signal = re.compile(Evspec.REGEX_SIGNAL)
+    re_evsym = re.compile(Evsym.REGEX_SYM)
+    re_evfrob = re.compile(Evfrob.REGEX_FROB)
+
+    matches_evsym = re_evsym.findall(evsymspec) if evsymspec else None
+    matches_evfrob = re_evfrob.findall(evfrobspec) if evfrobspec else None
+    evsyms = [ Evsym(s) for s in matches_evsym[1:] ] if matches_evsym else None
+    evfrobs = [ Evfrob(s) for s in matches_evfrob[1:] ] if matches_evfrob else None
+
+    return Evspec(signal, evsyms, evfrobs)
+
 
 class CfgMaker (object):
   pass
 
-
-
-Evsym.parse("(B)")
-Evsym.parse("+(B):1000~2%^@0,200/100")
-Evsym.parse("+(B)s1000h2tcd0,200/100")
-Evsym.parse("_(B)s1000h2tcd0,200/100")
-#Srcsym.parse("BQ")
-#Srcsym.parse("+BQ.d")
