@@ -204,10 +204,54 @@ class Evsym (object):
 
   REGEX_SYM = """(<[A-Za-z_][A-Za-z0-9_]*>|\[[A-Za-z_][A-Za-z0-9_]*\]|\([A-Za-z_][A-Za-z0-9_]*\)|{[^}]*})"""
 
+  def __str__ (self):
+    parts = []
+    if self.evtype == "keyboard":
+      parts.append("<{}>".format(self.evcode))
+    elif self.evtype == "mouse":
+      parts.append("[{}]".format(self.evcode))
+    elif self.evtype == "gamepad":
+      parts.append("({})".format(self.evcode))
+    elif self.evtype == "host":
+      parts.append("{}{}{}".format("{", self.evcode, "}"))
+    return "".join(parts)
+
+  def __repr__ (self):
+    return "{}(evtype='{!s}', evcode='{!s}', actsig='{!s}')".format(
+      self.__class__.__name__,
+      self.evtype,
+      self.evcode,
+      self.actsig,
+      )
+
   @staticmethod
   def parse (s):
-    specs = re.compile(REGEX_EVENT)
+    specs = re.compile(Evsym.REGEX_SYM)
     matches = specs.findall(s)
+    actsig = None
+    evsymspec = matches[0]
+    evcode = None
+    if evsymspec[0] == '<':
+      evtype = "keyboard"
+      evcode = evsymspec[1:]
+      if evcode[-1] == '>':
+        evcode = evcode[:-1]
+    elif evsymspec[0] == '[':
+      evtype = "mouse"
+      evcode = evsymspec[1:]
+      if evcode[-1] == ']':
+        evcode = evcode[:-1]
+    elif evsymspec[0] == '(':
+      evtype = "gamepad"
+      evcode = evsymspec[1:]
+      if evcode[-1] == ')':
+        evcode = evcode[:-1]
+    elif evsymspec[0] == '{':
+      evtype = "host"
+      evcode = evsymspec[1:]
+      if evcode[-1] == '}':
+        evcode = evcode[:-1]
+    return Evsym(evtype, evcode, actsig)
 
 class Evfrob (object):
   """'setting' fork in 'activator'."""
@@ -243,6 +287,7 @@ class Evfrob (object):
   def __repr__ (self):
     return "{}(specific={!r}, toggle={!r}, interrupt={!r}, delay_start={!r}, delay_end={!r}, haptic={!r}, cycle={!r}, repeat={!r}".format(
       self.__class__.__name__,
+      self.specific,
       self.toggle,
       self.interrupt,
       self.delay_start, self.delay_end,
@@ -271,13 +316,14 @@ class Evspec (object):
     self.evfrob = evfrob
 
   def __repr__ (self):
-    evsymspec = "".join(self.evsyms)
-    evfrobspec = "".join(self.evfrob)
-    retval = """{}(actsig={!s}, evsyms='{!s}', evfrob='{!s}')""".format(
+    evsymspec = "".join(map(str, self.evsyms))
+#    evsymspec = self.evsyms
+    evfrobspec = str(self.evfrob)
+    retval = """{}(actsig='{!s}', evsyms='{!s}', evfrob='{!s}')""".format(
       self.__class__.__name__,
       self.actsig,
-      self.evsyms,  # list of Evsym
-      self.evfrob,  # list of Evfrob
+      evsymspec,    # list of Evsym
+      evfrobspec,   # list of Evfrob
       )
     return retval
 
@@ -304,8 +350,11 @@ class Evspec (object):
 
     matches_evsym = re_evsym.findall(evsymspec) if evsymspec else None
     matches_evfrob = re_evfrob.findall(evfrobspec) if evfrobspec else None
-    evsyms = [ Evsym(s) for s in matches_evsym[1:] ] if matches_evsym else None
-    evfrobs = [ Evfrob(s) for s in matches_evfrob[1:] ] if matches_evfrob else None
+#    evsyms = [ Evsym(s) for s in matches_evsym[1:] ] if matches_evsym else None
+    evsyms = [ Evsym.parse(s) for s in matches_evsym ] if matches_evsym else None
+#    evfrobs = [ Evfrob(s) for s in matches_evfrob[1:] ] if matches_evfrob else None
+#    evfrobs = Evfrob(matches_evfrob[1])
+    evfrobs = Evfrob(evfrobspec)
 
     return Evspec(signal, evsyms, evfrobs)
 
