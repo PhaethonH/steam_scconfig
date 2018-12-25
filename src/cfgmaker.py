@@ -197,8 +197,7 @@ class Srcspec (object):
 
 class Evsym (object):
   """'bindings' fork in 'activator'."""
-  def __init__ (self, evtype=None, evcode=None, actsig=None):
-    self.actsig = actsig  # explicit Activator owner.
+  def __init__ (self, evtype=None, evcode=None):
     self.evtype = evtype  # EventSym physical device
     self.evcode = evcode  # EventSym code
 
@@ -217,18 +216,16 @@ class Evsym (object):
     return "".join(parts)
 
   def __repr__ (self):
-    return "{}(evtype='{!s}', evcode='{!s}', actsig='{!s}')".format(
+    return "{}(evtype='{!s}', evcode='{!s}')".format(
       self.__class__.__name__,
       self.evtype,
       self.evcode,
-      self.actsig,
       )
 
   @staticmethod
-  def parse (s):
+  def _parse (s):
     specs = re.compile(Evsym.REGEX_SYM)
     matches = specs.findall(s)
-    actsig = None
     evsymspec = matches[0]
     evcode = None
     if evsymspec[0] == '<':
@@ -251,7 +248,13 @@ class Evsym (object):
       evcode = evsymspec[1:]
       if evcode[-1] == '}':
         evcode = evcode[:-1]
-    return Evsym(evtype, evcode, actsig)
+    return (evtype, evcode)
+
+  @staticmethod
+  def parse (s):
+    evtype, evcode = Evsym._parse(s)
+    return Evsym(evtype, evcode)
+
 
 class Evfrob (object):
   """'setting' fork in 'activator'."""
@@ -296,7 +299,7 @@ class Evfrob (object):
       self.repeat)
 
   @staticmethod
-  def parse (s):
+  def _parse (s):
     re_frobs = re.compile(Evfrob.REGEX_FROB)
     matches = re_frobs.findall(s)
     specific, toggle, interrupt, delay_start, delay_end, haptic, cycle, repeat = (None,)*8
@@ -317,7 +320,13 @@ class Evfrob (object):
         haptic = int(s[1:])
       if s[0] in "r/":
         repeat = int(s[1:])
-    return Evfrob(specific, toggle, interrupt, delay_start, delay_end, haptic, cycle, repeat)
+    return (specific, toggle, interrupt, delay_start, delay_end, haptic, cycle, repeat)
+
+  @staticmethod
+  def parse (s):
+    parsed = Evfrob._parse(s)
+    return Evfrob(*parsed)
+
 
 class Evspec (object):
   """Event specification: combine Evsym and Evfrob."""
@@ -365,8 +374,6 @@ class Evspec (object):
     evsymspec = evsyms.group(2)
     evfrobspec = evsyms.group(4)
 
-    #evsym = Evsym(evsymspec)
-    #evfrob = Evfrob(evfrobspec)
     return (signal, evsymspec, evfrobspec)
 
   @staticmethod
@@ -378,12 +385,8 @@ class Evspec (object):
     re_evfrob = re.compile(Evfrob.REGEX_FROB)
 
     matches_evsym = re_evsym.findall(evsymspec) if evsymspec else None
-    matches_evfrob = re_evfrob.findall(evfrobspec) if evfrobspec else None
-#    evsyms = [ Evsym(s) for s in matches_evsym[1:] ] if matches_evsym else None
     evsyms = [ Evsym.parse(s) for s in matches_evsym ] if matches_evsym else None
-#    evfrobs = [ Evfrob(s) for s in matches_evfrob[1:] ] if matches_evfrob else None
-#    evfrobs = Evfrob(matches_evfrob[1])
-    evfrobs = Evfrob.parse(evfrobspec)
+    evfrobs = Evfrob.parse(evfrobspec) if evfrobspec else None
 
     return Evspec(signal, evsyms, evfrobs)
 
