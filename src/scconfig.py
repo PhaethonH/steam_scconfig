@@ -228,7 +228,7 @@ def toVDF (sccobj, maptype=scvdf.SCVDFDict):
   except (AttributeError, TypeError) as e:
     pass    # fall-through to other attempts.
   else:
-    return [ toDict(x, maptype) for x in sccobj ]
+    return [ toVDF(x, maptype) for x in sccobj ]
 
   # last resort.
   return str(sccobj)
@@ -1957,7 +1957,7 @@ class GroupFactory (object):
     return GroupJoystickMouse(index, py_inputs, py_settings=None, **kwargs)
   @staticmethod
   def make_mouse_joystick (index, py_inputs=None, py_settings=None, **kwargs):
-    return GroupJoystickMove(index, py_inputs, py_settings=None, **kwargs)
+    return GroupMouseJoystick (index, py_inputs, py_settings=None, **kwargs)
   @staticmethod
   def make_mouse_region (index, py_inputs=None, py_settings=None, **kwargs):
     return GroupMouseRegion(index, py_inputs, py_settings=None, **kwargs)
