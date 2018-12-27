@@ -4,6 +4,7 @@
 # generate Scconfig and VDF.
 
 import re
+import scconfig, scvdf
 
 r"""
 	cfg:
@@ -24,6 +25,7 @@ srcsym:
   LJ : Left Joystick whole
   BQ : Button Quad - face buttons
   GY : gyro(scope); pad tilt
+? SW : switches as a cluster
  (PS3, XB360, PS4)
   RS : Right Stick click
   RJ : Right Joystick whole
@@ -34,6 +36,7 @@ srcsym:
   .c = click
   .o = edge (threshold, soft pull)
   .t = touch
+  .2 = double-tap
   .u .d .l .r = Direction Pad up, down, left, right
   .n .e .s .w = Button Quad north, east, south, west
   .a .b .x .y = Button Quad south, east, west, north
@@ -305,6 +308,44 @@ class Evfrob (object):
       self.cycle,
       self.repeat)
 
+  def export_scconfig (self, activator_type=None):
+    retval = {}
+    VSC_KEYS = scconfig.ActivatorBase.Settings._VSC_KEYS
+
+    SPECIFIC_MAP = {
+      scconfig.ActivatorLongPress.signal: (VSC_KEYS.LONG_PRESS_TIME, int),
+      scconfig.ActivatorDoublePress.signal: (VSC_KEYS.DOUBLE_TAP_TIME, int),
+      # TODO: map keysym:str to chord_button:int
+      scconfig.ActivatorChord.signal: (VSC_KEYS.CHORD_BUTTON, lambda x:x),
+      }
+    specific_key, converter = SPECIFIC_MAP.get(activator_type, (None,None))
+    if specific_key:
+      retval[specific_key] = converter(self.specific)
+
+    if activator_type == scconfig.ActivatorLongPress.signal:
+      retval[VSC_KEYS.LONG_PRESS_TIME] = int(self.specific)
+    elif activator_type == scconfig.ActivatorDoublePress.signal:
+      retval[VSC_KEYS.DOUBLE_TAP_TIME] = int(self.specific)
+    elif activator_type == scconfig.ActivatorChord.signal:
+      # TODO: map keysym:str to chord_button:int
+      retval[VSC_KEYS.CHORD_BUTTON] = self.specific
+
+    if self.toggle:
+      retval[VSC_KEYS.TOGGLE] = bool(self.toggle)
+    if self.interrupt:
+      retval[VSC_KEYS.INTERRUPTIBLE] = bool(self.interrupt)
+    if self.delay_start is not None or self.delay_end is not None:
+      retval[VSC_KEYS.DELAY_START] = int(self.delay_start)
+      retval[VSC_KEYS.DELAY_END] = int(self.delay_end)
+    if self.haptic is not None:
+      retval[VSC_KEYS.HAPTIC_INTENSITY] = self.haptic
+    if self.cycle is not None:
+      retval[VSC_KEYS.CYCLE] = bool(self.cycle)
+    if self.repeat:
+      retval[VSC_KEYS.HOLD_REPEATS] = True
+      retval[VSC_KEYS.REPEAT_RATE] = self.repeat
+    return retval
+
   @staticmethod
   def _parse (s):
     re_frobs = re.compile(Evfrob.REGEX_FROB)
@@ -372,6 +413,35 @@ class Evspec (object):
       )
     return retval
 
+  def export_scbind (self, evsym):
+    retval = None
+    if evsym.evtype == "keyboard":
+      retval = scconfig.EvgenFactory.make_keystroke(evsym.evcode)
+    elif evsym.evtype == "mouse":
+      retval = scconfig.EvgenFactory.make_mouseswitch(evsym.evcode)
+    elif evsym.evtype == "gamepad":
+      retval = scconfig.EvgenFactory.make_gamepad(evsym.evcode)
+    elif evsym.evtype == "host":
+      pass
+    return retval
+
+  def export_scconfig (self):
+    SIGNAL_MAP = {
+      "+": scconfig.ActivatorStartPress.signal,
+      "_": scconfig.ActivatorLongPress.signal,
+      ":": scconfig.ActivatorDoublePress.signal,
+      "=": scconfig.ActivatorDoublePress.signal,
+      "-": scconfig.ActivatorRelease.signal,
+      "&": scconfig.ActivatorChord.signal,
+      "/": scconfig.ActivatorFullPress.signal,
+      None: scconfig.ActivatorFullPress.signal,
+      }
+    actsig = SIGNAL_MAP.get(self.actsig, scconfig.ActivatorFullPress.signal)
+    bindings = [ self.export_scbind(evsym) for evsym in self.evsyms ]
+    settings = self.evfrob.export_scconfig() if self.evfrob else None
+    retval = scconfig.ActivatorFactory.make(actsig, bindings, settings)
+    return retval
+
   @staticmethod
   def _parse (s):
     evsymre = re.compile(Evspec.REGEX_MAIN)
@@ -398,6 +468,285 @@ class Evspec (object):
     return Evspec(signal, evsyms, evfrobs)
 
 
-class CfgMaker (object):
+
+
+class CfgEvgen (object):
+  def __init__ (self):
+    pass
   pass
+
+
+class CfgBind (object):
+  r"""
+<SrcSym>: <Evgen>+
+
+"""
+  def __init__ (self):
+    # List of event generators.
+    self.evgen = []
+  pass
+
+
+class CfgEvspec (object):
+  r"""
+
+- signal: { full, start, long, ... }
+  label: ...
+  icon: ...
+  bindings:
+    - <Evsym>
+    - <Evsym>
+  settings:
+    toggle: ...
+    repeat: ...
+"""
+  def __init__ (self):
+    self.signal = None
+    self.label = None
+    self.icon = None
+    self.bindings = []
+    self.settings = {}
+
+
+class CfgClusterBase (object):
+  r"""
+<ClusterSrcSym>:
+  mode: ...
+  <SubpartSrcSym>:
+    - signal: { full, start, long, ... }
+      label: ...
+      icon: ...
+      bindings:
+        - <Evsym>
+        - <Evsym>
+      settings:
+        toggle: ...
+        repeat: ...
+    - signal: ...
+"""
+  MODES = set([
+    "pen",
+    "dpad",
+    "face",
+    "js-move"
+    "js-cam",
+    "js-mouse",
+    "mouse-js",
+    "region",
+    "pie",
+    "scroll",
+    "single",
+    "switches",
+    "menu",
+    "trigger",
+    ])
+  SUBPARTS = set()
+  def __init__ (self, mode=None, py_dict=None):
+    self.mode = mode
+    self.subparts = {}  # key <- subpart name; value <- Evspec
+    if py_dict:
+      self.load(py_dict)
+
+  def load (self, py_dict):
+    self.mode = py_dict.get("mode", None)
+    for k,v in py_dict.items():
+      if k in self.SUBPARTS:
+        self.subparts[k] = v
+    return
+
+  def export_group_dpad (self, grp):
+    grp.inputs.dpad_up = self.subparts["u"]
+    grp.inputs.dpad_down = self.subparts["d"]
+    grp.inputs.dpad_left = self.subparts["l"]
+    grp.inputs.dpad_right = self.subparts["r"]
+    #.export_activators
+
+  def export_group_face (self, grp):
+    grp.inputs.s = self.subparts["s"]
+    grp.inputs.e = self.subparts["e"]
+    grp.inputs.w = self.subparts["w"]
+    grp.inputs.n = self.subparts["n"]
+
+  def export_group (self, py_dict):
+    """Generate Scconfig fragment."""
+    print("export_group.{}".format(self.mode))
+    grp = scconfig.GroupFactory.make(mode=self.mode)
+
+    if self.mode == 'dpad':
+      self.export_group_dpad(grp)
+    elif self.mode == 'face':
+      self.export_group_face(grp)
+
+#    for k in self.SUBPARTS:
+#      if k in self.subparts:
+#        v = self.subparts[k]
+#        py_dict[k] = v
+    return scconfig.toVDF(grp)
+#    py_dict['mode'] = self.mode
+#    for k in self.SUBPARTS:
+#      if k in self.subparts:
+#        v = self.subparts[k]
+#        py_dict[k] = v
+#    return py_dict
+
+class CfgClusterPen (CfgClusterBase):
+  SUBPARTS = set([
+    "c", "2", "t",
+    ])
+  def __init__ (self, py_dict=None):
+    super(CfgClusterPen,self).__init__('pen', py_dict)
+
+class CfgClusterDpad (CfgClusterBase):
+  SUBPARTS = set([
+    "u", "d", "l", "r", "c", "o"
+    ])
+  def __init__ (self, py_dict=None):
+    super(CfgClusterDpad,self).__init__('dpad', py_dict)
+
+class CfgClusterFace (CfgClusterBase):
+  SUBPARTS = set([
+    "s", "e", "w", "n",
+    "a", "b", "x", "y"
+    ])
+  def __init__ (self, py_dict=None):
+    super(CfgClusterFace,self).__init__('face', py_dict)
+
+class CfgClusterJoystick (CfgClusterBase):
+  SUBPARTS = set([
+    "u", "d", "l", "r", "c", "o"
+    ])
+  def __init__ (self, py_dict=None):
+    super(CfgClusterJoystick,self).__init__('js-generic', py_dict)
+
+
+class CfgClusterFactory (object):
+  @staticmethod
+  def make_pen (py_dict): return CfgClusterPen(py_dict)
+  @staticmethod
+  def make_dpad (py_dict): return CfgClusterDpad(py_dict)
+  @staticmethod
+  def make_face (py_dict): return CfgClusterFace(py_dict)
+  @staticmethod
+  def make_js (py_dict): return CfgClusterJoystick(py_dict)
+  @staticmethod
+  def make_cluster (py_dict):
+    DELEGATE = {
+      "pen": CfgClusterFactory.make_pen,
+      "dpad": CfgClusterFactory.make_dpad,
+      "face": CfgClusterFactory.make_face,
+      "js-move": CfgClusterFactory.make_js,
+      "js-cam": CfgClusterFactory.make_js,
+      "js-mouse": CfgClusterFactory.make_js,
+      }
+    delegate = DELEGATE[py_dict["mode"]]
+    if delegate:
+      retval = delegate(py_dict)
+      return retval
+    return None
+
+
+class CfgLayer (object):
+  r"""
+# abbreviated
+layer:
+  name: 
+  <SrcSym>: <Evgen> <Evgen> <Evgen>
+
+
+# canonical
+layer:
+  name:
+  <SubpartSrcSym>:
+    [[CfgCluster]]
+  <SubpartSrcSym>:
+  ...
+
+'''
+  <ClusteredSrcSym>:
+    mode: { dpad, joystick-move, ... }
+    <SubpartSrcSym>:
+      - signal: <SignalSpec>
+        label: ...
+        icon: ...
+        binding:
+          - <BareEvgen>
+          - <BareEvgen>
+        settings:
+          specific: ...
+          toggle: ...
+      - signal: <SignalSpec>
+        ...
+    <SubpartSrcSym>:
+      - signal: <SignalSpec>
+        binding:
+          - <BareEvgen>
+          - <BareEvgen>
+'''
+"""
+  def __init__ (self):
+    self.name = None
+    self.specs = {}
+
+  CLUSTER_SYMS = set([
+    "LP", "RP", "LJ", "BQ", "LT", "RT", "GY", "SW",
+    "RJ"
+    ])
+
+  def filter_bind (self, v_dict):
+    retval = {}
+    if 'mode' in v_dict:
+      m = v_dict.get("mode", None)
+      if not m in CfgClusterNode.MODES:
+        m = None
+      retval['mode'] = m
+    pass
+
+  def load (self, py_dict):
+    if 'name' in py_dict:
+      self.name = py_dict['name']
+    for k,v in py_dict:
+      if k in self.CLUSTER_SYMS:
+        # TODO: filter bind
+        v2 = self.filter_bind(v)
+        self.spec[k] = v2
+
+  def export_scconfig (self, sccfg):
+    pass
+
+
+class CfgAction (object):
+  def __init__ (self):
+    self.name = None
+    self.layers = []
+
+  def load (self, py_dict):
+    pass
+
+  def export_scconfig (self, sccfg=None):
+    pass
+
+
+class CfgMaker (object):
+  r"""
+actions:
+  layers:
+    <SrcSpec>: <Evsym>+
+"""
+  def __init__ (self):
+    self.name = None
+    self.actions = []
+
+  def load (self, py_dict):
+    self.name = py_dict.get("name", self.name)
+    actions_list = py_dict.get("actions", None)
+    for action_dict in actions_list:
+      action = CfgAction()
+      action.load(action_dict)
+      self.actions.append(action)
+
+  def export_scconfig (self, sccfg=None):
+    if sccfg is None:
+      sccfg = scconfig.Scconfig()
+    return
+
 

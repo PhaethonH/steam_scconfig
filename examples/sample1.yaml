@@ -29,9 +29,12 @@ actions:
     GU: (GU)
     BK: (BK)
     ST: (ST)
-    # Triggers.
-    LT.f: (LT)
-    RT.f: (RT)
+    # Triggers, full-pull ("click").
+    LT.c: (LT)
+    RT.c: (RT)
+    # Triggers, soft-pull ("edge").
+    LT.o: ""
+    RT.o: ""
     # Triggers analog on.
     LT: (LT)
     RT: (RT)
