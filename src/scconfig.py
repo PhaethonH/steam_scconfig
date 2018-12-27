@@ -206,6 +206,8 @@ def toVDF (sccobj, maptype=scvdf.SCVDFDict):
       return sccobj._toVDF(maptype)
 
   # special cases.
+  if sccobj is None:
+    return maptype()        # empty dict.
   if _stringlike(sccobj):
     return sccobj           # strings returned as-is.
   if isinstance(sccobj,bool):
@@ -1228,6 +1230,7 @@ class GroupBase (object):
     TouchmenuButtonFireType.MODESHIFT_END = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
 
   class Inputs (RestrictedDictMixin, AliasableDictMixin, IndexDict):
+    # dict that maps to list of activators.
     # Restrictive, to encourage subclassing.
     _ALLOW = False
 

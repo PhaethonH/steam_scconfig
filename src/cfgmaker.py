@@ -413,35 +413,6 @@ class Evspec (object):
       )
     return retval
 
-  def export_scbind (self, evsym):
-    retval = None
-    if evsym.evtype == "keyboard":
-      retval = scconfig.EvgenFactory.make_keystroke(evsym.evcode)
-    elif evsym.evtype == "mouse":
-      retval = scconfig.EvgenFactory.make_mouseswitch(evsym.evcode)
-    elif evsym.evtype == "gamepad":
-      retval = scconfig.EvgenFactory.make_gamepad(evsym.evcode)
-    elif evsym.evtype == "host":
-      pass
-    return retval
-
-  def export_scconfig (self):
-    SIGNAL_MAP = {
-      "+": scconfig.ActivatorStartPress.signal,
-      "_": scconfig.ActivatorLongPress.signal,
-      ":": scconfig.ActivatorDoublePress.signal,
-      "=": scconfig.ActivatorDoublePress.signal,
-      "-": scconfig.ActivatorRelease.signal,
-      "&": scconfig.ActivatorChord.signal,
-      "/": scconfig.ActivatorFullPress.signal,
-      None: scconfig.ActivatorFullPress.signal,
-      }
-    actsig = SIGNAL_MAP.get(self.actsig, scconfig.ActivatorFullPress.signal)
-    bindings = [ self.export_scbind(evsym) for evsym in self.evsyms ]
-    settings = self.evfrob.export_scconfig() if self.evfrob else None
-    retval = scconfig.ActivatorFactory.make(actsig, bindings, settings)
-    return retval
-
   @staticmethod
   def _parse (s):
     evsymre = re.compile(Evspec.REGEX_MAIN)
@@ -500,12 +471,40 @@ class CfgEvspec (object):
     toggle: ...
     repeat: ...
 """
-  def __init__ (self):
-    self.signal = None
-    self.label = None
-    self.icon = None
-    self.bindings = []
-    self.settings = {}
+  def __init__ (self, evspec=None):
+    self.evspec = evspec
+
+  def export_scbind (self, evsym):
+    retval = None
+    if evsym.evtype == "keyboard":
+      retval = scconfig.EvgenFactory.make_keystroke(evsym.evcode)
+    elif evsym.evtype == "mouse":
+      retval = scconfig.EvgenFactory.make_mouseswitch(evsym.evcode)
+    elif evsym.evtype == "gamepad":
+      retval = scconfig.EvgenFactory.make_gamepad(evsym.evcode)
+    elif evsym.evtype == "host":
+      pass
+    return retval
+
+  def export_scconfig (self):
+    """Convert Evspec to Scconfig.Activator*"""
+    SIGNAL_MAP = {
+      "+": scconfig.ActivatorStartPress.signal,
+      "_": scconfig.ActivatorLongPress.signal,
+      ":": scconfig.ActivatorDoublePress.signal,
+      "=": scconfig.ActivatorDoublePress.signal,
+      "-": scconfig.ActivatorRelease.signal,
+      "&": scconfig.ActivatorChord.signal,
+      "/": scconfig.ActivatorFullPress.signal,
+      None: scconfig.ActivatorFullPress.signal,
+      }
+    evspec = self.evspec
+    actsig = SIGNAL_MAP.get(evspec.actsig, scconfig.ActivatorFullPress.signal)
+    bindings = [ self.export_scbind(evsym) for evsym in evspec.evsyms ]
+    settings = evspec.evfrob.export_scconfig() if evspec.evfrob else None
+    retval = scconfig.ActivatorFactory.make(actsig, bindings, settings)
+    return retval
+
 
 
 class CfgClusterBase (object):
@@ -513,6 +512,8 @@ class CfgClusterBase (object):
 <ClusterSrcSym>:
   mode: ...
   <SubpartSrcSym>:
+    - [[CfgEvspec]]
+
     - signal: { full, start, long, ... }
       label: ...
       icon: ...
@@ -543,7 +544,7 @@ class CfgClusterBase (object):
   SUBPARTS = set()
   def __init__ (self, mode=None, py_dict=None):
     self.mode = mode
-    self.subparts = {}  # key <- subpart name; value <- Evspec
+    self.subparts = {}  # key <- subpart name; value <- CfgEvspec
     if py_dict:
       self.load(py_dict)
 
@@ -555,21 +556,38 @@ class CfgClusterBase (object):
     return
 
   def export_group_dpad (self, grp):
-    grp.inputs.dpad_up = self.subparts["u"]
-    grp.inputs.dpad_down = self.subparts["d"]
-    grp.inputs.dpad_left = self.subparts["l"]
-    grp.inputs.dpad_right = self.subparts["r"]
+    def __export (subpart_name):
+      collate = None
+      if self.subparts.get(subpart_name, None):
+        collate = None
+        for evspec in self.subparts[subpart_name]:
+          d = evspec.export_scconfig()
+          a = scconfig.toVDF(d)
+          if collate is None:
+            collate = a
+          elif isinstance(collate, list):
+            collate.append(a)
+          else:
+            collate = [ collate ]
+      return collate
+    if 'u' in self.subparts:
+      grp.inputs.dpad_up = __export("u")
+    if 'd' in self.subparts:
+      grp.inputs.dpad_down = __export("d")
+    if 'l' in self.subparts:
+      grp.inputs.dpad_left = __export("l")
+    if 'r' in self.subparts:
+      grp.inputs.dpad_right = __export("r")
     #.export_activators
 
   def export_group_face (self, grp):
-    grp.inputs.s = self.subparts["s"]
-    grp.inputs.e = self.subparts["e"]
-    grp.inputs.w = self.subparts["w"]
-    grp.inputs.n = self.subparts["n"]
+    grp.inputs.s = self.subparts["s"].export_scconfig()
+    grp.inputs.e = self.subparts["e"].export_scconfig()
+    grp.inputs.w = self.subparts["w"].export_scconfig()
+    grp.inputs.n = self.subparts["n"].export_scconfig()
 
-  def export_group (self, py_dict):
+  def export_scconfig (self, py_dict):
     """Generate Scconfig fragment."""
-    print("export_group.{}".format(self.mode))
     grp = scconfig.GroupFactory.make(mode=self.mode)
 
     if self.mode == 'dpad':
@@ -577,17 +595,7 @@ class CfgClusterBase (object):
     elif self.mode == 'face':
       self.export_group_face(grp)
 
-#    for k in self.SUBPARTS:
-#      if k in self.subparts:
-#        v = self.subparts[k]
-#        py_dict[k] = v
     return scconfig.toVDF(grp)
-#    py_dict['mode'] = self.mode
-#    for k in self.SUBPARTS:
-#      if k in self.subparts:
-#        v = self.subparts[k]
-#        py_dict[k] = v
-#    return py_dict
 
 class CfgClusterPen (CfgClusterBase):
   SUBPARTS = set([

@@ -4,6 +4,7 @@ import unittest
 
 import cfgmaker
 from cfgmaker import Evspec, Srcspec, CfgMaker
+from cfgmaker import CfgEvspec
 import scconfig
 import pprint
 
@@ -67,15 +68,17 @@ class TestCfgMaker (unittest.TestCase):
 #    print("obj = ")
 #    pprint.pprint(obj)
 
-  def test_evspec (self):
+  def test_cfgevspec (self):
     evspec = Evspec.parse("+(B)")
-    obj = evspec.export_scconfig()
+    cfg = CfgEvspec(evspec)
+    obj = cfg.export_scconfig()
     d = scconfig.toVDF(obj)
     # singular entry for 'binding'.
     self.assertEqual(d, {'bindings': { "binding": "xinput_button B" } })
 
     evspec = Evspec.parse("+(B)~3@10,50")
-    obj = evspec.export_scconfig()
+    cfg = CfgEvspec(evspec)
+    obj = cfg.export_scconfig()
     d = scconfig.toVDF(obj)
     self.assertEqual(d, { 'bindings':
       { 'binding': "xinput_button B" },
@@ -87,7 +90,8 @@ class TestCfgMaker (unittest.TestCase):
       })
 
     evspec = Evspec.parse("_<LeftControl><C>:180%^|~1@10,50/250")
-    obj = evspec.export_scconfig()
+    cfg = CfgEvspec(evspec)
+    obj = cfg.export_scconfig()
     d = scconfig.toVDF(obj)
     self.assertEqual(d, { 'bindings':
       { 'binding': [ "key_press LeftControl", "key_press C" ] },
@@ -100,6 +104,36 @@ class TestCfgMaker (unittest.TestCase):
         'delay_end': '50',
         'hold_repeats': '1',
         'repeat_rate': '250',
+        }
+      })
+
+  def test_cfgcluster (self):
+    d = {
+      "mode": "dpad",
+      "u": [
+        CfgEvspec(Evspec.parse("+<a><b>%")),
+        ],
+      "d": None,
+      "l": None,
+      "r": None,
+      }
+    cfg = cfgmaker.CfgClusterDpad()
+    cfg.load(d)
+    obj = cfg.export_scconfig(None)
+    d = scconfig.toVDF(obj)
+    self.assertEqual(d, {
+      "id": "0",
+      "mode": "dpad",
+      "inputs": {
+        "dpad_north": {  # First/one activator.
+          "bindings": {
+            "binding": [ "key_press a", "key_press b" ],
+            },
+          "settings": { "toggle": "1" },
+          },
+        "dpad_south": {},
+        "dpad_west": {},
+        "dpad_east": {},
         }
       })
 
