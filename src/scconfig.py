@@ -1230,7 +1230,7 @@ class GroupBase (object):
     TouchmenuButtonFireType.MODESHIFT_END = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
 
   class Inputs (RestrictedDictMixin, AliasableDictMixin, IndexDict):
-    # dict that maps to list of activators.
+    # dict that maps subpart to ControllerInput.
     # Restrictive, to encourage subclassing.
     _ALLOW = False
 

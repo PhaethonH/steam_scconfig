@@ -211,7 +211,7 @@ class Evsym (object):
     self.evtype = evtype  # EventSym physical device
     self.evcode = evcode  # EventSym code
 
-  REGEX_SYM = """(<[A-Za-z_][A-Za-z0-9_]*>|\[[A-Za-z_][A-Za-z0-9_]*\]|\([A-Za-z_][A-Za-z0-9_]*\)|{[^}]*})"""
+  REGEX_SYM = """(<[A-Za-z0-9_]+>|\[[A-Za-z_][A-Za-z0-9_]*\]|\([A-Za-z_][A-Za-z0-9_]*\)|{[^}]*})"""
 
   def __str__ (self):
     parts = []
@@ -486,8 +486,7 @@ class CfgEvspec (object):
       pass
     return retval
 
-  def export_scconfig (self):
-    """Convert Evspec to Scconfig.Activator*"""
+  def export_signal (self):
     SIGNAL_MAP = {
       "+": scconfig.ActivatorStartPress.signal,
       "_": scconfig.ActivatorLongPress.signal,
@@ -500,6 +499,12 @@ class CfgEvspec (object):
       }
     evspec = self.evspec
     actsig = SIGNAL_MAP.get(evspec.actsig, scconfig.ActivatorFullPress.signal)
+    return actsig
+
+  def export_scconfig (self):
+    """Convert Evspec to Scconfig.Activator*"""
+    evspec = self.evspec
+    actsig = self.export_signal()
     bindings = [ self.export_scbind(evsym) for evsym in evspec.evsyms ]
     settings = evspec.evfrob.export_scconfig() if evspec.evfrob else None
     retval = scconfig.ActivatorFactory.make(actsig, bindings, settings)
@@ -557,19 +562,16 @@ class CfgClusterBase (object):
 
   def export_group_dpad (self, grp):
     def __export (subpart_name):
-      collate = None
+      inputobj = None
       if self.subparts.get(subpart_name, None):
-        collate = None
+        inputobj = scconfig.ControllerInput(subpart_name)
         for evspec in self.subparts[subpart_name]:
           d = evspec.export_scconfig()
           a = scconfig.toVDF(d)
-          if collate is None:
-            collate = a
-          elif isinstance(collate, list):
-            collate.append(a)
-          else:
-            collate = [ collate ]
-      return collate
+          signal = evspec.export_signal()
+          #signal = d.signal
+          inputobj.add_activator(signal, **a)
+      return inputobj
     if 'u' in self.subparts:
       grp.inputs.dpad_up = __export("u")
     if 'd' in self.subparts:

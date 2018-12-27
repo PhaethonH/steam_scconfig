@@ -125,17 +125,62 @@ class TestCfgMaker (unittest.TestCase):
       "id": "0",
       "mode": "dpad",
       "inputs": {
-        "dpad_north": {  # First/one activator.
-          "bindings": {
-            "binding": [ "key_press a", "key_press b" ],
-            },
-          "settings": { "toggle": "1" },
+        "dpad_north": {  # One/first activator.
+          "activators": {
+            "Start_Press": {
+              "bindings": {
+                "binding": [ "key_press a", "key_press b" ],
+                },
+              "settings": { "toggle": "1" },
+              }
+            }
           },
         "dpad_south": {},
         "dpad_west": {},
         "dpad_east": {},
         }
       })
+
+    d = {
+      "mode": "dpad",
+      "u": [
+        CfgEvspec(Evspec.parse("+<a><b>%")),
+        CfgEvspec(Evspec.parse("_<2>%")),
+        ],
+      "d": None,
+      "l": None,
+      "r": None,
+      }
+    cfg = cfgmaker.CfgClusterDpad()
+    cfg.load(d)
+    obj = cfg.export_scconfig(None)
+    d = scconfig.toVDF(obj)
+    ref = {
+      "id": "0",
+      "mode": "dpad",
+      "inputs": {
+        "dpad_north": {  # One/first activator.
+          "activators": {
+            "Start_Press": {
+              "bindings": {
+                "binding": [ "key_press a", "key_press b" ],
+                },
+              "settings": { "toggle": "1" },
+              },
+            "Long_Press": {
+              "bindings": {
+                "binding": "key_press 2"
+                },
+              "settings": { "toggle": "1" },
+              }
+            },
+          },
+        "dpad_south": {},
+        "dpad_west": {},
+        "dpad_east": {},
+        }
+      }
+    self.assertEqual(d, ref)
 
 
 if __name__ == "__main__":
