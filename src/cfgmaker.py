@@ -546,10 +546,9 @@ class CfgClusterBase (object):
     "menu",
     "trigger",
     ])
-  SUBPARTS = set()
+  MODE = mode = None
   SUBPARTS = dict()
-  def __init__ (self, mode=None, py_dict=None):
-    self.mode = mode
+  def __init__ (self, py_dict=None):
     self.subparts = {}  # key <- subpart name; value <- CfgEvspec
     if py_dict:
       self.load(py_dict)
@@ -573,69 +572,28 @@ class CfgClusterBase (object):
         inputobj.add_activator(signal, **a)
     return inputobj
 
-  def export_group (self, grp, ordering):
-    for k in ordering:
+  def export_scconfig (self, py_dict):
+    grp = scconfig.GroupFactory.make(mode=self.COUNTERPART)
+    for k in self.ORDERING:
       if k in self.subparts:
         realfield = self.SUBPARTS[k]
         grp.inputs[realfield] = self.export_input(k)
-
-  def export_group_dpad (self, grp):
-#    for k in [ 'u', 'd', 'l', 'r', 'c', 'o' ]:
-#      if k in self.subparts:
-#        realfield = self.SUBPARTS[k]
-#        grp.inputs[realfield] = self.export_input(k)
-    self.export_group(grp, [ 'u', 'd', 'l', 'r', 'c', 'o' ])
-
-  def export_group_face (self, grp):
-#    grp.inputs.s = self.subparts["s"].export_scconfig()
-#    grp.inputs.e = self.subparts["e"].export_scconfig()
-#    grp.inputs.w = self.subparts["w"].export_scconfig()
-#    grp.inputs.n = self.subparts["n"].export_scconfig()
-#    for k in [ 's', 'e', 'w', 'n' ]:
-#      if k in self.subparts:
-#        realfield = self.SUBPARTS[k]
-#        grp.inputs[realfield] = self.export_input(k)
-    self.export_group(grp, [ 's', 'e', 'w', 'n' ])
-
-  def export_group_pen (self, grp):
-    self.export_group(grp, [ 'c', '2', 't' ])
-
-  def export_scconfig (self, py_dict):
-    """Generate Scconfig fragment."""
-    MODE_MAP = {
-      "pen": scconfig.GroupAbsoluteMouse.MODE,
-      "face": scconfig.GroupFourButtons.MODE,
-      }
-
-    # Effective mode.
-    effmode = MODE_MAP.get(self.mode, self.mode)
-    grp = scconfig.GroupFactory.make(mode=effmode)
-
-    if self.mode == 'dpad':
-      self.export_group_dpad(grp)
-    elif self.mode == 'face':
-      self.export_group_face(grp)
-    elif self.mode == 'pen':
-      self.export_group_pen(grp)
-
     return scconfig.toVDF(grp)
 
 class CfgClusterPen (CfgClusterBase):
-  SUBPARTS = set([
-    "c", "2", "t",
-    ])
+  MODE = mode = "pen"
+  COUNTERPART = scconfig.GroupAbsoluteMouse.MODE
+  ORDERING = "c2t"
   SUBPARTS = {
     "c": scconfig.GroupAbsoluteMouse.Inputs.CLICK,
     "2": scconfig.GroupAbsoluteMouse.Inputs.DOUBLETAP,
     "t": scconfig.GroupAbsoluteMouse.Inputs.TOUCH,
     }
-  def __init__ (self, py_dict=None):
-    super(CfgClusterPen,self).__init__('pen', py_dict)
 
 class CfgClusterDpad (CfgClusterBase):
-  SUBPARTS = set([
-    "u", "d", "l", "r", "c", "o"
-    ])
+  MODE = mode = "dpad"
+  COUNTERPART = scconfig.GroupDpad.MODE
+  ORDERING = "udlrco"
   SUBPARTS = {
     "u": scconfig.GroupDpad.Inputs.DPAD_NORTH,
     "d": scconfig.GroupDpad.Inputs.DPAD_SOUTH,
@@ -644,33 +602,38 @@ class CfgClusterDpad (CfgClusterBase):
     "c": scconfig.GroupDpad.Inputs.CLICK,
     "o": scconfig.GroupDpad.Inputs.EDGE,
   }
-  def __init__ (self, py_dict=None):
-    super(CfgClusterDpad,self).__init__('dpad', py_dict)
 
 class CfgClusterFace (CfgClusterBase):
-  SUBPARTS = set([
-    "s", "e", "w", "n",
-    "a", "b", "x", "y"
-    ])
+  MODE = mode = "face"
+  COUNTERPART = scconfig.GroupFourButtons.MODE
+  ORDERING = "sewn"
   SUBPARTS = {
     "s": scconfig.GroupFourButtons.Inputs.BUTTON_A,
     "e": scconfig.GroupFourButtons.Inputs.BUTTON_B,
     "w": scconfig.GroupFourButtons.Inputs.BUTTON_X,
     "n": scconfig.GroupFourButtons.Inputs.BUTTON_Y,
   }
-  def __init__ (self, py_dict=None):
-    super(CfgClusterFace,self).__init__('face', py_dict)
 
 class CfgClusterJoystick (CfgClusterBase):
-  SUBPARTS = set([
-    "u", "d", "l", "r", "c", "o"
-    ])
+  MODE = mode = "js-generic"
+  COUNTERPART = scconfig.GroupJoystickMove.MODE
+  ORDERING = "co"
   SUBPARTS = {
     "c": "click",
     "o": "edge",
   }
-  def __init__ (self, py_dict=None):
-    super(CfgClusterJoystick,self).__init__('js-generic', py_dict)
+
+class CfgClusterJoystickMove (CfgClusterJoystick):
+  MODE = mode = "jsmove"
+  COUNTERPART = scconfig.GroupJoystickMove.MODE
+
+class CfgClusterJoystickCamera (CfgClusterJoystick):
+  MODE = mode = "jscam"
+  COUNTERPART = scconfig.GroupJoystickCamera.MODE
+
+class CfgClusterJoystickMouse (CfgClusterJoystick):
+  MODE = mode = "jsmouse"
+  COUNTERPART = scconfig.GroupJoystickMouse.MODE
 
 
 class CfgClusterFactory (object):
@@ -683,14 +646,20 @@ class CfgClusterFactory (object):
   @staticmethod
   def make_js (py_dict): return CfgClusterJoystick(py_dict)
   @staticmethod
+  def make_jsmove (py_dict): return CfgClusterJoystickMove(py_dict)
+  @staticmethod
+  def make_jscam (py_dict): return CfgClusterJoystickCamera(py_dict)
+  @staticmethod
+  def make_jsmouse (py_dict): return CfgClusterJoystickMouse(py_dict)
+  @staticmethod
   def make_cluster (py_dict):
     DELEGATE = {
       "pen": CfgClusterFactory.make_pen,
       "dpad": CfgClusterFactory.make_dpad,
       "face": CfgClusterFactory.make_face,
-      "js-move": CfgClusterFactory.make_js,
-      "js-cam": CfgClusterFactory.make_js,
-      "js-mouse": CfgClusterFactory.make_js,
+      "jsmove": CfgClusterFactory.make_jsmove,
+      "jscam": CfgClusterFactory.make_jscam,
+      "jsmouse": CfgClusterFactory.make_jsmouse,
       }
     delegate = DELEGATE[py_dict["mode"]]
     if delegate:

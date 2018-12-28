@@ -226,7 +226,7 @@ class TestCfgMaker (unittest.TestCase):
     self.assertEqual(d, ref)
 
   def test_cfgcluster_pen (self):
-    # pen (absolute-mouse)
+    # pen (absolute_mouse)
     d = {
       "mode": "pen",
       "c": [ CfgEvspec(Evspec.parse("[1]")) ],
@@ -244,6 +244,33 @@ class TestCfgMaker (unittest.TestCase):
             "Full_Press": {
               "bindings": {
                 "binding": "mouse_button LEFT",
+                },
+              },
+            },
+          },
+        }
+      }
+    self.assertEqual(d, ref)
+
+  def test_cfgcluster_jsmove (self):
+    # jsmove (joystick_move)
+    d = {
+      "mode": "jsmove",
+      "c": [ CfgEvspec(Evspec.parse("(LS)")) ],
+      }
+    cfg = cfgmaker.CfgClusterJoystickMove()
+    cfg.load(d)
+    obj = cfg.export_scconfig(None)
+    d = scconfig.toVDF(obj)
+    ref = {
+      "id": "0",
+      "mode": "joystick_move",
+      "inputs": {
+        "click": {
+          "activators": {  # One/first activator.
+            "Full_Press": {
+              "bindings": {
+                "binding": "xinput_button JOYSTICK_LEFT",
                 },
               },
             },
