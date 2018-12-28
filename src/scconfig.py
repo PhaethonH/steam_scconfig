@@ -2204,25 +2204,6 @@ class Mapping (object):
   VSC_PRESET = "preset"
   VSC_SETTINGS = "settings"
 
-  def __init__ (self, index=None, version=None, revision=None, title=None, description=None, creator=None, controller_type=None, Timestamp=None):
-    self.index = index
-    if version is None: version = 3
-    if revision is None: revision = 1
-    if title is None: title = "Unnamed"
-    if description is None: description = "Unnamed configuration"
-    if creator is None: creator = "Anonymous"
-    if controller_type is None: controller_type = "controller_steamcontroller_gordon"
-    if Timestamp is None:
-      # TODO: determine timestamp
-      Timestamp = 0
-    self.version = version
-    self.revision = revision
-    self.title = title
-    self.description = description
-    self.creator = creator
-    self.controller_type = controller_type
-    self.timestamp = Timestamp
-
   class Settings (SettingsBase):
     _VSC_KEYS = PseudoNamespace(
       LEFT_TRACKPAD_MODE = "left_trackpad_mode",
