@@ -125,8 +125,8 @@ class TestCfgMaker (unittest.TestCase):
       "id": "0",
       "mode": "dpad",
       "inputs": {
-        "dpad_north": {  # One/first activator.
-          "activators": {
+        "dpad_north": {
+          "activators": {  # One/first activator.
             "Start_Press": {
               "bindings": {
                 "binding": [ "key_press a", "key_press b" ],
@@ -159,8 +159,8 @@ class TestCfgMaker (unittest.TestCase):
       "id": "0",
       "mode": "dpad",
       "inputs": {
-        "dpad_north": {  # One/first activator.
-          "activators": {
+        "dpad_north": {
+          "activators": {  # One/first activator.
             "Start_Press": {
               "bindings": {
                 "binding": [ "key_press a", "key_press b" ],
@@ -178,6 +178,49 @@ class TestCfgMaker (unittest.TestCase):
         "dpad_south": {},
         "dpad_west": {},
         "dpad_east": {},
+        }
+      }
+    self.assertEqual(d, ref)
+
+    # buttons
+
+    d = {
+      "mode": "face",
+      "n": [
+        CfgEvspec(Evspec.parse("+<a><b>%")),
+        CfgEvspec(Evspec.parse("_<2>%")),
+        ],
+      "e": None,
+      "w": None,
+      "s": None,
+      }
+    cfg = cfgmaker.CfgClusterFace()
+    cfg.load(d)
+    obj = cfg.export_scconfig(None)
+    d = scconfig.toVDF(obj)
+    ref = {
+      "id": "0",
+      "mode": "four_buttons",
+      "inputs": {
+        "button_y": {
+          "activators": {  # One/first activator.
+            "Start_Press": {
+              "bindings": {
+                "binding": [ "key_press a", "key_press b" ],
+                },
+              "settings": { "toggle": "1" },
+              },
+            "Long_Press": {
+              "bindings": {
+                "binding": "key_press 2"
+                },
+              "settings": { "toggle": "1" },
+              }
+            },
+          },
+        "button_x": {},
+        "button_b": {},
+        "button_a": {},
         }
       }
     self.assertEqual(d, ref)

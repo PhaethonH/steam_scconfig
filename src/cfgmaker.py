@@ -547,6 +547,7 @@ class CfgClusterBase (object):
     "trigger",
     ])
   SUBPARTS = set()
+  SUBPARTS = dict()
   def __init__ (self, mode=None, py_dict=None):
     self.mode = mode
     self.subparts = {}  # key <- subpart name; value <- CfgEvspec
@@ -560,37 +561,51 @@ class CfgClusterBase (object):
         self.subparts[k] = v
     return
 
+  def export_input (self, subpart_name):
+    inputobj = None
+    if self.subparts.get(subpart_name, None):
+      inputobj = scconfig.ControllerInput(subpart_name)
+      for evspec in self.subparts[subpart_name]:
+        d = evspec.export_scconfig()
+        a = scconfig.toVDF(d)
+        signal = evspec.export_signal()
+        #signal = d.signal
+        inputobj.add_activator(signal, **a)
+    return inputobj
+
+  def export_group (self, grp, ordering):
+    for k in ordering:
+      if k in self.subparts:
+        realfield = self.SUBPARTS[k]
+        grp.inputs[realfield] = self.export_input(k)
+
   def export_group_dpad (self, grp):
-    def __export (subpart_name):
-      inputobj = None
-      if self.subparts.get(subpart_name, None):
-        inputobj = scconfig.ControllerInput(subpart_name)
-        for evspec in self.subparts[subpart_name]:
-          d = evspec.export_scconfig()
-          a = scconfig.toVDF(d)
-          signal = evspec.export_signal()
-          #signal = d.signal
-          inputobj.add_activator(signal, **a)
-      return inputobj
-    if 'u' in self.subparts:
-      grp.inputs.dpad_up = __export("u")
-    if 'd' in self.subparts:
-      grp.inputs.dpad_down = __export("d")
-    if 'l' in self.subparts:
-      grp.inputs.dpad_left = __export("l")
-    if 'r' in self.subparts:
-      grp.inputs.dpad_right = __export("r")
-    #.export_activators
+#    for k in [ 'u', 'd', 'l', 'r', 'c', 'o' ]:
+#      if k in self.subparts:
+#        realfield = self.SUBPARTS[k]
+#        grp.inputs[realfield] = self.export_input(k)
+    self.export_group(grp, [ 'u', 'd', 'l', 'r', 'c', 'o' ])
 
   def export_group_face (self, grp):
-    grp.inputs.s = self.subparts["s"].export_scconfig()
-    grp.inputs.e = self.subparts["e"].export_scconfig()
-    grp.inputs.w = self.subparts["w"].export_scconfig()
-    grp.inputs.n = self.subparts["n"].export_scconfig()
+#    grp.inputs.s = self.subparts["s"].export_scconfig()
+#    grp.inputs.e = self.subparts["e"].export_scconfig()
+#    grp.inputs.w = self.subparts["w"].export_scconfig()
+#    grp.inputs.n = self.subparts["n"].export_scconfig()
+#    for k in [ 's', 'e', 'w', 'n' ]:
+#      if k in self.subparts:
+#        realfield = self.SUBPARTS[k]
+#        grp.inputs[realfield] = self.export_input(k)
+    self.export_group(grp, [ 's', 'e', 'w', 'n' ])
 
   def export_scconfig (self, py_dict):
     """Generate Scconfig fragment."""
-    grp = scconfig.GroupFactory.make(mode=self.mode)
+    MODE_MAP = {
+      "face": scconfig.GroupFourButtons.MODE,
+      }
+
+    # Effective mode.
+    effmode = MODE_MAP.get(self.mode, self.mode)
+    grp = scconfig.GroupFactory.make(mode=effmode)
 
     if self.mode == 'dpad':
       self.export_group_dpad(grp)
@@ -603,6 +618,11 @@ class CfgClusterPen (CfgClusterBase):
   SUBPARTS = set([
     "c", "2", "t",
     ])
+  SUBPARTS = {
+    "c": scconfig.GroupAbsoluteMouse.Inputs.CLICK,
+    "2": scconfig.GroupAbsoluteMouse.Inputs.DOUBLETAP,
+    "t": scconfig.GroupAbsoluteMouse.Inputs.TOUCH,
+    }
   def __init__ (self, py_dict=None):
     super(CfgClusterPen,self).__init__('pen', py_dict)
 
@@ -610,6 +630,14 @@ class CfgClusterDpad (CfgClusterBase):
   SUBPARTS = set([
     "u", "d", "l", "r", "c", "o"
     ])
+  SUBPARTS = {
+    "u": scconfig.GroupDpad.Inputs.DPAD_NORTH,
+    "d": scconfig.GroupDpad.Inputs.DPAD_SOUTH,
+    "l": scconfig.GroupDpad.Inputs.DPAD_WEST,
+    "r": scconfig.GroupDpad.Inputs.DPAD_EAST,
+    "c": scconfig.GroupDpad.Inputs.CLICK,
+    "o": scconfig.GroupDpad.Inputs.EDGE,
+  }
   def __init__ (self, py_dict=None):
     super(CfgClusterDpad,self).__init__('dpad', py_dict)
 
@@ -618,6 +646,12 @@ class CfgClusterFace (CfgClusterBase):
     "s", "e", "w", "n",
     "a", "b", "x", "y"
     ])
+  SUBPARTS = {
+    "s": scconfig.GroupFourButtons.Inputs.BUTTON_A,
+    "e": scconfig.GroupFourButtons.Inputs.BUTTON_B,
+    "w": scconfig.GroupFourButtons.Inputs.BUTTON_X,
+    "n": scconfig.GroupFourButtons.Inputs.BUTTON_Y,
+  }
   def __init__ (self, py_dict=None):
     super(CfgClusterFace,self).__init__('face', py_dict)
 
@@ -625,6 +659,10 @@ class CfgClusterJoystick (CfgClusterBase):
   SUBPARTS = set([
     "u", "d", "l", "r", "c", "o"
     ])
+  SUBPARTS = {
+    "c": "click",
+    "o": "edge",
+  }
   def __init__ (self, py_dict=None):
     super(CfgClusterJoystick,self).__init__('js-generic', py_dict)
 
@@ -667,31 +705,10 @@ layer:
 layer:
   name:
   <SubpartSrcSym>:
-    [[CfgCluster]]
+    [[CfgCluster*]]
   <SubpartSrcSym>:
   ...
 
-'''
-  <ClusteredSrcSym>:
-    mode: { dpad, joystick-move, ... }
-    <SubpartSrcSym>:
-      - signal: <SignalSpec>
-        label: ...
-        icon: ...
-        binding:
-          - <BareEvgen>
-          - <BareEvgen>
-        settings:
-          specific: ...
-          toggle: ...
-      - signal: <SignalSpec>
-        ...
-    <SubpartSrcSym>:
-      - signal: <SignalSpec>
-        binding:
-          - <BareEvgen>
-          - <BareEvgen>
-'''
 """
   def __init__ (self):
     self.name = None
