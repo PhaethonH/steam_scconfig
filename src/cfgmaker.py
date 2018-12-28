@@ -862,14 +862,56 @@ layer:
         v2 = self.filter_bind(v)
         self.spec[k] = v2
 
+  def auto_mode (self, subparts):
+    """Determine cluster mode from available subparts specified."""
+    if any([ x in subparts  for x in "udlr" ]):
+      return CfgClusterDpad.mode
+    if any([x in subparts  for x in "sewn" ]):
+      return CfgClusterFace.mode
+    if any([x in subparts  for x in "abxy" ]):
+      return CfgClusterFace.mode
+    def _intlike (x):
+      try: int(x)
+      except TypeError: return False
+      else: return True
+    def _intOrZero(x):
+      try: return int(x)
+      except TypeError: return 0
+    if any([_intlike(x) for x in subparts ]):
+      if any([_intOrZero(x) > 16  for x in subparts ]):
+        # definitely pie.
+        return CfgClusterPie.mode
+      # TODO: divine if touchmenu.
+      return CfgClusterPie.mode
+    return None
+
   def load (self, py_dict):
     if 'name' in py_dict:
       self.name = py_dict['name']
     for k,v in py_dict.items():
       if k in self.CLUSTERS:
+        # whole cluster.
         v = py_dict[k]
-        #self.clusters[k] = v
         self.clusters[k] = CfgClusterFactory.make_cluster(v)
+      elif k[2] == '.' and k[:2] in self.CLUSTERS:
+        # inline subpart.
+        clustername = k[:2]
+        cluster = self.clusters.get(clustername, None)
+        subpart = k[3:]
+        if cluster is None:
+          prefix = k[:3]
+          if clustername in ("LT", "RT"):
+            mode = CfgClusterTrigger.mode
+          else:
+            subparts = [ x[3] for x in py_dict if x.startswith(prefix) ]
+            mode = self.auto_mode(subparts)
+          py_dict = {
+            "mode": mode,
+            }
+          cluster = CfgClusterFactory.make_cluster(py_dict)
+          self.clusters[clustername] = cluster
+        cfgevspec = CfgEvspec(Evspec.parse(v))
+        cluster.subparts[subpart] = [ cfgevspec ]
 
   def export_preset (self, sccfg):
     # TODO: better place to store grpid.

@@ -6,6 +6,7 @@ import cfgmaker
 from cfgmaker import Evspec, Srcspec, CfgMaker
 from cfgmaker import CfgEvspec
 import scconfig
+import yaml
 import pprint
 
 
@@ -543,6 +544,75 @@ class TestCfgMaker (unittest.TestCase):
 			  },
       }
     self.assertEqual(d, res)
+
+  def test_inline_subparts (self):
+    d = {
+      'name': 'inline subparts',
+      'BQ.s': '(A)',
+      'BQ.e': '(B)',
+      'BQ.w': '(X)',
+      'BQ.n': '+(Y)',
+      }
+    cfg = cfgmaker.CfgLayer()
+    cfg.load(d)
+    sccfg = scconfig.Mapping()
+    obj = cfg.export_scconfig(sccfg)
+    vdf = scconfig.toVDF(obj)
+    d = vdf['group',0]
+    res = {
+      'id': '0',
+			'mode': 'four_buttons',
+      'inputs': {
+        'button_a': {
+          'activators': {
+ 						'Full_Press': {
+							'bindings': {
+								'binding': 'xinput_button A'
+								}
+							}
+						}
+					},
+        'button_b': {
+          'activators': {
+ 						'Full_Press': {
+							'bindings': {
+								'binding': 'xinput_button B'
+								}
+							}
+						}
+					},
+        'button_x': {
+          'activators': {
+ 						'Full_Press': {
+							'bindings': {
+								'binding': 'xinput_button X'
+								}
+							}
+						}
+					},
+        'button_y': {
+          'activators': {
+ 						'Start_Press': {
+							'bindings': {
+								'binding': 'xinput_button Y'
+								}
+							}
+						}
+					},
+				}
+			}
+    self.assertEqual(d, res)
+
+
+  def test_load1 (self):
+    with open("../examples/sample1.yaml") as f:
+      d = yaml.load(f)
+    cfg = cfgmaker.CfgMaker()
+    cfg.load(d)
+    sccfg = scconfig.Mapping()
+    obj = cfg.export_scconfig(sccfg)
+    d = scconfig.toVDF(sccfg)
+    print("d", d)
 
 
 if __name__ == "__main__":
