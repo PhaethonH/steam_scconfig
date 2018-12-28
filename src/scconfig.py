@@ -206,6 +206,8 @@ def toVDF (sccobj, maptype=scvdf.SCVDFDict):
       return sccobj._toVDF(maptype)
 
   # special cases.
+  if sccobj is None:
+    return maptype()        # empty dict.
   if _stringlike(sccobj):
     return sccobj           # strings returned as-is.
   if isinstance(sccobj,bool):
@@ -228,7 +230,7 @@ def toVDF (sccobj, maptype=scvdf.SCVDFDict):
   except (AttributeError, TypeError) as e:
     pass    # fall-through to other attempts.
   else:
-    return [ toDict(x, maptype) for x in sccobj ]
+    return [ toVDF(x, maptype) for x in sccobj ]
 
   # last resort.
   return str(sccobj)
@@ -1022,6 +1024,8 @@ Contains:
 class GroupBase (object):
   """Base class for input groups: joystick, dpad, triggers, etc."""
 
+  MODE = None
+
   class Settings (SettingsBase):
     # VSC VDF settings keys at 'group' level.
     _VSC_KEYS = PseudoNamespace(
@@ -1214,6 +1218,9 @@ class GroupBase (object):
       NO_ANALOG = 0,
       LEFT_TRIGGER = 1,
       RIGHT_TRIGGER = 2,
+      # TODO: is it left/right or matched/opposite?
+      MATCHED_SIDE = 1,
+      OPPOSITE_SIDE = 2,
       )
 
     # Values for 'touchmenu_button_fire_type'.
@@ -1228,25 +1235,21 @@ class GroupBase (object):
     TouchmenuButtonFireType.MODESHIFT_END = TouchmenuButtonFireType.TOUCH_RELEASE_MODESHIFT_END,
 
   class Inputs (RestrictedDictMixin, AliasableDictMixin, IndexDict):
+    # dict that maps subpart to ControllerInput.
     # Restrictive, to encourage subclassing.
     _ALLOW = False
 
-  def __init__ (self, py_mode=None, index=None, py_inputs=None, py_settings=None, **kwargs):
+  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
     if index is None:
       if 'id' in kwargs:
         index = int(kwargs['id'])
     if index is None:
       index = 0
 
-#    if py_mode is None:
-#      if 'mode' in kwargs:
-#        py_mode = kwargs['mode']
-#    py_mode = filter_enum(self.MODES, py_mode)
-
     self.index = index
-    self.mode = py_mode
+    self.mode = self.MODE
     # Subclass-specific Inputs(), tailored to Group*-specific constraints.
-    self.inputs = self.Inputs(py_mode)
+    self.inputs = self.Inputs(self.MODE)
     self.settings = self.Settings(py_settings)
     self.gameactions = scvdf.SCVDFDict()
 
@@ -1293,8 +1296,8 @@ class GroupBase (object):
       kv['gameactions'] = toVDF(self.gameactions, maptype)
     return kv
 
-
 class GroupAbsoluteMouse (GroupBase):
+  MODE = "absolute_mouse"
   class Settings (GroupBase.Settings):
     # Values for 'friction.
     Friction = PseudoNamespace(
@@ -1377,11 +1380,9 @@ class GroupAbsoluteMouse (GroupBase):
   Inputs._create_alias(Inputs.DOUBLETAP)
   Inputs._create_alias(Inputs.TOUCH)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'absolute_mouse', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupDpad (GroupBase):
+  MODE = 'dpad'
   class Settings (GroupBase.Settings):
     Layout = PseudoNamespace(
       FOUR_WAY = 0,
@@ -1438,11 +1439,9 @@ class GroupDpad (GroupBase):
   Inputs._create_alias(Inputs.CLICK, 'click')
   Inputs._create_alias(Inputs.EDGE, 'edge')
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'dpad', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupFourButtons (GroupBase):
+  MODE = "four_buttons"
   class Settings (GroupBase.Settings):
     S = GroupBase.Settings._VSC_KEYS
     _CONSTRAINTS = {
@@ -1469,11 +1468,9 @@ class GroupFourButtons (GroupBase):
   Inputs._create_alias(Inputs.BUTTON_X)
   Inputs._create_alias(Inputs.BUTTON_Y)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'four_buttons', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupJoystickCamera (GroupBase):
+  MODE = "joystick_camera"
   class Settings (GroupBase.Settings):
     CurveExponent = GroupBase.Settings.CurveExponent
     SwipeDuration = GroupBase.Settings.SwipeDuration
@@ -1522,11 +1519,9 @@ class GroupJoystickCamera (GroupBase):
       }
   Inputs._create_alias(Inputs.CLICK)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'joystick_camera', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupJoystickMouse (GroupBase):
+  MODE = "joystick_mouse"
   class Settings (GroupBase.Settings):
     CurveExponent = GroupBase.Settings.CurveExponent
     OutputJoystick = PseudoNamespace(
@@ -1560,11 +1555,9 @@ class GroupJoystickMouse (GroupBase):
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.EDGE)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'joystick_mouse', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupJoystickMove (GroupBase):
+  MODE = "joystick_move"
   class Settings (GroupBase.Settings):
     CurveExponent = GroupBase.Settings.CurveExponent
     DeadzoneShape = GroupBase.Settings.DeadzoneShape
@@ -1631,11 +1624,9 @@ class GroupJoystickMove (GroupBase):
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.EDGE)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'joystick_move', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupMouseJoystick (GroupBase):
+  MODE = "mouse_joystick"
   class Settings (GroupBase.Settings):
     Friction = GroupBase.Settings.Friction
     GyroButton = GroupBase.Settings.GyroButton
@@ -1690,18 +1681,16 @@ class GroupMouseJoystick (GroupBase):
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
-    EDGE = "edge"
+    DOUBLETAP = "doubletap"
     _ALLOW = {
-      CLICK, EDGE,
+      CLICK, DOUBLETAP,
       }
   Inputs._create_alias(Inputs.CLICK)
-  Inputs._create_alias(Inputs.EDGE)
-
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'mouse_joystick', index, py_inputs, py_settings, **kwargs)
+  Inputs._create_alias(Inputs.DOUBLETAP)
 
 
 class GroupMouseRegion (GroupBase):
+  MODE = "mouse_region"
   class Settings (GroupBase.Settings):
     HapticIntensity = GroupBase.Settings.HapticIntensity
     MouseDampeningTrigger = GroupBase.Settings.MouseDampeningTrigger
@@ -1749,11 +1738,9 @@ class GroupMouseRegion (GroupBase):
   Inputs._create_alias(Inputs.EDGE)
   Inputs._create_alias(Inputs.TOUCH)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'mouse_region', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupRadialMenu (GroupBase):
+  MODE = "radial_menu"
   class Settings (GroupBase.Settings):
     TouchmenuButtonFireType = GroupBase.Settings.TouchmenuButtonFireType
     S = GroupBase.Settings._VSC_KEYS
@@ -1782,11 +1769,9 @@ class GroupRadialMenu (GroupBase):
     symbol = "touch_menu_button_%d" % d
     Inputs._create_alias(symbol)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'radial_menu', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupScrollwheel (GroupBase):
+  MODE = "scrollwheel"
   class Settings (GroupBase.Settings):
     Friction = GroupBase.Settings.Friction
     HapticIntensity = GroupBase.Settings.HapticIntensity
@@ -1822,11 +1807,9 @@ class GroupScrollwheel (GroupBase):
   Inputs._create_alias(Inputs.SCROLL_CLOCKWISE)
   Inputs._create_alias(Inputs.SCROLL_COUNTERCLOCKWISE)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'scrollwheel', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupSingleButton (GroupBase):
+  MODE = "single_button"
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
     TOUCH = "touch"
@@ -1836,11 +1819,10 @@ class GroupSingleButton (GroupBase):
     click = GroupBase.Inputs._alias(CLICK)
     touch = GroupBase.Inputs._alias(TOUCH)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'single_button', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupSwitches (GroupBase):
+  MODE = "switches"
+
   BUTTON_ESCAPE = "button_escape"
   BUTTON_MENU = "button_menu"
   LEFT_BUMPER = "left_bumper"
@@ -1855,12 +1837,25 @@ class GroupSwitches (GroupBase):
   # TODO: find out what may go in here.
   class Inputs (GroupBase.Inputs):
     _ALLOW = True
+    BUTTON_ESCAPE = "button_escape"
+    BUTTON_MENU = "button_menu"
+    LEFT_BUMPER = "left_bumper"
+    RIGHT_BUMPER = "right_bumper"
+    BUTTON_BACK_LEFT = "button_back_left"
+    BUTTON_BACK_RIGHT = "button_back_right"
+    LEFT_GRIP = BUTTON_BACK_LEFT
+    RIGHT_GRIP = BUTTON_BACK_RIGHT
+    bk = GroupBase.Inputs._alias(BUTTON_ESCAPE)
+    st = GroupBase.Inputs._alias(BUTTON_MENU)
+    lb = GroupBase.Inputs._alias(LEFT_BUMPER)
+    rb = GroupBase.Inputs._alias(RIGHT_BUMPER)
+    lg = GroupBase.Inputs._alias(BUTTON_BACK_LEFT)
+    rg = GroupBase.Inputs._alias(BUTTON_BACK_RIGHT)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'switches', index, py_inputs, py_settings, **kwargs)
 
 
 class GroupTouchMenu (GroupBase):
+  MODE = "touch_menu"
   # touch_menu_button_%d  0..15
   class Settings (GroupBase.Settings):
     TouchmenuButtonFireType = GroupBase.Settings.TouchmenuButtonFireType
@@ -1889,11 +1884,9 @@ class GroupTouchMenu (GroupBase):
     symbol = "touch_menu_button_%d"
     Inputs._create_alias(symbol)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'touch_menu', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupTrigger (GroupBase):
+  MODE = "trigger"
   class Settings (GroupBase.Settings):
     AdaptiveThreshold = PseudoNamespace(
       SIMPLE_THRESHOLD = 0,
@@ -1932,9 +1925,6 @@ class GroupTrigger (GroupBase):
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.EDGE)
 
-  def __init__ (self, index=None, py_inputs=None, py_settings=None, **kwargs):
-    GroupBase.__init__(self, 'trigger', index, py_inputs, py_settings, **kwargs)
-
 
 class GroupFactory (object):
   @staticmethod
@@ -1957,7 +1947,7 @@ class GroupFactory (object):
     return GroupJoystickMouse(index, py_inputs, py_settings=None, **kwargs)
   @staticmethod
   def make_mouse_joystick (index, py_inputs=None, py_settings=None, **kwargs):
-    return GroupJoystickMove(index, py_inputs, py_settings=None, **kwargs)
+    return GroupMouseJoystick (index, py_inputs, py_settings=None, **kwargs)
   @staticmethod
   def make_mouse_region (index, py_inputs=None, py_settings=None, **kwargs):
     return GroupMouseRegion(index, py_inputs, py_settings=None, **kwargs)
@@ -2202,24 +2192,20 @@ class Preset (object):
 
 class Mapping (object):
   """Encapsulates controller mapping (toplevel)"""
-  def __init__ (self, index=None, version=None, revision=None, title=None, description=None, creator=None, controller_type=None, Timestamp=None):
-    self.index = index
-    if version is None: version = 3
-    if revision is None: revision = 1
-    if title is None: title = "Unnamed"
-    if description is None: description = "Unnamed configuration"
-    if creator is None: creator = "Anonymous"
-    if controller_type is None: controller_type = "controller_steamcontroller_gordon"
-    if Timestamp is None:
-      # TODO: determine timestamp
-      Timestamp = 0
-    self.version = version
-    self.revision = revision
-    self.title = title
-    self.description = description
-    self.creator = creator
-    self.controller_type = controller_type
-    self.timestamp = Timestamp
+
+  VSC_VERSION = "version"
+  VSC_REVISION = "revision"
+  VSC_TITLE = "title"
+  VSC_DESCRIPTION = "description"
+  VSC_CREATOR = "creator"
+  VSC_CONTROLLER_TYPE = "controller_type"
+  VSC_TIMESTAMP = "Timestamp"
+  VSC_LOCALIZATION = "localization"
+  VSC_ACTIONS = "actions"
+  VSC_ACTION_LAYERS = "action_layers"
+  VSC_GROUP = "group"
+  VSC_PRESET = "preset"
+  VSC_SETTINGS = "settings"
 
   class Settings (SettingsBase):
     _VSC_KEYS = PseudoNamespace(
@@ -2237,19 +2223,19 @@ class Mapping (object):
 
   def __init__ (self, py_version=None, py_revision=None, py_title=None, py_description=None, py_creator=None, py_controller_type=None, py_timestamp=None, py_settings=None, **kwargs):
     if py_version is None:
-      py_version = int(kwargs.get("version", 3))
+      py_version = int(kwargs.get(self.VSC_VERSION, 3))
     if py_revision is None:
-      py_revision = int(kwargs.get("revision", 1))
+      py_revision = int(kwargs.get(self.VSC_REVISION, 1))
     if py_title is None:
-      py_title = kwargs.get("title", "Unnamed")
+      py_title = kwargs.get(self.VSC_TITLE, "Unnamed")
     if py_description is None:
-      py_description = kwargs.get("description", "Unnamed configuration")
+      py_description = kwargs.get(self.VSC_DESCRIPTION, "Unnamed configuration")
     if py_creator is None:
-      py_creator = kwargs.get("creator", "(Auto-Generator)")
+      py_creator = kwargs.get(self.VSC_CREATOR, "(Auto-Generator)")
     if py_controller_type is None:
-      py_controller_type = kwargs.get("controller_type", "controller_steamcontroller_gordon")
+      py_controller_type = kwargs.get(self.VSC_CONTROLLER_TYPE, "controller_steamcontroller_gordon")
     if py_timestamp is None:
-      py_timestamp = kwargs.get("Timestamp", None)
+      py_timestamp = kwargs.get(self.VSC_TIMESTAMP, None)
       if py_timestamp is None:
         # TODO: determine current timestamp
         py_timestamp = -1
@@ -2276,24 +2262,24 @@ class Mapping (object):
     # Miscellaneous settings
     self.settings = self.Settings(py_settings)
 
-    if 'localization' in kwargs:
-      self.localizations.update(kwargs['localization'])
+    if self.VSC_LOCALIZATION in kwargs:
+      self.localizations.update(kwargs[self.VSC_LOCALIZATION])
 
-    if 'actions' in kwargs:
-      for obj_name, obj_kv in kwargs['actions'].items():
+    if self.VSC_ACTIONS in kwargs:
+      for obj_name, obj_kv in kwargs[self.VSC_ACTIONS].items():
         self.add_action_set(obj_name, **obj_kv)
 
-    if 'action_layers' in kwargs:
+    if self.VSC_ACTION_LAYERS in kwargs:
       self.layers = []
-      for obj_name, obj_kv in kwargs['action_layers'].items():
+      for obj_name, obj_kv in kwargs[self.VSC_ACTION_LAYERS].items():
         self.add_action_layer(obj_name, **obj_kv)
 
-    if 'group' in kwargs:
-      for grp_kv in get_all(kwargs, 'group', []):
+    if self.VSC_GROUP in kwargs:
+      for grp_kv in get_all(kwargs, self.VSC_GROUP, []):
         self.add_group(**grp_kv)
 
-    if 'preset' in kwargs:
-      for preset_kv in get_all(kwargs, 'preset', []):
+    if self.VSC_PRESET in kwargs:
+      for preset_kv in get_all(kwargs, self.VSC_PRESET, []):
         self.add_preset(**preset_kv)
 
     if VSC_SETTINGS in kwargs:
@@ -2370,13 +2356,13 @@ class Mapping (object):
   def _toVDF (self, maptype=scvdf.SCVDFDict):
     """Encode object to list of pairs (scvdf)."""
     kv = maptype()
-    kv['version'] = str(self.version)
-    kv['revision'] = str(self.revision)
-    kv['title'] = str(self.title)
-    kv['description'] = str(self.description)
-    kv['creator'] = str(self.creator)
-    kv['controller_type'] = str(self.controller_type)
-    kv['Timestamp'] = str(self.timestamp)
+    kv[self.VSC_VERSION] = str(self.version)
+    kv[self.VSC_REVISION] = str(self.revision)
+    kv[self.VSC_TITLE] = str(self.title)
+    kv[self.VSC_DESCRIPTION] = str(self.description)
+    kv[self.VSC_CREATOR] = str(self.creator)
+    kv[self.VSC_CONTROLLER_TYPE] = str(self.controller_type)
+    kv[self.VSC_TIMESTAMP] = str(self.timestamp)
 
     self._gensym = 0
     def _encode_overlays (overlay_store):
@@ -2411,22 +2397,22 @@ class Mapping (object):
 #  * 'actions', 'action_layers': The overlays are in no particular order (as per nature of mapping type), but may be iterated in the proper sequence by sorting their names.
 
     if self.actions:
-      kv['actions'] = _encode_overlays(self.actions)
+      kv[self.VSC_ACTIONS] = _encode_overlays(self.actions)
 
     if self.layers is not None:
       if self.layers:
-        kv['action_layers'] = _encode_overlays(self.layers)
+        kv[self.VSC_ACTION_LAYERS] = _encode_overlays(self.layers)
       else:
-        kv['action_layers'] = {}
+        kv[self.VSC_ACTION_LAYERS] = {}
 
     if self.localizations:
-      kv['localization'] = toVDF(self.localizations, maptype)
+      kv[self.VSC_LOCALIZATION] = toVDF(self.localizations, maptype)
 
     for grp in self.groups:
-      kv['group'] = toVDF(grp, maptype)
+      kv[self.VSC_GROUP] = toVDF(grp, maptype)
 
     for preset in self.presets:
-      kv['preset'] = toVDF(preset, maptype)
+      kv[self.VSC_PRESET] = toVDF(preset, maptype)
 
     if self.settings:
       kv[VSC_SETTINGS] = toVDF(self.settings, maptype)
