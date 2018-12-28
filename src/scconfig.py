@@ -2189,6 +2189,21 @@ class Preset (object):
 
 class Mapping (object):
   """Encapsulates controller mapping (toplevel)"""
+
+  VSC_VERSION = "version"
+  VSC_REVISION = "revision"
+  VSC_TITLE = "title"
+  VSC_DESCRIPTION = "description"
+  VSC_CREATOR = "creator"
+  VSC_CONTROLLER_TYPE = "controller_type"
+  VSC_TIMESTAMP = "Timestamp"
+  VSC_LOCALIZATION = "localization"
+  VSC_ACTIONS = "actions"
+  VSC_ACTION_LAYERS = "action_layers"
+  VSC_GROUP = "group"
+  VSC_PRESET = "preset"
+  VSC_SETTINGS = "settings"
+
   def __init__ (self, index=None, version=None, revision=None, title=None, description=None, creator=None, controller_type=None, Timestamp=None):
     self.index = index
     if version is None: version = 3
@@ -2224,19 +2239,19 @@ class Mapping (object):
 
   def __init__ (self, py_version=None, py_revision=None, py_title=None, py_description=None, py_creator=None, py_controller_type=None, py_timestamp=None, py_settings=None, **kwargs):
     if py_version is None:
-      py_version = int(kwargs.get("version", 3))
+      py_version = int(kwargs.get(self.VSC_VERSION, 3))
     if py_revision is None:
-      py_revision = int(kwargs.get("revision", 1))
+      py_revision = int(kwargs.get(self.VSC_REVISION, 1))
     if py_title is None:
-      py_title = kwargs.get("title", "Unnamed")
+      py_title = kwargs.get(self.VSC_TITLE, "Unnamed")
     if py_description is None:
-      py_description = kwargs.get("description", "Unnamed configuration")
+      py_description = kwargs.get(self.VSC_DESCRIPTION, "Unnamed configuration")
     if py_creator is None:
-      py_creator = kwargs.get("creator", "(Auto-Generator)")
+      py_creator = kwargs.get(self.VSC_CREATOR, "(Auto-Generator)")
     if py_controller_type is None:
-      py_controller_type = kwargs.get("controller_type", "controller_steamcontroller_gordon")
+      py_controller_type = kwargs.get(self.VSC_CONTROLLER_TYPE, "controller_steamcontroller_gordon")
     if py_timestamp is None:
-      py_timestamp = kwargs.get("Timestamp", None)
+      py_timestamp = kwargs.get(self.VSC_TIMESTAMP, None)
       if py_timestamp is None:
         # TODO: determine current timestamp
         py_timestamp = -1
@@ -2263,24 +2278,24 @@ class Mapping (object):
     # Miscellaneous settings
     self.settings = self.Settings(py_settings)
 
-    if 'localization' in kwargs:
-      self.localizations.update(kwargs['localization'])
+    if self.VSC_LOCALIZATION in kwargs:
+      self.localizations.update(kwargs[self.VSC_LOCALIZATION])
 
-    if 'actions' in kwargs:
-      for obj_name, obj_kv in kwargs['actions'].items():
+    if self.VSC_ACTIONS in kwargs:
+      for obj_name, obj_kv in kwargs[self.VSC_ACTIONS].items():
         self.add_action_set(obj_name, **obj_kv)
 
-    if 'action_layers' in kwargs:
+    if self.VSC_ACTION_LAYERS in kwargs:
       self.layers = []
-      for obj_name, obj_kv in kwargs['action_layers'].items():
+      for obj_name, obj_kv in kwargs[self.VSC_ACTION_LAYERS].items():
         self.add_action_layer(obj_name, **obj_kv)
 
-    if 'group' in kwargs:
-      for grp_kv in get_all(kwargs, 'group', []):
+    if self.VSC_GROUP in kwargs:
+      for grp_kv in get_all(kwargs, self.VSC_GROUP, []):
         self.add_group(**grp_kv)
 
-    if 'preset' in kwargs:
-      for preset_kv in get_all(kwargs, 'preset', []):
+    if self.VSC_PRESET in kwargs:
+      for preset_kv in get_all(kwargs, self.VSC_PRESET, []):
         self.add_preset(**preset_kv)
 
     if VSC_SETTINGS in kwargs:
@@ -2357,13 +2372,13 @@ class Mapping (object):
   def _toVDF (self, maptype=scvdf.SCVDFDict):
     """Encode object to list of pairs (scvdf)."""
     kv = maptype()
-    kv['version'] = str(self.version)
-    kv['revision'] = str(self.revision)
-    kv['title'] = str(self.title)
-    kv['description'] = str(self.description)
-    kv['creator'] = str(self.creator)
-    kv['controller_type'] = str(self.controller_type)
-    kv['Timestamp'] = str(self.timestamp)
+    kv[self.VSC_VERSION] = str(self.version)
+    kv[self.VSC_REVISION] = str(self.revision)
+    kv[self.VSC_TITLE] = str(self.title)
+    kv[self.VSC_DESCRIPTION] = str(self.description)
+    kv[self.VSC_CREATOR] = str(self.creator)
+    kv[self.VSC_CONTROLLER_TYPE] = str(self.controller_type)
+    kv[self.VSC_TIMESTAMP] = str(self.timestamp)
 
     self._gensym = 0
     def _encode_overlays (overlay_store):
@@ -2398,22 +2413,22 @@ class Mapping (object):
 #  * 'actions', 'action_layers': The overlays are in no particular order (as per nature of mapping type), but may be iterated in the proper sequence by sorting their names.
 
     if self.actions:
-      kv['actions'] = _encode_overlays(self.actions)
+      kv[self.VSC_ACTIONS] = _encode_overlays(self.actions)
 
     if self.layers is not None:
       if self.layers:
-        kv['action_layers'] = _encode_overlays(self.layers)
+        kv[self.VSC_ACTION_LAYERS] = _encode_overlays(self.layers)
       else:
-        kv['action_layers'] = {}
+        kv[self.VSC_ACTION_LAYERS] = {}
 
     if self.localizations:
-      kv['localization'] = toVDF(self.localizations, maptype)
+      kv[self.VSC_LOCALIZATION] = toVDF(self.localizations, maptype)
 
     for grp in self.groups:
-      kv['group'] = toVDF(grp, maptype)
+      kv[self.VSC_GROUP] = toVDF(grp, maptype)
 
     for preset in self.presets:
-      kv['preset'] = toVDF(preset, maptype)
+      kv[self.VSC_PRESET] = toVDF(preset, maptype)
 
     if self.settings:
       kv[VSC_SETTINGS] = toVDF(self.settings, maptype)
