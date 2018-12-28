@@ -1293,7 +1293,6 @@ class GroupBase (object):
       kv['gameactions'] = toVDF(self.gameactions, maptype)
     return kv
 
-
 class GroupAbsoluteMouse (GroupBase):
   MODE = "absolute_mouse"
   class Settings (GroupBase.Settings):
@@ -1679,12 +1678,12 @@ class GroupMouseJoystick (GroupBase):
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
-    EDGE = "edge"
+    DOUBLETAP = "doubletap"
     _ALLOW = {
-      CLICK, EDGE,
+      CLICK, DOUBLETAP,
       }
   Inputs._create_alias(Inputs.CLICK)
-  Inputs._create_alias(Inputs.EDGE)
+  Inputs._create_alias(Inputs.DOUBLETAP)
 
 
 class GroupMouseRegion (GroupBase):
@@ -1835,6 +1834,21 @@ class GroupSwitches (GroupBase):
   # TODO: find out what may go in here.
   class Inputs (GroupBase.Inputs):
     _ALLOW = True
+    BUTTON_ESCAPE = "button_escape"
+    BUTTON_MENU = "button_menu"
+    LEFT_BUMPER = "left_bumper"
+    RIGHT_BUMPER = "right_bumper"
+    BUTTON_BACK_LEFT = "button_back_left"
+    BUTTON_BACK_RIGHT = "button_back_right"
+    LEFT_GRIP = BUTTON_BACK_LEFT
+    RIGHT_GRIP = BUTTON_BACK_RIGHT
+    bk = GroupBase.Inputs._alias(BUTTON_ESCAPE)
+    st = GroupBase.Inputs._alias(BUTTON_MENU)
+    lb = GroupBase.Inputs._alias(LEFT_BUMPER)
+    rb = GroupBase.Inputs._alias(RIGHT_BUMPER)
+    lg = GroupBase.Inputs._alias(BUTTON_BACK_LEFT)
+    rg = GroupBase.Inputs._alias(BUTTON_BACK_RIGHT)
+
 
 
 class GroupTouchMenu (GroupBase):

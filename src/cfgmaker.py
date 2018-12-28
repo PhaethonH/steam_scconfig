@@ -573,7 +573,7 @@ class CfgClusterBase (object):
     return inputobj
 
   def export_scconfig (self, py_dict):
-    grp = scconfig.GroupFactory.make(mode=self.COUNTERPART)
+    grp = scconfig.GroupFactory.make(mode=self.COUNTERPART.MODE)
     for k in self.ORDERING:
       if k in self.subparts:
         realfield = self.SUBPARTS[k]
@@ -582,58 +582,153 @@ class CfgClusterBase (object):
 
 class CfgClusterPen (CfgClusterBase):
   MODE = mode = "pen"
-  COUNTERPART = scconfig.GroupAbsoluteMouse.MODE
+  COUNTERPART = scconfig.GroupAbsoluteMouse
   ORDERING = "c2t"
   SUBPARTS = {
-    "c": scconfig.GroupAbsoluteMouse.Inputs.CLICK,
-    "2": scconfig.GroupAbsoluteMouse.Inputs.DOUBLETAP,
-    "t": scconfig.GroupAbsoluteMouse.Inputs.TOUCH,
+    "c": COUNTERPART.Inputs.CLICK,
+    "2": COUNTERPART.Inputs.DOUBLETAP,
+    "t": COUNTERPART.Inputs.TOUCH,
     }
 
 class CfgClusterDpad (CfgClusterBase):
   MODE = mode = "dpad"
-  COUNTERPART = scconfig.GroupDpad.MODE
+  COUNTERPART = scconfig.GroupDpad
   ORDERING = "udlrco"
   SUBPARTS = {
-    "u": scconfig.GroupDpad.Inputs.DPAD_NORTH,
-    "d": scconfig.GroupDpad.Inputs.DPAD_SOUTH,
-    "l": scconfig.GroupDpad.Inputs.DPAD_WEST,
-    "r": scconfig.GroupDpad.Inputs.DPAD_EAST,
-    "c": scconfig.GroupDpad.Inputs.CLICK,
-    "o": scconfig.GroupDpad.Inputs.EDGE,
+    "u": COUNTERPART.Inputs.DPAD_NORTH,
+    "d": COUNTERPART.Inputs.DPAD_SOUTH,
+    "l": COUNTERPART.Inputs.DPAD_WEST,
+    "r": COUNTERPART.Inputs.DPAD_EAST,
+    "c": COUNTERPART.Inputs.CLICK,
+    "o": COUNTERPART.Inputs.EDGE,
   }
 
 class CfgClusterFace (CfgClusterBase):
   MODE = mode = "face"
-  COUNTERPART = scconfig.GroupFourButtons.MODE
+  COUNTERPART = scconfig.GroupFourButtons
   ORDERING = "sewn"
   SUBPARTS = {
-    "s": scconfig.GroupFourButtons.Inputs.BUTTON_A,
-    "e": scconfig.GroupFourButtons.Inputs.BUTTON_B,
-    "w": scconfig.GroupFourButtons.Inputs.BUTTON_X,
-    "n": scconfig.GroupFourButtons.Inputs.BUTTON_Y,
+    "s": COUNTERPART.Inputs.BUTTON_A,
+    "e": COUNTERPART.Inputs.BUTTON_B,
+    "w": COUNTERPART.Inputs.BUTTON_X,
+    "n": COUNTERPART.Inputs.BUTTON_Y,
   }
 
 class CfgClusterJoystick (CfgClusterBase):
   MODE = mode = "js-generic"
-  COUNTERPART = scconfig.GroupJoystickMove.MODE
+  COUNTERPART = scconfig.GroupJoystickMove
   ORDERING = "co"
   SUBPARTS = {
-    "c": "click",
-    "o": "edge",
+    "c": COUNTERPART.Inputs.CLICK,
+    "o": COUNTERPART.Inputs.EDGE,
   }
 
 class CfgClusterJoystickMove (CfgClusterJoystick):
   MODE = mode = "jsmove"
-  COUNTERPART = scconfig.GroupJoystickMove.MODE
+  COUNTERPART = scconfig.GroupJoystickMove
 
 class CfgClusterJoystickCamera (CfgClusterJoystick):
   MODE = mode = "jscam"
-  COUNTERPART = scconfig.GroupJoystickCamera.MODE
+  COUNTERPART = scconfig.GroupJoystickCamera
 
 class CfgClusterJoystickMouse (CfgClusterJoystick):
   MODE = mode = "jsmouse"
-  COUNTERPART = scconfig.GroupJoystickMouse.MODE
+  COUNTERPART = scconfig.GroupJoystickMouse
+  ORDERING = "co"
+  SUBPARTS = {
+    "c": COUNTERPART.Inputs.CLICK,
+    "o": COUNTERPART.Inputs.EDGE,
+    }
+
+class CfgClusterMouseJoystick (CfgClusterBase):
+  MODE = mode = "mousejs"
+  COUNTERPART = scconfig.GroupMouseJoystick
+  ORDERING = "c2"
+  SUBPARTS = {
+    "c": COUNTERPART.Inputs.CLICK,
+    "2": COUNTERPART.Inputs.DOUBLETAP,
+    }
+
+class CfgClusterMouseRegion (CfgClusterBase):
+  MODE = mode = "region"
+  COUNTERPART  = scconfig.GroupMouseRegion
+  ORDERING = "cet"
+  SUBPARTS = {
+    "c": COUNTERPART.Inputs.CLICK,
+    "e": COUNTERPART.Inputs.EDGE,
+    "t": COUNTERPART.Inputs.TOUCH,
+    }
+
+class CfgClusterPie (CfgClusterBase):
+  MODE = mode = "pie"
+  COUNTERPART = scconfig.GroupRadialMenu
+  MAX_BUTTONS = COUNTERPART.Inputs.N_BUTTONS+1
+  ORDERING = [ "{:02d}".format(x) for x in range(0,MAX_BUTTONS) ] + [ 'c' ]
+  SUBPARTS = dict( [
+    ("{:02d}".format(x),"touch_menu_button_{}".format(x))
+      for x in range(0, MAX_BUTTONS) ] + \
+    [ ('c', COUNTERPART.Inputs.CLICK) ] )
+
+class CfgClusterScrollwheel (CfgClusterBase):
+  MODE = mode = "scroll"
+  COUNTERPART = scconfig.GroupScrollwheel
+  ORDERING = "ioc0123456789"
+  SUBPARTS = {
+    "i": COUNTERPART.Inputs.SCROLL_CLOCKWISE,
+    "o": COUNTERPART.Inputs.SCROLL_COUNTERCLOCKWISE,
+    "c": COUNTERPART.Inputs.CLICK,
+    "0": "scroll_wheel_list_0",
+    "1": "scroll_wheel_list_1",
+    "2": "scroll_wheel_list_2",
+    "3": "scroll_wheel_list_3",
+    "4": "scroll_wheel_list_4",
+    "5": "scroll_wheel_list_5",
+    "6": "scroll_wheel_list_6",
+    "7": "scroll_wheel_list_7",
+    "8": "scroll_wheel_list_8",
+    "9": "scroll_wheel_list_9",
+    }
+
+class CfgClusterSingleButton (CfgClusterBase):
+  MODE = mode = "single"
+  COUNTERPART = scconfig.GroupSingleButton
+  ORDERING = "ct"
+  SUBPARTS = {
+    'c': COUNTERPART.Inputs.CLICK,
+    't': COUNTERPART.Inputs.TOUCH,
+    }
+
+class CfgClusterSwitches (CfgClusterBase):
+  MODE = mode = "switches"
+  COUNTERPART = scconfig.GroupSwitches
+  ORDERING = [ 'BK', 'ST', 'LB', 'RB', 'LG', 'RG' ]
+  SUBPARTS = {
+    'BK': COUNTERPART.Inputs.BUTTON_ESCAPE,
+    'ST': COUNTERPART.Inputs.BUTTON_MENU,
+    'LB': COUNTERPART.Inputs.LEFT_BUMPER,
+    'RB': COUNTERPART.Inputs.RIGHT_BUMPER,
+    'LG': COUNTERPART.Inputs.LEFT_GRIP,
+    'RG': COUNTERPART.Inputs.RIGHT_GRIP,
+    }
+
+class CfgClusterMenu (CfgClusterBase):
+  MODE = mode = "menu"
+  COUNTERPART = scconfig.GroupRadialMenu
+  MAX_BUTTONS = COUNTERPART.Inputs.N_BUTTONS+1
+  ORDERING = [ "{:02d}".format(x) for x in range(0,MAX_BUTTONS) ] + [ 'c' ]
+  SUBPARTS = dict( [
+    ("{:02d}".format(x),"touch_menu_button_{}".format(x))
+      for x in range(0, MAX_BUTTONS) ] + \
+    [ ('c', COUNTERPART.Inputs.CLICK) ] )
+
+class CfgClusterTrigger (CfgClusterBase):
+  MODE = mode = "trigger"
+  COUNTERPART = scconfig.GroupTrigger
+  ORDERING = "co"
+  SUBPARTS = {
+    'c': COUNTERPART.Inputs.CLICK,
+    'o': COUNTERPART.Inputs.EDGE,
+    }
 
 
 class CfgClusterFactory (object):
