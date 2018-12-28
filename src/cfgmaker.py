@@ -872,7 +872,7 @@ layer:
         preset.add_gsb(grp.index, realfield)
     sccfg.add_preset(preset)
 
-  def export_scconfig (self, sccfg, parent_set_name=''):
+  def export_scconfig (self, sccfg, parent_set_name='', **overrides):
     # Generate "preset" entry.
     self.export_preset(sccfg)
 
@@ -887,14 +887,26 @@ layer:
       "title": self.name,
       "legacy_set": True,
       }
+    if 'index' in overrides:
+      index = overrides['index']
+    else:
+      index = self.name
     if parent_set_name:
       d.update({
         'set_layer': 1,
         'parent_set_name': parent_set_name,
         })
-      sccfg.add_action_layer("{GENSYM_LAYER}", **d)
+      d.update(overrides)
+      if 'index' in d: del d['index']
+      if index is None:
+        index = "{GENSYM_LAYER}"
+      sccfg.add_action_layer(index, **d)
     else:
-      sccfg.add_action_set("Default", **d)
+      d.update(overrides)
+      if 'index' in d: del d['index']
+      if index is None:
+        index = "{GENSYM_SET}"
+      sccfg.add_action_set(index, **d)
     return sccfg
 
 
@@ -909,27 +921,18 @@ class CfgAction (object):
     for k,v in py_dict.items():
       if k == 'layers':
         for v in py_dict[k]:
-          print("a layer")
           lyr = CfgLayer()
           lyr.load(v)
           self.layers.append(lyr)
     return
 
   def export_scconfig (self, sccfg=None):
+    # Add first layer as Action Set, other layers as Action Layers.
     for lyr in self.layers:
       if lyr == self.layers[0]:
-        print("expect ActionSet")
-        lyr.export_scconfig(sccfg)
+        lyr.export_scconfig(sccfg, title=self.name, index='Default')
       else:
-        print("expect ActionLayer")
-        lyr.export_scconfig(sccfg, self.name)
-
-#    # add ActionSet to Sccfg
-#    d = {
-#      "title": self.name,
-#      "legacy_set": True,
-#      }
-#    sccfg.add_action_set("UnnamedSet", **d)
+        lyr.export_scconfig(sccfg, parent_set_name=self.name, index=None)
     return sccfg
 
 

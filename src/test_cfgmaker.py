@@ -319,7 +319,7 @@ class TestCfgMaker (unittest.TestCase):
     cfg = cfgmaker.CfgLayer()
     cfg.load(d)
     sccfg = scconfig.Mapping()
-    obj = cfg.export_scconfig(sccfg, 'Default')
+    obj = cfg.export_scconfig(sccfg, 'Default', index=None)
     d = scconfig.toVDF(sccfg)
     res = {
       'version': '3',
@@ -415,7 +415,7 @@ class TestCfgMaker (unittest.TestCase):
       'actions': {
         'Default': {
           'legacy_set': '1',
-          'title': 'DefaultLayer',
+          'title': 'DefaultSet',
           },
         },
       'group': [
