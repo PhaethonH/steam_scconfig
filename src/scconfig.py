@@ -1218,6 +1218,9 @@ class GroupBase (object):
       NO_ANALOG = 0,
       LEFT_TRIGGER = 1,
       RIGHT_TRIGGER = 2,
+      # TODO: is it left/right or matched/opposite?
+      MATCHED_SIDE = 1,
+      OPPOSITE_SIDE = 2,
       )
 
     # Values for 'touchmenu_button_fire_type'.

@@ -187,6 +187,11 @@ def _stringlike (x):
   except AttributeError: return False
   else: return True
 
+def _dictlike (x):
+  try: x.items
+  except AttributeError: return False
+  else: return True
+
 class Srcspec (object):
   REGEX = r"([/+-_=:&])?([LR][TBGPSJ]|GY|BQ|BK|ST)(\.([neswabxyudlrcet]|[0-9][0-9]))?"
   def __init__ (self):
@@ -424,9 +429,12 @@ class Evspec (object):
     evsymre = re.compile(Evspec.REGEX_MAIN)
     evsyms = evsymre.match(s)
 
-    signal = evsyms.group(1)
-    evsymspec = evsyms.group(2)
-    evfrobspec = evsyms.group(4)
+    if evsyms:
+      signal = evsyms.group(1)
+      evsymspec = evsyms.group(2)
+      evfrobspec = evsyms.group(4)
+    else:
+      signal, evsymspec, evfrobspec = None, None, None
 
     return (signal, evsymspec, evfrobspec)
 
@@ -511,9 +519,12 @@ class CfgEvspec (object):
     """Convert Evspec to Scconfig.Activator*"""
     evspec = self.evspec
     actsig = self.export_signal()
-    bindings = [ self.export_scbind(evsym) for evsym in evspec.evsyms ]
-    settings = evspec.evfrob.export_scconfig() if evspec.evfrob else None
-    retval = scconfig.ActivatorFactory.make(actsig, bindings, settings)
+    if evspec.evsyms:
+      bindings = [ self.export_scbind(evsym) for evsym in evspec.evsyms ]
+      settings = evspec.evfrob.export_scconfig() if evspec.evfrob else None
+      retval = scconfig.ActivatorFactory.make(actsig, bindings, settings)
+    else:
+      retval = None
     return retval
 
 
@@ -561,17 +572,16 @@ class CfgClusterBase (object):
       self.load(py_dict)
 
   def load (self, py_dict):
-    self.mode = py_dict.get("mode", None)
     for k,v in py_dict.items():
       if k in self.SUBPARTS:
-        # if string, parse as [CfgEvspec]; otherwise, take directly.
         if _stringlike(v):
           # generate list of CfgEvspec
           collate = []
           evspecs = v.split()
           for evspec in evspecs:
             cfgevspec = CfgEvspec(Evspec.parse(evspec))
-            collate.append(cfgevspec)
+            if cfgevspec:
+              collate.append(cfgevspec)
           self.subparts[k] = collate
         else:
           self.subparts[k] = v
@@ -642,7 +652,15 @@ class CfgClusterJoystick (CfgClusterBase):
   SUBPARTS = {
     "c": COUNTERPART.Inputs.CLICK,
     "o": COUNTERPART.Inputs.EDGE,
+    '>': "output_joystick",
   }
+
+  def export_scconfig (self, index=None):
+    grp = super(CfgClusterJoystick,self).export_scconfig(index)
+    if '>' in self.subparts:
+      val = int(self.subparts['>'])
+      grp.settings.output_joystick = val
+    return grp
 
 class CfgClusterJoystickMove (CfgClusterJoystick):
   MODE = mode = "jsmove"
@@ -749,7 +767,15 @@ class CfgClusterTrigger (CfgClusterBase):
   SUBPARTS = {
     'c': COUNTERPART.Inputs.CLICK,
     'o': COUNTERPART.Inputs.EDGE,
+    '>': "output_trigger",
     }
+
+  def export_scconfig (self, index=None):
+    grp = super(CfgClusterTrigger,self).export_scconfig(index)
+    if '>' in self.subparts:
+      val = int(self.subparts['>'])
+      grp.settings.output_trigger = val
+    return grp
 
 
 class CfgClusterFactory (object):
@@ -853,15 +879,6 @@ layer:
       retval['mode'] = m
     pass
 
-  def load (self, py_dict):
-    if 'name' in py_dict:
-      self.name = py_dict['name']
-    for k,v in py_dict.items():
-      if k in self.CLUSTERS:
-        # TODO: filter bind
-        v2 = self.filter_bind(v)
-        self.spec[k] = v2
-
   def auto_mode (self, subparts):
     """Determine cluster mode from available subparts specified."""
     if any([ x in subparts  for x in "udlr" ]):
@@ -889,11 +906,77 @@ layer:
     if 'name' in py_dict:
       self.name = py_dict['name']
     for k,v in py_dict.items():
-      if k in self.CLUSTERS:
+      if v == "":
+        # No-Op binding: do nothing.
+        pass
+      elif k in self.CLUSTERS:
         # whole cluster.
         v = py_dict[k]
-        self.clusters[k] = CfgClusterFactory.make_cluster(v)
-      elif k[2] == '.' and k[:2] in self.CLUSTERS:
+        if _dictlike(v):
+          self.clusters[k] = CfgClusterFactory.make_cluster(v)
+        else:
+          # whole-cluster.
+          cfgevspec = CfgEvspec(Evspec.parse(v))
+          if k in ('LT', 'RT'):
+            # analog assignment of triggers.
+            if v[0] == '(':
+              v = v[1:3]
+            if k == v:
+              # same side
+              output_trigger = scconfig.GroupBase.Settings.OutputTrigger.MATCHED_SIDE
+            else:
+              # opposite side
+              output_trigger = scconfig.GroupBase.Settings.OutputTrigger.OPPOSITE_SIDE
+            cluster = self.clusters.get(k, None)
+            if cluster is None:
+              init_dict = {
+                "mode": "trigger",
+                }
+              cluster = CfgClusterFactory.make_cluster(init_dict)
+              self.clusters[k] = cluster
+            self.clusters[k].subparts['>'] = output_trigger
+          elif k in ('LJ', 'RJ', 'LP', 'RP'):
+            # analog assignment of joysticks.
+            if v[0] == '(':
+              v = v[1:3]
+            if k[0] == v[0]:
+              # same side
+              output_joystick = 0
+            else:
+              # opposite side
+              output_joystick = 1
+            cluster = self.clusters.get(k, None)
+            if cluster is None:
+              if k[0] == 'L':
+                init_dict = { "mode": "jsmove" }
+              else:
+                init_dict = { "mode": "jscam" }
+              cluster = CfgClusterFactory.make_cluster(init_dict)
+              self.clusters[k] = cluster
+            self.clusters[k].subparts['>'] = output_joystick
+          elif k in ('LP', 'RP'):
+            cluster = self.clusters.get(k, None)
+            if cluster is None:
+              init_dict = {
+                "mode": "single",
+                "click": [ cfgevspec ],
+                }
+              cluster = CfgClusterFactory.make_cluster(init_dict)
+              self.clusters[k] = cluster
+            #cluster.subparts[k] = None
+            pass
+      elif k in CfgClusterSwitches.SUBPARTS:
+        clustername = "SW"
+        cluster = self.clusters.get(clustername, None)
+        if cluster is None:
+          init_dict = {
+            "mode": CfgClusterSwitches.mode
+            }
+          cluster = CfgClusterFactory.make_cluster(init_dict)
+          self.clusters[clustername] = cluster
+        cfgevspec = CfgEvspec(Evspec.parse(v))
+        cluster.subparts[k] = [ cfgevspec ]
+      elif len(k) > 2 and k[2] == '.' and k[:2] in self.CLUSTERS:
         # inline subpart.
         clustername = k[:2]
         cluster = self.clusters.get(clustername, None)
@@ -905,10 +988,10 @@ layer:
           else:
             subparts = [ x[3] for x in py_dict if x.startswith(prefix) ]
             mode = self.auto_mode(subparts)
-          py_dict = {
+          init_dict = {
             "mode": mode,
             }
-          cluster = CfgClusterFactory.make_cluster(py_dict)
+          cluster = CfgClusterFactory.make_cluster(init_dict)
           self.clusters[clustername] = cluster
         cfgevspec = CfgEvspec(Evspec.parse(v))
         cluster.subparts[subpart] = [ cfgevspec ]

@@ -603,6 +603,154 @@ class TestCfgMaker (unittest.TestCase):
 			}
     self.assertEqual(d, res)
 
+  def test_inline_switches (self):
+    d = {
+      'name': 'inline switches',
+      'BK': '(BK)',
+      'ST': '(ST)',
+      'LB': '(LB)',
+      'RB': '(RB)',
+      'LG': '(A)',
+      'RG': '(X)',
+      }
+    cfg = cfgmaker.CfgLayer()
+    cfg.load(d)
+    sccfg = scconfig.Mapping()
+    obj = cfg.export_scconfig(sccfg)
+    vdf = scconfig.toVDF(obj)
+    d = vdf['group',0]
+    res = {
+      'id': '0',
+			'mode': 'switches',
+      'inputs': {
+        'button_escape': {
+          'activators': {
+ 						'Full_Press': {
+							'bindings': {
+								'binding': 'xinput_button SELECT'
+								}
+							}
+						}
+					},
+        'button_menu': {
+          'activators': {
+ 						'Full_Press': {
+							'bindings': {
+								'binding': 'xinput_button START'
+								}
+							}
+						}
+					},
+        'left_bumper': {
+          'activators': {
+ 						'Full_Press': {
+							'bindings': {
+								'binding': 'xinput_button SHOULDER_LEFT'
+								}
+							}
+						}
+					},
+        'right_bumper': {
+          'activators': {
+ 						'Full_Press': {
+							'bindings': {
+								'binding': 'xinput_button SHOULDER_RIGHT'
+								}
+							}
+						}
+					},
+        'button_back_left': {
+          'activators': {
+ 						'Full_Press': {
+							'bindings': {
+								'binding': 'xinput_button A'
+								}
+							}
+						}
+					},
+        'button_back_right': {
+          'activators': {
+ 						'Full_Press': {
+							'bindings': {
+								'binding': 'xinput_button X'
+								}
+							}
+						}
+					},
+				}
+			}
+    self.assertEqual(d, res)
+
+  def test_inline_trigger (self):
+    d = {
+      'name': 'inline trigger',
+      'LT.c': '[2]',
+      'RT.c': '[1]',
+      'LT.o': '<LeftControl>',
+      'RT.o': '<LeftShift>',
+      'LT': "LT",
+      'RT': "RT",
+      }
+    cfg = cfgmaker.CfgLayer()
+    cfg.load(d)
+    sccfg = scconfig.Mapping()
+    obj = cfg.export_scconfig(sccfg)
+    vdf = scconfig.toVDF(obj)
+    d = vdf['group',0]
+#    pprint.pprint(d)
+    res = {
+      'id': '0',
+      'mode': 'trigger',
+      'inputs': {
+        'click': {
+          'activators': {
+            'Full_Press': {
+              'bindings': {
+                'binding': 'mouse_button MIDDLE'
+                }
+              }
+            }
+          },
+        'edge': {
+          'activators': {
+            'Full_Press': {
+              'bindings': {
+                'binding': 'key_press LeftControl'
+                }
+              }
+            }
+          }
+        },
+      'settings': {'output_trigger': '1'}}
+    self.assertEqual(d, res)
+
+  def test_inline_joystick (self):
+    d = {
+      'name': 'inline joystick',
+      'LJ': 'LJ',
+      'RJ': 'RJ',
+      }
+    cfg = cfgmaker.CfgLayer()
+    cfg.load(d)
+    sccfg = scconfig.Mapping()
+    obj = cfg.export_scconfig(sccfg)
+    vdf = scconfig.toVDF(obj)
+    d = vdf['group',]
+#    pprint.pprint(d)
+    res = [
+      { 'id': '0',
+        'inputs': {},
+        'mode': 'joystick_move',
+        'settings': {'output_joystick': '0'}
+        },
+      { 'id': '1',
+        'inputs': {},
+        'mode': 'joystick_camera',
+        'settings': {'output_joystick': '0'}
+        }
+      ]
+    self.assertEqual(d, res)
+
 
   def test_load1 (self):
     with open("../examples/sample1.yaml") as f:
@@ -612,7 +760,202 @@ class TestCfgMaker (unittest.TestCase):
     sccfg = scconfig.Mapping()
     obj = cfg.export_scconfig(sccfg)
     d = scconfig.toVDF(sccfg)
-    print("d", d)
+    res = {
+      'version': '3',
+      'revision': '1',
+      'title': 'Sample XB360 mimick',
+      'description': 'Unnamed configuration',
+      'creator': '(Auto-Generator)',
+      'controller_type': 'controller_steamcontroller_gordon',
+      'Timestamp': '-1',
+      'actions': {
+        'Default': {
+          'legacy_set': '1', 'title': 'Default',
+          }
+        },
+      'group': [
+        {
+          'id': '0',
+          'mode': 'switches',
+          'inputs': {
+            'button_escape': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button SELECT',
+                    }
+                  }
+                }
+              },
+            'button_menu': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button START',
+                    },
+                  }
+                }
+              },
+            'left_bumper': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button SHOULDER_LEFT',
+                    }
+                  }
+                }
+              },
+            'right_bumper': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button SHOULDER_RIGHT',
+                    }
+                  }
+                }
+              }
+            },
+          },
+
+         {
+          'id': '1',
+           'mode': 'four_buttons',
+           'inputs': {
+             'button_a': {
+               'activators': {
+                 'Full_Press': {
+                   'bindings': {
+                     'binding': 'xinput_button A',
+                     }
+                   }
+                 }
+               },
+             'button_b': {
+               'activators': {
+                 'Full_Press': {
+                   'bindings': {
+                     'binding': 'xinput_button B',
+                     }
+                   }
+                 }
+               },
+             'button_x': {
+               'activators': {
+                 'Full_Press': {
+                   'bindings': {
+                     'binding': 'xinput_button X',
+                     }
+                   }
+                 }
+               },
+             'button_y': {
+               'activators': {
+                 'Full_Press': {
+                   'bindings': {
+                     'binding': 'xinput_button Y',
+                     }
+                   }
+                 }
+               }
+             },
+           },
+
+        {
+          'id': '2',
+          'mode': 'dpad',
+          'inputs': {
+            'dpad_east': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button DPAD_RIGHT',
+                    }
+                  }
+                }
+              },
+            'dpad_north': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button DPAD_UP',
+                    }
+                  }
+                }
+              },
+            'dpad_south': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button DPAD_DOWN',
+                    }
+                  }
+                }
+              },
+            'dpad_west': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button DPAD_LEFT',
+                    }
+                  }
+                }
+              }
+            },
+          },
+        {
+          'id': '3',
+          'inputs': {},
+          'mode': 'joystick_camera',
+          'settings': {'output_joystick': '0'}
+          },
+        {
+          'id': '4',
+          'mode': 'trigger',
+          'inputs': {
+            'click': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button TRIGGER_LEFT',
+                    }
+                  }
+                }
+              }
+            },
+          'settings': {'output_trigger': '1'}
+          },
+        {
+          'id': '5',
+          'mode': 'trigger',
+          'inputs': {
+            'click': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button TRIGGER_RIGHT',
+                    }
+                  }
+                }
+              }
+            },
+          'settings': {'output_trigger': '1'}
+          },
+        ],
+      'preset': {
+        'id': '0',
+        'name': 'Default',
+        'group_source_bindings': {
+          '0': 'switch active',
+          '1': 'button_diamond active',
+          '2': 'left_trackpad active',
+          '3': 'right_trackpad active',
+          '4': 'left_trigger active',
+          '5': 'right_trigger active',
+          },
+        },
+      'settings': {},
+      }
+    self.assertEqual(d, res)
 
 
 if __name__ == "__main__":
