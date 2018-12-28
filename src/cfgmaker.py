@@ -182,6 +182,11 @@ repeat_spec: '/' INTEGER |
 
 """
 
+def _stringlike (x):
+  try: x.isalpha
+  except AttributeError: return False
+  else: return True
+
 class Srcspec (object):
   REGEX = r"([/+-_=:&])?([LR][TBGPSJ]|GY|BQ|BK|ST)(\.([neswabxyudlrcet]|[0-9][0-9]))?"
   def __init__ (self):
@@ -559,7 +564,17 @@ class CfgClusterBase (object):
     self.mode = py_dict.get("mode", None)
     for k,v in py_dict.items():
       if k in self.SUBPARTS:
-        self.subparts[k] = v
+        # if string, parse as [CfgEvspec]; otherwise, take directly.
+        if _stringlike(v):
+          # generate list of CfgEvspec
+          collate = []
+          evspecs = v.split()
+          for evspec in evspecs:
+            cfgevspec = CfgEvspec(Evspec.parse(evspec))
+            collate.append(cfgevspec)
+          self.subparts[k] = collate
+        else:
+          self.subparts[k] = v
     return
 
   def export_input (self, subpart_name):
@@ -962,7 +977,6 @@ actions:
     self.actions = []
 
   def load (self, py_dict):
-#    self.name = py_dict.get("name", self.name)
     for k,v in py_dict.items():
       if k == "actions":
         actions_list = py_dict["actions"]
@@ -970,17 +984,17 @@ actions:
           action = CfgAction()
           action.load(action_dict)
           self.actions.append(action)
-      elif k == 'name' or k == 'title':
+      elif k in ('name', 'title'):
         self.name = v
       elif k == 'revision':
         self.revision = int(v)
-      elif k == 'desc' or k == 'description':
+      elif k in ('desc', 'description'):
         self.desc = v
-      elif k == 'author' or k == 'creator':
+      elif k in ('author', 'creator'):
         self.author = v
       elif k == 'devtype':
         self.devtype = v
-      elif k == 'timestamp' or k == 'Timestamp':
+      elif k in ('timestamp', 'Timestamp'):
         self.timestamp = int(v)
 
   def export_scconfig (self, sccfg=None):

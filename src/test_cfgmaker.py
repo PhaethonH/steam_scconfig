@@ -455,7 +455,7 @@ class TestCfgMaker (unittest.TestCase):
           "name": "DefaultLayer",
           "BQ": {
             "mode": "face",
-            "n": [ CfgEvspec(Evspec.parse("<n>")) ],
+            "n": "<LeftShift><n> -<m>",
             },
           "SW": {
             "mode": "switches",
@@ -507,7 +507,23 @@ class TestCfgMaker (unittest.TestCase):
         },
       'group': [
 				{'id': '0', 'mode': 'switches', 'inputs': {}},
-				{'id': '1', 'mode': 'four_buttons', 'inputs': {'button_y': {'activators': {'Full_Press': {'bindings': {'binding': 'key_press n'}}}}}},
+				{'id': '1', 'mode': 'four_buttons', 'inputs': {
+            'button_y': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': [ 'key_press LeftShift',  'key_press n' ]
+                    }
+                  },
+                'release': {
+                  'bindings': {
+                    'binding': 'key_press m'
+                  },
+                }
+              }
+            }
+          }
+        },
 				{'id': '2', 'mode': 'dpad', 'inputs': {}},
 				{'id': '3', 'mode': 'joystick_camera', 'inputs': {}},
 				{'id': '4', 'mode': 'joystick_move', 'inputs': {}},
