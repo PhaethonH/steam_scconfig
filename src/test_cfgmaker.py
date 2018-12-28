@@ -724,6 +724,51 @@ class TestCfgMaker (unittest.TestCase):
       'settings': {'output_trigger': '1'}}
     self.assertEqual(d, res)
 
+    d = {
+      'name': 'inline trigger',
+      'LT': "<1>",
+      'RT': "<q>",
+      }
+    cfg = cfgmaker.CfgLayer()
+    cfg.load(d)
+    sccfg = scconfig.Mapping()
+    obj = cfg.export_scconfig(sccfg)
+    vdf = scconfig.toVDF(obj)
+    d = vdf['group',]
+    res =  [
+      {
+        'id': '0',
+        'mode': 'trigger',
+        'inputs': {
+          'click': {
+            'activators': {
+              'Full_Press': {
+                'bindings': {
+                  'binding': 'key_press 1'
+                  }
+                }
+              }
+            }
+          },
+        },
+      {
+        'id': '1',
+        'mode': 'trigger',
+        'inputs': {
+          'click': {
+            'activators': {
+              'Full_Press': {
+                'bindings': {
+                  'binding': 'key_press q'
+                  }
+                }
+              }
+            }
+          },
+        }
+      ]
+    self.assertEqual(d, res)
+
   def test_inline_joystick (self):
     d = {
       'name': 'inline joystick',
@@ -955,6 +1000,44 @@ class TestCfgMaker (unittest.TestCase):
         },
       'settings': {},
       }
+    self.assertEqual(d, res)
+
+  def test_inline_touchpad (self):
+    d = {
+      'name': 'inline joystick',
+      'LP': '<1>',
+      'RP': '(RJ)',
+      }
+    cfg = cfgmaker.CfgLayer()
+    cfg.load(d)
+    sccfg = scconfig.Mapping()
+    obj = cfg.export_scconfig(sccfg)
+    vdf = scconfig.toVDF(obj)
+    d = vdf['group',]
+    res = [
+      {
+        'id': '0',
+        'mode': 'single_button',
+        'inputs': {
+          'click': {
+            'activators': {
+              'Full_Press': {
+                'bindings': {
+                  'binding': 'key_press '
+                    '1'
+                  }
+                }
+              }
+            }
+          },
+        },
+      {
+        'id': '1',
+        'inputs': {},
+        'mode': 'joystick_camera',
+        'settings': {'output_joystick': '0'},
+        },
+      ]
     self.assertEqual(d, res)
 
 

@@ -902,6 +902,76 @@ layer:
       return CfgClusterPie.mode
     return None
 
+  def load_trigger (self, trigger_name, trigger_value):
+    # analog assignment of triggers.
+    k, v = trigger_name, trigger_value
+    if v[0] == '(':
+      v = v[1:3]
+    cluster = self.clusters.get(k, None)
+    if v in ("LT", "RT"):
+      if k == v:
+        # same side
+        output_trigger = scconfig.GroupBase.Settings.OutputTrigger.MATCHED_SIDE
+      else:
+        # opposite side
+        output_trigger = scconfig.GroupBase.Settings.OutputTrigger.OPPOSITE_SIDE
+
+      if cluster is None:
+        init_dict = {
+          "mode": "trigger",
+          }
+        cluster = CfgClusterFactory.make_cluster(init_dict)
+        self.clusters[k] = cluster
+      self.clusters[k].subparts['>'] = output_trigger
+    else:
+      # full-press only assignment.
+      cfgevspec = CfgEvspec(Evspec.parse(v))
+      if not cfgevspec:
+        return False
+      if cluster is None:
+        init_dict = {
+          "mode": "trigger",
+          }
+        cluster = CfgClusterFactory.make_cluster(init_dict)
+        self.clusters[k] = cluster
+      self.clusters[k].subparts['c'] = [ cfgevspec ]
+    return True
+
+  def load_joystick (self, js_name, js_value):
+    # analog assignment of joysticks.
+    k, v = js_name, js_value
+    if v[0] == '(':
+      v = v[1:3]
+    if v[1] != 'J':
+      # not joystick assignment.
+      return False
+    if k[0] == v[0]:
+      # same side
+      output_joystick = 0
+    else:
+      # opposite side
+      output_joystick = 1
+    cluster = self.clusters.get(k, None)
+    if cluster is None:
+      if k[0] == 'L':
+        init_dict = { "mode": "jsmove" }
+      else:
+        init_dict = { "mode": "jscam" }
+      cluster = CfgClusterFactory.make_cluster(init_dict)
+      self.clusters[k] = cluster
+    self.clusters[k].subparts['>'] = output_joystick
+    return True
+
+  def load_touchpad (self, tp_name, tp_value):
+    k, v = tp_name, tp_value
+    cfgevspec = CfgEvspec(Evspec.parse(tp_value))
+    init_dict = {
+      "mode": "single",
+      "c": [ cfgevspec ],
+      }
+    self.clusters[k] = CfgClusterFactory.make_cluster(init_dict)
+    return True
+
   def load (self, py_dict):
     if 'name' in py_dict:
       self.name = py_dict['name']
@@ -916,56 +986,18 @@ layer:
           self.clusters[k] = CfgClusterFactory.make_cluster(v)
         else:
           # whole-cluster.
-          cfgevspec = CfgEvspec(Evspec.parse(v))
           if k in ('LT', 'RT'):
-            # analog assignment of triggers.
-            if v[0] == '(':
-              v = v[1:3]
-            if k == v:
-              # same side
-              output_trigger = scconfig.GroupBase.Settings.OutputTrigger.MATCHED_SIDE
-            else:
-              # opposite side
-              output_trigger = scconfig.GroupBase.Settings.OutputTrigger.OPPOSITE_SIDE
-            cluster = self.clusters.get(k, None)
-            if cluster is None:
-              init_dict = {
-                "mode": "trigger",
-                }
-              cluster = CfgClusterFactory.make_cluster(init_dict)
-              self.clusters[k] = cluster
-            self.clusters[k].subparts['>'] = output_trigger
-          elif k in ('LJ', 'RJ', 'LP', 'RP'):
+            # analog or full-press-only assignment of triggers.
+            self.load_trigger(k, v)
+          elif k in ('LJ', 'RJ'):
             # analog assignment of joysticks.
-            if v[0] == '(':
-              v = v[1:3]
-            if k[0] == v[0]:
-              # same side
-              output_joystick = 0
-            else:
-              # opposite side
-              output_joystick = 1
-            cluster = self.clusters.get(k, None)
-            if cluster is None:
-              if k[0] == 'L':
-                init_dict = { "mode": "jsmove" }
-              else:
-                init_dict = { "mode": "jscam" }
-              cluster = CfgClusterFactory.make_cluster(init_dict)
-              self.clusters[k] = cluster
-            self.clusters[k].subparts['>'] = output_joystick
+            self.load_joystick(k, v)
           elif k in ('LP', 'RP'):
-            cluster = self.clusters.get(k, None)
-            if cluster is None:
-              init_dict = {
-                "mode": "single",
-                "click": [ cfgevspec ],
-                }
-              cluster = CfgClusterFactory.make_cluster(init_dict)
-              self.clusters[k] = cluster
-            #cluster.subparts[k] = None
-            pass
+            # analog or single-button assigment of touchpads.
+            if not self.load_joystick(k, v):
+              self.load_touchpad(k, v)
       elif k in CfgClusterSwitches.SUBPARTS:
+        # directly inlined switch subpart: BK, ST, LB, RB, LG, RG
         clustername = "SW"
         cluster = self.clusters.get(clustername, None)
         if cluster is None:
@@ -977,7 +1009,7 @@ layer:
         cfgevspec = CfgEvspec(Evspec.parse(v))
         cluster.subparts[k] = [ cfgevspec ]
       elif len(k) > 2 and k[2] == '.' and k[:2] in self.CLUSTERS:
-        # inline subpart.
+        # inline subpart "XX.y".
         clustername = k[:2]
         cluster = self.clusters.get(clustername, None)
         subpart = k[3:]
