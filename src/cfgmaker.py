@@ -309,6 +309,7 @@ class Evfrob (object):
       self.repeat)
 
   def export_scconfig (self, activator_type=None):
+    """Convert Evfrob to Scconfig fragment (settings)."""
     retval = {}
     VSC_KEYS = scconfig.ActivatorBase.Settings._VSC_KEYS
 
@@ -549,6 +550,7 @@ class CfgClusterBase (object):
   MODE = mode = None
   SUBPARTS = dict()
   def __init__ (self, py_dict=None):
+    self.index = 0
     self.subparts = {}  # key <- subpart name; value <- CfgEvspec
     if py_dict:
       self.load(py_dict)
@@ -572,13 +574,17 @@ class CfgClusterBase (object):
         inputobj.add_activator(signal, **a)
     return inputobj
 
-  def export_scconfig (self, py_dict):
-    grp = scconfig.GroupFactory.make(mode=self.COUNTERPART.MODE)
+  def export_scconfig (self, index=None):
+    """Convert CfgCluster to scconfig.Group*"""
+    if index is None:
+      index = self.index
+    grp = scconfig.GroupFactory.make(index, mode=self.COUNTERPART.MODE)
     for k in self.ORDERING:
       if k in self.subparts:
         realfield = self.SUBPARTS[k]
         grp.inputs[realfield] = self.export_input(k)
-    return scconfig.toVDF(grp)
+    #return scconfig.toVDF(grp)
+    return grp
 
 class CfgClusterPen (CfgClusterBase):
   MODE = mode = "pen"
@@ -649,7 +655,7 @@ class CfgClusterMouseJoystick (CfgClusterBase):
     "2": COUNTERPART.Inputs.DOUBLETAP,
     }
 
-class CfgClusterMouseRegion (CfgClusterBase):
+class CfgClusterRegion (CfgClusterBase):
   MODE = mode = "region"
   COUNTERPART  = scconfig.GroupMouseRegion
   ORDERING = "cet"
@@ -770,13 +776,13 @@ class CfgClusterFactory (object):
       CfgClusterJoystickCamera.MODE: CfgClusterFactory.make_jscam,
       CfgClusterJoystickMouse.MODE: CfgClusterFactory.make_jsmouse,
       CfgClusterMouseJoystick.MODE: CfgClusterFactory.make_mousejs,
-      CfgClusterRegion.MODE: CfgClusterFace.make_region,
-      CfgClusterPie.MODE: CfgClusterFace.make_pie,
-      CfgClusterScroll.MODE: CfgClusterFace.make_scroll,
-      CfgClusterSingle.MODE: CfgClusterFace.make_single,
-      CfgClusterSwitches.MODE: CfgClusterFace.make_switches,
-      CfgClusterMenu.MODE: CfgClusterFace.make_menu,
-      CfgClusterTrigger.MODE: CfgClusterFace.make_trigger,
+      CfgClusterRegion.MODE: CfgClusterFactory.make_region,
+      CfgClusterPie.MODE: CfgClusterFactory.make_pie,
+      CfgClusterScroll.MODE: CfgClusterFactory.make_scroll,
+      CfgClusterSingle.MODE: CfgClusterFactory.make_single,
+      CfgClusterSwitches.MODE: CfgClusterFactory.make_switches,
+      CfgClusterMenu.MODE: CfgClusterFactory.make_menu,
+      CfgClusterTrigger.MODE: CfgClusterFactory.make_trigger,
       }
     delegate = DELEGATE[py_dict["mode"]]
     if delegate:
@@ -804,12 +810,24 @@ layer:
 """
   def __init__ (self):
     self.name = None
-    self.specs = {}
+    self.clusters = {}
 
+  ORDERING = [ "SW", "BQ", "LP", "RP", "LJ", "LT", "RT", "RJ", "DP" ]
   CLUSTER_SYMS = set([
     "LP", "RP", "LJ", "BQ", "LT", "RT", "GY", "SW",
     "RJ"
     ])
+  CLUSTERS = {
+    "SW": "switch",
+    "DP": "dpad",
+    "BQ": "button_diamond",
+    "LJ": "joystick",
+    "LT": "left_trigger",
+    "RT": "right_trigger",
+    "LP": "left_trackpad",
+    "RP": "right_trackpad",
+    "RJ": "right_joystick",
+    }
 
   def filter_bind (self, v_dict):
     retval = {}
@@ -823,14 +841,45 @@ layer:
   def load (self, py_dict):
     if 'name' in py_dict:
       self.name = py_dict['name']
-    for k,v in py_dict:
-      if k in self.CLUSTER_SYMS:
+    for k,v in py_dict.items():
+      if k in self.CLUSTERS:
         # TODO: filter bind
         v2 = self.filter_bind(v)
         self.spec[k] = v2
 
-  def export_scconfig (self, sccfg):
-    pass
+  def load (self, py_dict):
+    if 'name' in py_dict:
+      self.name = py_dict['name']
+    for k,v in py_dict.items():
+      if k in self.CLUSTERS:
+        v = py_dict[k]
+        #self.clusters[k] = v
+        self.clusters[k] = CfgClusterFactory.make_cluster(v)
+
+  def export_scconfig (self, sccfg, parent_set_name=''):
+    # Generate "preset" entry.
+    grpid = 0
+    preset = scconfig.Preset(py_name=self.name)
+    for k in self.ORDERING:
+      if k in self.clusters:
+        cluster = self.clusters[k]
+        realfield = self.CLUSTERS[k]
+        # add Group to Sccfg
+        grp = cluster.export_scconfig(grpid)
+        grpid += 1
+        sccfg.add_group(grp)
+        # add GSB to Preset
+        preset.add_gsb(grp.index, realfield)
+    sccfg.add_preset(preset)
+    # add Layer to Sccfg
+    d = {
+      "title": self.name,
+      "legacy_set": True,
+      "set_layer": 1,
+      "parent_set_name": parent_set_name,
+      }
+    sccfg.add_action_layer("UnnamedLayer", **d)
+    return sccfg
 
 
 class CfgAction (object):
