@@ -211,7 +211,7 @@ class Evsym (object):
     self.evtype = evtype  # EventSym physical device
     self.evcode = evcode  # EventSym code
 
-  REGEX_SYM = """(<[A-Za-z0-9_]+>|\[[A-Za-z_][A-Za-z0-9_]*\]|\([A-Za-z_][A-Za-z0-9_]*\)|{[^}]*})"""
+  REGEX_SYM = """(<[A-Za-z0-9_]+>|\[[A-Za-z0-9_]+\]|\([A-Za-z0-9_]+\)|{[^}]*})"""
 
   def __str__ (self):
     parts = []
@@ -597,9 +597,13 @@ class CfgClusterBase (object):
 #        grp.inputs[realfield] = self.export_input(k)
     self.export_group(grp, [ 's', 'e', 'w', 'n' ])
 
+  def export_group_pen (self, grp):
+    self.export_group(grp, [ 'c', '2', 't' ])
+
   def export_scconfig (self, py_dict):
     """Generate Scconfig fragment."""
     MODE_MAP = {
+      "pen": scconfig.GroupAbsoluteMouse.MODE,
       "face": scconfig.GroupFourButtons.MODE,
       }
 
@@ -611,6 +615,8 @@ class CfgClusterBase (object):
       self.export_group_dpad(grp)
     elif self.mode == 'face':
       self.export_group_face(grp)
+    elif self.mode == 'pen':
+      self.export_group_pen(grp)
 
     return scconfig.toVDF(grp)
 

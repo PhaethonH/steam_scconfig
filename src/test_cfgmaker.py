@@ -107,7 +107,7 @@ class TestCfgMaker (unittest.TestCase):
         }
       })
 
-  def test_cfgcluster (self):
+  def test_cfgcluster_dpad (self):
     d = {
       "mode": "dpad",
       "u": [
@@ -182,8 +182,8 @@ class TestCfgMaker (unittest.TestCase):
       }
     self.assertEqual(d, ref)
 
+  def test_cfgcluster_face (self):
     # buttons
-
     d = {
       "mode": "face",
       "n": [
@@ -221,6 +221,33 @@ class TestCfgMaker (unittest.TestCase):
         "button_x": {},
         "button_b": {},
         "button_a": {},
+        }
+      }
+    self.assertEqual(d, ref)
+
+  def test_cfgcluster_pen (self):
+    # pen (absolute-mouse)
+    d = {
+      "mode": "pen",
+      "c": [ CfgEvspec(Evspec.parse("[1]")) ],
+      }
+    cfg = cfgmaker.CfgClusterPen()
+    cfg.load(d)
+    obj = cfg.export_scconfig(None)
+    d = scconfig.toVDF(obj)
+    ref = {
+      "id": "0",
+      "mode": "absolute_mouse",
+      "inputs": {
+        "click": {
+          "activators": {  # One/first activator.
+            "Full_Press": {
+              "bindings": {
+                "binding": "mouse_button LEFT",
+                },
+              },
+            },
+          },
         }
       }
     self.assertEqual(d, ref)
