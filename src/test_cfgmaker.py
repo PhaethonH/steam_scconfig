@@ -441,6 +441,93 @@ class TestCfgMaker (unittest.TestCase):
       }
     self.assertEqual(d, res)
 
+  def test_cfgmaker (self):
+    d = {
+      "name": "Sample Config",
+      "revision": 7,
+      "creator": "unittest",
+      "desc": "Sample Configuration Dump",
+      "devtype": "controller_ps3",
+      "timestamp": 12345,
+      "actions": [ {
+        "name": "DefaultSet",
+        "layers": [ {
+          "name": "DefaultLayer",
+          "BQ": {
+            "mode": "face",
+            "n": [ CfgEvspec(Evspec.parse("<n>")) ],
+            },
+          "SW": {
+            "mode": "switches",
+            "inputs": {
+              "BK": {
+                "activators": {
+                  "Full_Press": {
+                    "bindings": {
+                      "binding": "xinput_button button_escape"
+                      }
+                    }
+                  }
+                },
+              "ST": {
+                "activators": {
+                  "Full_Press": {
+                    "bindings": {
+                      "binding": "xinput_button button_menu"
+                      }
+                    }
+                  }
+                },
+              }
+            },
+          "LP": { "mode": "dpad" },
+          "RP": { "mode": "jscam" },
+          "LJ": { "mode": "jsmove" },
+          "LT": { "mode": "trigger" },
+          "RT": { "mode": "trigger" },
+          }]}]}
+    cfg = cfgmaker.CfgMaker()
+    cfg.load(d)
+    sccfg = scconfig.Mapping()
+    obj = cfg.export_scconfig(sccfg)
+    d = scconfig.toVDF(sccfg)
+    res = {
+      'version': '3',
+      'title': 'Sample Config',
+      'revision': '7',
+			'creator': 'unittest', 'description': 'Sample Configuration Dump',
+			'controller_type': 'controller_ps3',
+      'Timestamp': '12345',
+      'settings': {},
+      'actions': {
+        'Default': {
+          'legacy_set': '1',
+          'title': 'DefaultSet',
+          },
+        },
+      'group': [
+				{'id': '0', 'mode': 'switches', 'inputs': {}},
+				{'id': '1', 'mode': 'four_buttons', 'inputs': {'button_y': {'activators': {'Full_Press': {'bindings': {'binding': 'key_press n'}}}}}},
+				{'id': '2', 'mode': 'dpad', 'inputs': {}},
+				{'id': '3', 'mode': 'joystick_camera', 'inputs': {}},
+				{'id': '4', 'mode': 'joystick_move', 'inputs': {}},
+				{'id': '5', 'mode': 'trigger', 'inputs': {}},
+				{'id': '6', 'mode': 'trigger', 'inputs': {}},
+        ],
+			'preset': {
+				'id': '0',
+				'name': 'DefaultLayer',
+        'group_source_bindings': {'0': 'switch active',
+                                  '1': 'button_diamond active',
+                                  '2': 'left_trackpad active',
+                                  '3': 'right_trackpad active',
+                                  '4': 'joystick active',
+                                  '5': 'left_trigger active',
+                                  '6': 'right_trigger active'},
+			  },
+      }
+    self.assertEqual(d, res)
+
 
 if __name__ == "__main__":
   unittest.main()

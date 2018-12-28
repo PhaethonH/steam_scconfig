@@ -938,25 +938,71 @@ class CfgAction (object):
 
 class CfgMaker (object):
   r"""
+name:
+title:
+revision:
+...
+settings:
+...
 actions:
+  name:
   layers:
+    name:
     <SrcSpec>: <Evsym>+
 """
+  COUNTERPART = scconfig.Mapping
+
   def __init__ (self):
     self.name = None
+    self.revision = 1
+    self.desc = None
+    self.author = None
+    self.devtype = None
+    self.timestamp = None
     self.actions = []
 
   def load (self, py_dict):
-    self.name = py_dict.get("name", self.name)
-    actions_list = py_dict.get("actions", None)
-    for action_dict in actions_list:
-      action = CfgAction()
-      action.load(action_dict)
-      self.actions.append(action)
+#    self.name = py_dict.get("name", self.name)
+    for k,v in py_dict.items():
+      if k == "actions":
+        actions_list = py_dict["actions"]
+        for action_dict in actions_list:
+          action = CfgAction()
+          action.load(action_dict)
+          self.actions.append(action)
+      elif k == 'name' or k == 'title':
+        self.name = v
+      elif k == 'revision':
+        self.revision = int(v)
+      elif k == 'desc' or k == 'description':
+        self.desc = v
+      elif k == 'author' or k == 'creator':
+        self.author = v
+      elif k == 'devtype':
+        self.devtype = v
+      elif k == 'timestamp' or k == 'Timestamp':
+        self.timestamp = int(v)
 
   def export_scconfig (self, sccfg=None):
     if sccfg is None:
-      sccfg = scconfig.Scconfig()
-    return
+      sccfg = scconfig.Scconfig(py_version=3)
+
+    if self.revision is not None:
+      sccfg.revision = self.revision
+    if self.name is not None:
+      sccfg.title = self.name
+    if self.desc is not None:
+      sccfg.description = self.desc
+    if self.author is not None:
+      sccfg.creator = self.author
+    if self.devtype is not None:
+      sccfg.controller_type = self.devtype
+    if self.timestamp is not None:
+      sccfg.timestamp = self.timestamp
+
+    for action in list(self.actions):
+      action.export_scconfig(sccfg)
+
+    return sccfg
 
 
