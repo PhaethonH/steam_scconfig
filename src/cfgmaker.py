@@ -669,7 +669,7 @@ class CfgClusterPie (CfgClusterBase):
       for x in range(0, MAX_BUTTONS) ] + \
     [ ('c', COUNTERPART.Inputs.CLICK) ] )
 
-class CfgClusterScrollwheel (CfgClusterBase):
+class CfgClusterScroll (CfgClusterBase):
   MODE = mode = "scroll"
   COUNTERPART = scconfig.GroupScrollwheel
   ORDERING = "ioc0123456789"
@@ -689,7 +689,7 @@ class CfgClusterScrollwheel (CfgClusterBase):
     "9": "scroll_wheel_list_9",
     }
 
-class CfgClusterSingleButton (CfgClusterBase):
+class CfgClusterSingle (CfgClusterBase):
   MODE = mode = "single"
   COUNTERPART = scconfig.GroupSingleButton
   ORDERING = "ct"
@@ -739,22 +739,44 @@ class CfgClusterFactory (object):
   @staticmethod
   def make_face (py_dict): return CfgClusterFace(py_dict)
   @staticmethod
-  def make_js (py_dict): return CfgClusterJoystick(py_dict)
-  @staticmethod
   def make_jsmove (py_dict): return CfgClusterJoystickMove(py_dict)
   @staticmethod
   def make_jscam (py_dict): return CfgClusterJoystickCamera(py_dict)
   @staticmethod
   def make_jsmouse (py_dict): return CfgClusterJoystickMouse(py_dict)
   @staticmethod
+  def make_mousejs (py_dict): return CfgClusterMouseJoystick(py_dict)
+  @staticmethod
+  def make_pie (py_dict): return CfgClusterPie(py_dict)
+  @staticmethod
+  def make_region (py_dict): return CfgClusterRegion(py_dict)
+  @staticmethod
+  def make_scroll (py_dict): return CfgClusterScroll(py_dict)
+  @staticmethod
+  def make_single (py_dict): return CfgClusterSingle(py_dict)
+  @staticmethod
+  def make_switches (py_dict): return CfgClusterSwitches(py_dict)
+  @staticmethod
+  def make_menu (py_dict): return CfgClusterMenu(py_dict)
+  @staticmethod
+  def make_trigger (py_dict): return CfgClusterTrigger(py_dict)
+  @staticmethod
   def make_cluster (py_dict):
     DELEGATE = {
-      "pen": CfgClusterFactory.make_pen,
-      "dpad": CfgClusterFactory.make_dpad,
-      "face": CfgClusterFactory.make_face,
-      "jsmove": CfgClusterFactory.make_jsmove,
-      "jscam": CfgClusterFactory.make_jscam,
-      "jsmouse": CfgClusterFactory.make_jsmouse,
+      CfgClusterPen.MODE: CfgClusterFactory.make_pen,
+      CfgClusterDpad.MODE: CfgClusterFactory.make_dpad,
+      CfgClusterFace.MODE: CfgClusterFactory.make_face,
+      CfgClusterJoystickMove.MODE: CfgClusterFactory.make_jsmove,
+      CfgClusterJoystickCamera.MODE: CfgClusterFactory.make_jscam,
+      CfgClusterJoystickMouse.MODE: CfgClusterFactory.make_jsmouse,
+      CfgClusterMouseJoystick.MODE: CfgClusterFactory.make_mousejs,
+      CfgClusterRegion.MODE: CfgClusterFace.make_region,
+      CfgClusterPie.MODE: CfgClusterFace.make_pie,
+      CfgClusterScroll.MODE: CfgClusterFace.make_scroll,
+      CfgClusterSingle.MODE: CfgClusterFace.make_single,
+      CfgClusterSwitches.MODE: CfgClusterFace.make_switches,
+      CfgClusterMenu.MODE: CfgClusterFace.make_menu,
+      CfgClusterTrigger.MODE: CfgClusterFace.make_trigger,
       }
     delegate = DELEGATE[py_dict["mode"]]
     if delegate:
