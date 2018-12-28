@@ -856,8 +856,8 @@ layer:
         #self.clusters[k] = v
         self.clusters[k] = CfgClusterFactory.make_cluster(v)
 
-  def export_scconfig (self, sccfg, parent_set_name=''):
-    # Generate "preset" entry.
+  def export_preset (self, sccfg):
+    # TODO: better place to store grpid.
     grpid = 0
     preset = scconfig.Preset(py_name=self.name)
     for k in self.ORDERING:
@@ -871,14 +871,30 @@ layer:
         # add GSB to Preset
         preset.add_gsb(grp.index, realfield)
     sccfg.add_preset(preset)
-    # add Layer to Sccfg
+
+  def export_scconfig (self, sccfg, parent_set_name=''):
+    # Generate "preset" entry.
+    self.export_preset(sccfg)
+
+    # add ActionLayer to Sccfg
     d = {
       "title": self.name,
       "legacy_set": True,
       "set_layer": 1,
       "parent_set_name": parent_set_name,
       }
-    sccfg.add_action_layer("UnnamedLayer", **d)
+    d = {
+      "title": self.name,
+      "legacy_set": True,
+      }
+    if parent_set_name:
+      d.update({
+        'set_layer': 1,
+        'parent_set_name': parent_set_name,
+        })
+      sccfg.add_action_layer("{GENSYM_LAYER}", **d)
+    else:
+      sccfg.add_action_set("Default", **d)
     return sccfg
 
 
@@ -888,10 +904,33 @@ class CfgAction (object):
     self.layers = []
 
   def load (self, py_dict):
-    pass
+    if 'name' in py_dict:
+      self.name = py_dict['name']
+    for k,v in py_dict.items():
+      if k == 'layers':
+        for v in py_dict[k]:
+          print("a layer")
+          lyr = CfgLayer()
+          lyr.load(v)
+          self.layers.append(lyr)
+    return
 
   def export_scconfig (self, sccfg=None):
-    pass
+    for lyr in self.layers:
+      if lyr == self.layers[0]:
+        print("expect ActionSet")
+        lyr.export_scconfig(sccfg)
+      else:
+        print("expect ActionLayer")
+        lyr.export_scconfig(sccfg, self.name)
+
+#    # add ActionSet to Sccfg
+#    d = {
+#      "title": self.name,
+#      "legacy_set": True,
+#      }
+#    sccfg.add_action_set("UnnamedSet", **d)
+    return sccfg
 
 
 class CfgMaker (object):

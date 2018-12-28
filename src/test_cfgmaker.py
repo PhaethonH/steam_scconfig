@@ -319,7 +319,7 @@ class TestCfgMaker (unittest.TestCase):
     cfg = cfgmaker.CfgLayer()
     cfg.load(d)
     sccfg = scconfig.Mapping()
-    obj = cfg.export_scconfig(sccfg)
+    obj = cfg.export_scconfig(sccfg, 'Default')
     d = scconfig.toVDF(sccfg)
     res = {
       'version': '3',
@@ -331,10 +331,11 @@ class TestCfgMaker (unittest.TestCase):
       'Timestamp': '-1',
       'settings': {},
       'action_layers': {
-        'UnnamedLayer': {
+        '{GENSYM_LAYER}': {
           'legacy_set': '1',
 					'set_layer': '1',
 					'title': 'DefaultLayer',
+          'parent_set_name': 'Default',
           }},
       'group': [
 				{'id': '0', 'mode': 'switches', 'inputs': {}},
@@ -359,6 +360,86 @@ class TestCfgMaker (unittest.TestCase):
       }
     self.assertEqual(d, res)
 
+  def test_cfgaction (self):
+    d = {
+      "name": "DefaultSet",
+      "layers": [ {
+        "name": "DefaultLayer",
+        "BQ": {
+          "mode": "face",
+          "n": [ CfgEvspec(Evspec.parse("<n>")) ],
+          },
+        "SW": {
+          "mode": "switches",
+          "inputs": {
+            "BK": {
+              "activators": {
+                "Full_Press": {
+                  "bindings": {
+                    "binding": "xinput_button button_escape"
+                    }
+                  }
+                }
+              },
+            "ST": {
+              "activators": {
+                "Full_Press": {
+                  "bindings": {
+                    "binding": "xinput_button button_menu"
+                    }
+                  }
+                }
+              },
+            }
+          },
+        "LP": { "mode": "dpad" },
+        "RP": { "mode": "jscam" },
+        "LJ": { "mode": "jsmove" },
+        "LT": { "mode": "trigger" },
+        "RT": { "mode": "trigger" },
+        }]}
+    cfg = cfgmaker.CfgAction()
+    cfg.load(d)
+    sccfg = scconfig.Mapping()
+    obj = cfg.export_scconfig(sccfg)
+    d = scconfig.toVDF(sccfg)
+    res = {
+      'version': '3',
+      'title': 'Unnamed',
+      'revision': '1',
+			'creator': '(Auto-Generator)',
+			'description': 'Unnamed configuration',
+			'controller_type': 'controller_steamcontroller_gordon',
+      'Timestamp': '-1',
+      'settings': {},
+      'actions': {
+        'Default': {
+          'legacy_set': '1',
+          'title': 'DefaultLayer',
+          },
+        },
+      'group': [
+				{'id': '0', 'mode': 'switches', 'inputs': {}},
+				{'id': '1', 'mode': 'four_buttons', 'inputs': {'button_y': {'activators': {'Full_Press': {'bindings': {'binding': 'key_press n'}}}}}},
+				{'id': '2', 'mode': 'dpad', 'inputs': {}},
+				{'id': '3', 'mode': 'joystick_camera', 'inputs': {}},
+				{'id': '4', 'mode': 'joystick_move', 'inputs': {}},
+				{'id': '5', 'mode': 'trigger', 'inputs': {}},
+				{'id': '6', 'mode': 'trigger', 'inputs': {}},
+        ],
+			'preset': {
+				'id': '0',
+				'name': 'DefaultLayer',
+        'group_source_bindings': {'0': 'switch active',
+                                  '1': 'button_diamond active',
+                                  '2': 'left_trackpad active',
+                                  '3': 'right_trackpad active',
+                                  '4': 'joystick active',
+                                  '5': 'left_trigger active',
+                                  '6': 'right_trigger active'},
+			  },
+      }
+    self.assertEqual(d, res)
 
 
 if __name__ == "__main__":
