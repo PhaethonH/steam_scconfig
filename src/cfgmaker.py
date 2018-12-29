@@ -573,20 +573,29 @@ class CfgClusterBase (object):
     if py_dict:
       self.load(py_dict)
 
+  def bind_subpart (self, subpartname, bindspec):
+    if _stringlike(bindspec):
+      # generate list of CfgEvspec
+      collate = []
+      evspecs = bindspec.split()
+      for evspec in evspecs:
+        cfgevspec = CfgEvspec(Evspec.parse(evspec))
+        if cfgevspec:
+          collate.append(cfgevspec)
+      self.subparts[subpartname] = collate
+    elif isinstance(bindspec, CfgEvspec):
+      if not subpartname in self.subparts:
+        self.subparts[subpartname] = []
+      self.subparts[subpartname].append(bindspec)
+    else:
+      # assume py literals (list of CfgEvspec).
+      self.subparts[subpartname] = bindspec
+    return True
+
   def load (self, py_dict):
     for k,v in py_dict.items():
       if k in self.SUBPARTS:
-        if _stringlike(v):
-          # generate list of CfgEvspec
-          collate = []
-          evspecs = v.split()
-          for evspec in evspecs:
-            cfgevspec = CfgEvspec(Evspec.parse(evspec))
-            if cfgevspec:
-              collate.append(cfgevspec)
-          self.subparts[k] = collate
-        else:
-          self.subparts[k] = v
+        self.bind_subpart(k, v)
     return
 
   def export_input (self, subpart_name):
@@ -881,30 +890,26 @@ layer:
       retval['mode'] = m
     pass
 
-  def pave_cluster (self, clustername, mode=None):
-    pass
+  def pave_cluster (self, clustername, create_mode=None):
+    """Ensure cluster entry exists, with specified mode if create needed."""
+    if not clustername in self.clusters:
+      cluster = CfgClusterFactory.make_cluster({"mode": create_mode})
+      self.clusters[clustername] = cluster
+    return True
 
   def pave_subpart (self, clustername, subpartname):
-    pass
+    """Ensure subpart within cluster exists (is ready for bind()).
+For inlined subparts.
+"""
+    if not clustername in self.clusters:
+      mode = self.auto_mode(subpartname)
+      self.pave_cluster(clustername, mode)
+    return True
 
   def bind_point (self, clustername, subpartname, bindspec):
     # bindspec: (dict, str, CfgEvspec, [ CfgEvspec ])
-    if isinstance(bindspec, CfgEvspec):
-      pass
-    elif _stringlike(bindspec):
-      pass
-    elif _dictlike(bindspec):
-      pass
-    else:
-      try:
-        if not isinstance(bindspec[0], CfgEvspec):
-          pass
-      except TypeError as e:
-        # not a list.
-        pass
-      else:
-        pass
-    pass
+    self.pave_subpart(clustername, subpartname)
+    self.clusters[clustername].bind_subpart(subpartname, bindspec)
 
   def auto_mode (self, subparts):
     """Determine cluster mode from available subparts specified."""
@@ -918,14 +923,20 @@ layer:
       try: int(x)
       except TypeError: return False
       else: return True
-    def _intOrZero(x):
+    def _intOrNegOne(x):
       try: return int(x)
-      except TypeError: return 0
+      except TypeError: return -1
+    numerics = [ _intOrNegOne(x) for x in subparts ]
     if any([_intlike(x) for x in subparts ]):
-      if any([_intOrZero(x) > 16  for x in subparts ]):
-        # definitely pie.
+      zero = 0 in numerics
+      m = max(numerics)
+      if (m > 16) or (zero):
+        # definitely pie: more than 16, or exists 0 = center/unselect.
         return CfgClusterPie.mode
-      # TODO: divine if touchmenu.
+      if m in (2, 4, 7, 9, 13, 15, 16):
+        # TouchMenu if exactly these many, and 0 does not exist.
+        return CfgClusterMenu.mode
+      # any other max-numeric.
       return CfgClusterPie.mode
     return None
 
@@ -934,7 +945,6 @@ layer:
     k, v = trigger_name, trigger_value
     if v[0] == '(':
       v = v[1:3]
-    cluster = self.clusters.get(k, None)
     if v in ("LT", "RT"):
       if k == v:
         # same side
@@ -943,25 +953,12 @@ layer:
         # opposite side
         output_trigger = scconfig.GroupBase.Settings.OutputTrigger.OPPOSITE_SIDE
 
-      if cluster is None:
-        init_dict = {
-          "mode": "trigger",
-          }
-        cluster = CfgClusterFactory.make_cluster(init_dict)
-        self.clusters[k] = cluster
-      self.clusters[k].subparts['>'] = output_trigger
+      self.pave_cluster(trigger_name, "trigger")
+      self.bind_point(trigger_name, '>', output_trigger)
     else:
       # full-press only assignment.
-      cfgevspec = CfgEvspec(Evspec.parse(v))
-      if not cfgevspec:
-        return False
-      if cluster is None:
-        init_dict = {
-          "mode": "trigger",
-          }
-        cluster = CfgClusterFactory.make_cluster(init_dict)
-        self.clusters[k] = cluster
-      self.clusters[k].subparts['c'] = [ cfgevspec ]
+      self.pave_cluster(trigger_name, "trigger")
+      self.bind_point(trigger_name, 'c', v)
     return True
 
   def load_joystick (self, js_name, js_value):
@@ -978,25 +975,16 @@ layer:
     else:
       # opposite side
       output_joystick = 1
-    cluster = self.clusters.get(k, None)
-    if cluster is None:
-      if k[0] == 'L':
-        init_dict = { "mode": "jsmove" }
-      else:
-        init_dict = { "mode": "jscam" }
-      cluster = CfgClusterFactory.make_cluster(init_dict)
-      self.clusters[k] = cluster
-    self.clusters[k].subparts['>'] = output_joystick
+    if js_name[0] == 'R':
+      self.pave_cluster(js_name, "jscam")
+    else:
+      self.pave_cluster(js_name, "jsmove")
+    self.bind_point(js_name, '>', output_joystick)
     return True
 
   def load_touchpad (self, tp_name, tp_value):
-    k, v = tp_name, tp_value
-    cfgevspec = CfgEvspec(Evspec.parse(tp_value))
-    init_dict = {
-      "mode": "single",
-      "c": [ cfgevspec ],
-      }
-    self.clusters[k] = CfgClusterFactory.make_cluster(init_dict)
+    self.pave_cluster(tp_name, "single")
+    self.bind_point(tp_name, 'c', tp_value)
     return True
 
   def load (self, py_dict):
@@ -1007,12 +995,12 @@ layer:
         # No-Op binding: do nothing.
         pass
       elif k in self.CLUSTERS:
-        # whole cluster.
+        # whole cluster full spec.
         v = py_dict[k]
         if _dictlike(v):
           self.clusters[k] = CfgClusterFactory.make_cluster(v)
         else:
-          # whole-cluster.
+          # whole-cluster single bind.
           if k in ('LT', 'RT'):
             # analog or full-press-only assignment of triggers.
             self.load_trigger(k, v)
@@ -1026,34 +1014,23 @@ layer:
       elif k in CfgClusterSwitches.SUBPARTS:
         # directly inlined switch subpart: BK, ST, LB, RB, LG, RG
         clustername = "SW"
-        cluster = self.clusters.get(clustername, None)
-        if cluster is None:
-          init_dict = {
-            "mode": CfgClusterSwitches.mode
-            }
-          cluster = CfgClusterFactory.make_cluster(init_dict)
-          self.clusters[clustername] = cluster
-        cfgevspec = CfgEvspec(Evspec.parse(v))
-        cluster.subparts[k] = [ cfgevspec ]
+        subpartname = k
+        self.pave_cluster(clustername, "switches")
+        self.bind_point(clustername, subpartname, v)
       elif len(k) > 2 and k[2] == '.' and k[:2] in self.CLUSTERS:
         # inline subpart "XX.y".
         clustername = k[:2]
+        subpartname = k[3:]
         cluster = self.clusters.get(clustername, None)
-        subpart = k[3:]
         if cluster is None:
           prefix = k[:3]
           if clustername in ("LT", "RT"):
-            mode = CfgClusterTrigger.mode
+            self.pave_cluster(clustername, "trigger")
           else:
             subparts = [ x[3] for x in py_dict if x.startswith(prefix) ]
             mode = self.auto_mode(subparts)
-          init_dict = {
-            "mode": mode,
-            }
-          cluster = CfgClusterFactory.make_cluster(init_dict)
-          self.clusters[clustername] = cluster
-        cfgevspec = CfgEvspec(Evspec.parse(v))
-        cluster.subparts[subpart] = [ cfgevspec ]
+            self.pave_cluster(clustername, mode)
+        self.bind_point(clustername, subpartname, v)
 
   def export_preset (self, sccfg):
     grpid = len(sccfg.groups)
