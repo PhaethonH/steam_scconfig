@@ -2207,6 +2207,18 @@ class Mapping (object):
   VSC_PRESET = "preset"
   VSC_SETTINGS = "settings"
 
+  ControllerType = PseudoNamespace(
+    VSC = "controller_steamcontroller_gordon",
+    PS3 = "controller_ps3",
+    PS4 = "controller_ps4",
+    # Add as discovered.
+    # TODO: Xbox/MS-Xinput, Xbox360, XboxOne, Switch, PC Generic
+    )
+  ControllerType.DEFAULT = ControllerType.VSC
+  ControllerType.GORDON = ControllerType.VSC
+
+  # PS4 distinguishes single-pad from split-pad by right_trackpad being active (split pad) or inactive (single pad).
+
   class Settings (SettingsBase):
     _VSC_KEYS = PseudoNamespace(
       LEFT_TRACKPAD_MODE = "left_trackpad_mode",
