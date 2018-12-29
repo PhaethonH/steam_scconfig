@@ -545,6 +545,9 @@ class EvgenFactory (object):
     else:
       mangled = mangle_vdfliteral(' '.join(args))
       return Evgen_Empty("UNKNOWN_CONTROLLER_ACTION({})".format(mangled))
+  @staticmethod
+  def make__literal (litsym):
+    return EvgenBase(' ', litsym)
 
   @staticmethod
   def _parse (bindstr):

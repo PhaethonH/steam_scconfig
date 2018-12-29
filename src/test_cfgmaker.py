@@ -34,6 +34,9 @@ class TestEvspec (unittest.TestCase):
     res = repr(obj)
     self.assertEqual(res, "Evspec(actsig='_', evsyms='(B)(A)', evfrob=':1000%@0,200~2|/100')")
 
+    obj = Evspec.parse("{foobar bletch}")
+    res = repr(obj)
+    self.assertEqual(res, "Evspec(actsig=None, evsyms='{foobar bletch}', evfrob=None)")
 
 class TestSrcspec (unittest.TestCase):
   def test_parse1 (self):
@@ -148,6 +151,44 @@ class TestCfgMaker (unittest.TestCase):
         CfgEvspec(Evspec.parse("+<a><b>%")),
         CfgEvspec(Evspec.parse("_<2>%")),
         ],
+      "d": None,
+      "l": None,
+      "r": None,
+      }
+    cfg = cfgmaker.CfgClusterDpad()
+    cfg.load(d)
+    obj = cfg.export_scconfig(None)
+    d = scconfig.toVDF(obj)
+    ref = {
+      "id": "0",
+      "mode": "dpad",
+      "inputs": {
+        "dpad_north": {
+          "activators": {  # One/first activator.
+            "Start_Press": {
+              "bindings": {
+                "binding": [ "key_press a", "key_press b" ],
+                },
+              "settings": { "toggle": "1" },
+              },
+            "Long_Press": {
+              "bindings": {
+                "binding": "key_press 2"
+                },
+              "settings": { "toggle": "1" },
+              }
+            },
+          },
+        "dpad_south": {},
+        "dpad_west": {},
+        "dpad_east": {},
+        }
+      }
+    self.assertEqual(d, ref)
+
+    d = {
+      "mode": "dpad",
+      "u": "+<a><b>% _<2>%",
       "d": None,
       "l": None,
       "r": None,
@@ -332,7 +373,7 @@ class TestCfgMaker (unittest.TestCase):
       'Timestamp': '-1',
       'settings': {},
       'action_layers': {
-        '0': {
+        'Default': {
           'legacy_set': '1',
 					'set_layer': '1',
 					'title': 'DefaultLayer',

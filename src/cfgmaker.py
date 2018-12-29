@@ -233,6 +233,8 @@ class Evsym (object):
       parts.append("({})".format(self.evcode))
     elif self.evtype == "host":
       parts.append("{}{}{}".format("{", self.evcode, "}"))
+    else:
+      parts.append("{}".format(self.evcode))
     return "".join(parts)
 
   def __repr__ (self):
@@ -399,9 +401,9 @@ class Evspec (object):
   REGEX_MAIN = "{}?({}+)({}+)?".format(REGEX_SIGNAL, REGEX_SYM, REGEX_FROB)
 
   def __init__ (self, actsig=None, evsyms=None, evfrob=None):
-    self.actsig = actsig
-    self.evsyms = evsyms
-    self.evfrob = evfrob
+    self.actsig = actsig    # one character of REGEX_SIGNAL
+    self.evsyms = evsyms    # list of Evsym instances.
+    self.evfrob = evfrob    # Evfrob instance.
 
   def __str__ (self):
     evsymspec = "".join(map(str, self.evsyms))
@@ -415,8 +417,8 @@ class Evspec (object):
   def __repr__ (self):
     evsymspec = "".join(map(str, self.evsyms))
 #    evsymspec = self.evsyms
-    evfrobspec = str(self.evfrob)
-    retval = """{}(actsig='{!s}', evsyms='{!s}', evfrob='{!s}')""".format(
+    evfrobspec = str(self.evfrob) if self.evfrob is not None else None
+    retval = """{}(actsig={!r}, evsyms='{!s}', evfrob={!r})""".format(
       self.__class__.__name__,
       self.actsig,
       evsymspec,    # list of Evsym
@@ -497,7 +499,7 @@ class CfgEvspec (object):
     elif evsym.evtype == "gamepad":
       retval = scconfig.EvgenFactory.make_gamepad(evsym.evcode)
     elif evsym.evtype == "host":
-      pass
+      retval = scconfig.EvgenFactory.make__literal(evsym.evcode)
     return retval
 
   def export_signal (self):
@@ -567,7 +569,7 @@ class CfgClusterBase (object):
   SUBPARTS = dict()
   def __init__ (self, py_dict=None):
     self.index = 0
-    self.subparts = {}  # key <- subpart name; value <- CfgEvspec
+    self.subparts = {}  # key <- subpart name; value <- list of CfgEvspec
     if py_dict:
       self.load(py_dict)
 
@@ -851,7 +853,7 @@ layer:
 """
   def __init__ (self):
     self.name = None
-    self.clusters = {}
+    self.clusters = {}    # map to list of CfgCluster*
 
   ORDERING = [ "SW", "BQ", "LP", "RP", "LJ", "LT", "RT", "RJ", "DP" ]
   CLUSTER_SYMS = set([
@@ -877,6 +879,31 @@ layer:
       if not m in CfgClusterNode.MODES:
         m = None
       retval['mode'] = m
+    pass
+
+  def pave_cluster (self, clustername, mode=None):
+    pass
+
+  def pave_subpart (self, clustername, subpartname):
+    pass
+
+  def bind_point (self, clustername, subpartname, bindspec):
+    # bindspec: (dict, str, CfgEvspec, [ CfgEvspec ])
+    if isinstance(bindspec, CfgEvspec):
+      pass
+    elif _stringlike(bindspec):
+      pass
+    elif _dictlike(bindspec):
+      pass
+    else:
+      try:
+        if not isinstance(bindspec[0], CfgEvspec):
+          pass
+      except TypeError as e:
+        # not a list.
+        pass
+      else:
+        pass
     pass
 
   def auto_mode (self, subparts):
@@ -1053,15 +1080,9 @@ layer:
   def export_scconfig (self, sccfg, parent_set_name='', **overrides):
     # Generate "preset" entry.
     preset = self.export_preset(sccfg)
-    presetid = preset.index
+    presetname = preset.name
 
     # add ActionLayer to Sccfg
-    d = {
-      "title": self.name,
-      "legacy_set": True,
-      "set_layer": 1,
-      "parent_set_name": parent_set_name,
-      }
     d = {
       "title": self.name,
       "legacy_set": True,
@@ -1078,20 +1099,20 @@ layer:
       d.update(overrides)
       if 'index' in d: del d['index']
       if index is None:
-        index = presetid
+        index = presetname
       sccfg.add_action_layer(index, **d)
     else:
       d.update(overrides)
       if 'index' in d: del d['index']
       if index is None:
-        index = presetid
+        index = presetname
       sccfg.add_action_set(index, **d)
     return sccfg
 
 
 class CfgAction (object):
   def __init__ (self):
-    self.name = None
+    self.name = 'Default'
     self.layers = []
 
   def load (self, py_dict):
