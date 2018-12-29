@@ -1163,7 +1163,7 @@ actions:
 
   def export_scconfig (self, sccfg=None):
     if sccfg is None:
-      sccfg = scconfig.Scconfig(py_version=3)
+      sccfg = scconfig.Mapping(py_version=3)
 
     if self.revision is not None:
       sccfg.revision = self.revision
@@ -1183,4 +1183,10 @@ actions:
 
     return sccfg
 
+  def export_controller_config (self, sccfg=None):
+    if sccfg is None:
+      sccfg = scconfig.ControllerConfig()
+    conmap = self.export_scconfig()
+    sccfg.add_mapping(conmap)
+    return sccfg
 

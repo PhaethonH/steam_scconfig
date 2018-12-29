@@ -1047,7 +1047,7 @@ class TestCfgMaker (unittest.TestCase):
     cfg.load(d)
     scmap = scconfig.Mapping()
     obj = cfg.export_scconfig(scmap)
-    sccfg = scconfig.ControllerConfig(py_mappings=[scmap])
+    sccfg = cfg.export_controller_config()
     d = scconfig.toVDF(sccfg)
     #pprint.pprint(d)
     s = scvdf.dumps(d)
