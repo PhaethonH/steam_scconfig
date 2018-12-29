@@ -5,7 +5,7 @@ import unittest
 import cfgmaker
 from cfgmaker import Evspec, Srcspec, CfgMaker
 from cfgmaker import CfgEvspec
-import scconfig
+import scconfig, scvdf
 import yaml
 import pprint
 
@@ -1039,6 +1039,19 @@ class TestCfgMaker (unittest.TestCase):
         },
       ]
     self.assertEqual(d, res)
+
+  def test_load2 (self):
+    with open("../examples/x3tc_1.yaml") as f:
+      d = yaml.load(f)
+    cfg = cfgmaker.CfgMaker()
+    cfg.load(d)
+    scmap = scconfig.Mapping()
+    obj = cfg.export_scconfig(scmap)
+    sccfg = scconfig.ControllerConfig(py_mappings=[scmap])
+    d = scconfig.toVDF(sccfg)
+    pprint.pprint(d)
+    s = scvdf.dumps(d)
+    print(s)
 
 
 if __name__ == "__main__":

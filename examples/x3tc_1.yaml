@@ -2,6 +2,7 @@
 
 name: "X3TC Experimental 1, PS3pad"
 revision: 1
+devtype: controller_ps3
 actions:
 - name: Default
   layers:

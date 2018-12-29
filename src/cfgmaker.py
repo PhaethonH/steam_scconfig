@@ -1029,9 +1029,14 @@ layer:
         cluster.subparts[subpart] = [ cfgevspec ]
 
   def export_preset (self, sccfg):
-    # TODO: better place to store grpid.
-    grpid = 0
-    preset = scconfig.Preset(py_name=self.name)
+    grpid = len(sccfg.groups)
+    presetid = len(sccfg.presets)
+    if presetid:
+      index = "Preset_{:07d}".format(1000000 + presetid)
+    else:
+      index = 'Default'
+
+    preset = scconfig.Preset(str(presetid), py_name=index)
     for k in self.ORDERING:
       if k in self.clusters:
         cluster = self.clusters[k]
@@ -1043,10 +1048,12 @@ layer:
         # add GSB to Preset
         preset.add_gsb(grp.index, realfield)
     sccfg.add_preset(preset)
+    return preset
 
   def export_scconfig (self, sccfg, parent_set_name='', **overrides):
     # Generate "preset" entry.
-    self.export_preset(sccfg)
+    preset = self.export_preset(sccfg)
+    presetid = preset.index
 
     # add ActionLayer to Sccfg
     d = {
@@ -1071,13 +1078,13 @@ layer:
       d.update(overrides)
       if 'index' in d: del d['index']
       if index is None:
-        index = "{GENSYM_LAYER}"
+        index = presetid
       sccfg.add_action_layer(index, **d)
     else:
       d.update(overrides)
       if 'index' in d: del d['index']
       if index is None:
-        index = "{GENSYM_SET}"
+        index = presetid
       sccfg.add_action_set(index, **d)
     return sccfg
 
