@@ -332,7 +332,7 @@ class TestCfgMaker (unittest.TestCase):
       'Timestamp': '-1',
       'settings': {},
       'action_layers': {
-        '{GENSYM_LAYER}': {
+        '0': {
           'legacy_set': '1',
 					'set_layer': '1',
 					'title': 'DefaultLayer',
@@ -349,7 +349,7 @@ class TestCfgMaker (unittest.TestCase):
         ],
 			'preset': {
 				'id': '0',
-				'name': 'DefaultLayer',
+				'name': 'Default',
         'group_source_bindings': {'0': 'switch active',
                                   '1': 'button_diamond active',
                                   '2': 'left_trackpad active',
@@ -430,7 +430,7 @@ class TestCfgMaker (unittest.TestCase):
         ],
 			'preset': {
 				'id': '0',
-				'name': 'DefaultLayer',
+				'name': 'Default',
         'group_source_bindings': {'0': 'switch active',
                                   '1': 'button_diamond active',
                                   '2': 'left_trackpad active',
@@ -533,7 +533,7 @@ class TestCfgMaker (unittest.TestCase):
         ],
 			'preset': {
 				'id': '0',
-				'name': 'DefaultLayer',
+				'name': 'Default',
         'group_source_bindings': {'0': 'switch active',
                                   '1': 'button_diamond active',
                                   '2': 'left_trackpad active',
@@ -1049,9 +1049,10 @@ class TestCfgMaker (unittest.TestCase):
     obj = cfg.export_scconfig(scmap)
     sccfg = scconfig.ControllerConfig(py_mappings=[scmap])
     d = scconfig.toVDF(sccfg)
-    pprint.pprint(d)
+    #pprint.pprint(d)
     s = scvdf.dumps(d)
-    print(s)
+    #print(s)
+    # TODO: literal or hash of 's'.
 
 
 if __name__ == "__main__":
