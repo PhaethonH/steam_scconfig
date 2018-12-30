@@ -1109,6 +1109,14 @@ class TestCfgMaker (unittest.TestCase):
         {
           "name": "Default",
           "layers": [
+            {
+              "ST": "<escape>",
+              },
+            ],
+        },
+        {
+          "name": "TestShifts",
+          "layers": [
             { "name": "Default",
               "BQ.s": "(A)",
               },
@@ -1143,12 +1151,14 @@ class TestCfgMaker (unittest.TestCase):
 #    action = cfgmaker.CfgAction()
 #    action.load(d["actions"])
 #    uppercfg.actions.append(action)
-    action = uppercfg.actions[0]
 
-    cfg = cfgmaker.CfgShifters()
-    d2 = d['actions'][0]
-    cfg.load(d2)
-    cfg.update_cfgaction(uppercfg.actions[0])
+    action = uppercfg.actions[0]
+    shiftcfg = cfgmaker.CfgShifters()
+    d2 = d['actions'][1]
+    shiftcfg.load(d2)
+    #shiftcfg.update_cfgaction(uppercfg.actions[0])
+    #shiftcfg.update_cfgaction(uppercfg.actions, 0)
+    shiftcfg.update_cfgaction(uppercfg.actions, 1)
 
     sccfg = uppercfg.export_scconfig()
     d = scconfig.toVDF(sccfg)

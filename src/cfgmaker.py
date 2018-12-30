@@ -1088,30 +1088,32 @@ For inlined subparts.
     preset = self.export_preset(sccfg)
     presetname = preset.name
 
-    # add ActionLayer to Sccfg
+    # add set/layer to actions/action_layers.
     d = {
       "title": self.name,
       "legacy_set": True,
       }
+    # index (key-in-parent) of the layer is the Preset's name.
     if 'index' in overrides:
       index = overrides['index']
     else:
-      index = self.name
+      #index = self.name
+      index = preset.name
+    if index is None:
+      index = presetname
     if parent_set_name:
+      # add layer to ActionLayer
       d.update({
         'set_layer': 1,
         'parent_set_name': parent_set_name,
         })
       d.update(overrides)
       if 'index' in d: del d['index']
-      if index is None:
-        index = presetname
       sccfg.add_action_layer(index, **d)
     else:
+      # add action's base layer to ActionSet
       d.update(overrides)
       if 'index' in d: del d['index']
-      if index is None:
-        index = presetname
       sccfg.add_action_set(index, **d)
     return sccfg
 
@@ -1141,13 +1143,25 @@ class CfgAction (object):
           self.layers.append(lyr)
     return
 
-  def export_scconfig (self, sccfg=None):
+  def export_scconfig (self, sccfg, phase=0):
     # Add first layer as Action Set, other layers as Action Layers.
-    for lyr in self.layers:
-      if lyr == self.layers[0]:
-        lyr.export_scconfig(sccfg, title=self.name, index='Default')
-      else:
-        lyr.export_scconfig(sccfg, parent_set_name=self.name, index=None)
+    if self.layers:
+      if phase == 0:
+        lyr = self.layers[0]
+        lyr.export_scconfig(sccfg, title=self.name)
+      elif phase == 1:
+        for lyr in self.layers[1:]:
+          lyr.export_scconfig(sccfg, parent_set_name=self.name)
+
+#    for lyr in self.layers:
+#      if lyr == self.layers[0]:
+#        if phase != 0:
+#          continue
+#        lyr.export_scconfig(sccfg, title=self.name)
+#      else:
+#        if phase == 0:
+#          break
+#        lyr.export_scconfig(sccfg, parent_set_name=self.name)
     return sccfg
 
 
@@ -1321,25 +1335,42 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
           self.overlays[shiftnum] = shiftlayers
 
   @staticmethod
-  def get_layer_num (cfgaction, layer_name):
-    lyr = CfgShifters.get_layer_by_name(cfgaction, layer_name)
+  def get_layer_num (cfgactions, layer_name, specific_action=None):
+    if specific_action:
+      lyr = CfgShifters.get_layer_by_name(specific_action, layer_name)
+    else:
+      specific_action, lyr = CfgShifters.get_action_layer_by_name(cfgactions, layer_name)
+
+    offset = len(cfgactions)
+    # More offset due to layers in preceding actions.
+    for cfgaction in cfgactions:
+      if cfgaction != specific_action:
+        break
+      delta = len(cfgaction.layers) - 1
+      if delta < 0:
+        delta = 0
+      offset += delta
+
     lyrnum = cfgaction.find(lyr)
+    lyrnum += offset - 1   # base layer in this action already counted in original offset.
+
     return lyrnum
 
-  def shifter_bind (self, cfgaction, from_level, shiftsym, shiftstyle, shiftbits):
+  def shifter_bind (self, cfgactions, actionidx, from_level, shiftsym, shiftstyle, shiftbits):
     # TODO: map shift level to action serialid.
+    cfgaction = cfgactions[actionidx]
     shift_base = 0
     evspec = None
 
     def apply_overlay (evsyms, overlay_name):
-      lyrid = self.get_layer_num(cfgaction, overlay_name)
+      lyrid = self.get_layer_num(cfgactions, overlay_name)
       #ovparms = ("apply", "${}({})".format(overlay_name, lyrid), 0, 0)
       ovparms = ("apply", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
       evsym = Evsym('overlay', ovparms)
       evsyms.append(evsym)
 
     def peel_overlay (evsyms, overlay_name):
-      lyrid = self.get_layer_num(cfgaction, overlay_name)
+      lyrid = self.get_layer_num(cfgactions, overlay_name)
 #      ovparms = ("peel", "${}({})".format(overlay_name, lyrid), 0, 0)
       ovparms = ("peel", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
       evsym = Evsym('overlay', ovparms)
@@ -1433,12 +1464,19 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
     for lyr in cfgaction.layers:
       if lyr.name == layer_name:
         return lyr
-    else:
-      return None
+    return None
 
-  def preshift_binds (self, cfgaction, lyr, from_level, shiftsym, shiftstyle, bitmask):
+  @staticmethod
+  def get_action_layer_by_name (cfgactions, layer_name):
+    for cfgaction in cfgactions:
+      lyr = CfgShifters.get_layer_by_name(cfgaction, layer_name)
+      return (cfgaction, lyr)
+    return None
+
+  def preshift_binds (self, cfgactions, actionidx, lyr, from_level, shiftsym, shiftstyle, bitmask):
     # Examine all clusters involved in current debounced state Shift_{from_level}
     # Set all involved clusters to dpad/trigger/switches to shift from Preshift_{from_level} to Shift_{from_level}
+    cfgaction = cfgactions[actionidx]
     proxies = []   # clusters that need to proxy into Shift_{from_level}
     for debounced_layernames in self.overlays.get(from_level, []):
       debounced_layer = self.get_layer_by_name(cfgaction, debounced_layernames)
@@ -1455,7 +1493,7 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
 
     for shiftsym,shiftspec in self.shifters.items():
       (style, bitmask) = shiftspec
-      cfgevspec = self.shifter_bind(cfgaction, from_level, shiftsym, style, bitmask)
+      cfgevspec = self.shifter_bind(cfgactions, actionidx, from_level, shiftsym, style, bitmask)
       lyr.bind_point(None, shiftsym, cfgevspec)
 
     proxyevspec = CfgEvspec(Evspec('+', [ Evsym('overlay', ('apply', '$Shift_{}'.format(from_level), 0, 0)) ], None))
@@ -1471,12 +1509,12 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
         lyr.bind_point(proxied_clustername, 'l', proxyevspec)
         lyr.bind_point(proxied_clustername, 'r', proxyevspec)
 
-  def update_cfgaction (self, cfgaction):
+  def update_cfgaction (self, cfgactions, actionidx):
     # Can only operate on extant layers and binds.
     # Generate the shift FSM layers.
-    cfgaction.name = 'Default'
-    parent_set_name = cfgaction.name
-    layers = cfgaction.layers
+#    cfgaction.name = 'Default'
+    parent_set_name = cfgactions[actionidx].name
+    layers = cfgactions[actionidx].layers
     # Generate shifter layers.
     for sl in range(0, self.maxshift+1):
       # Prepare preshifts (bounce keys).
@@ -1505,17 +1543,17 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
     # Set shifter binds.
     for sl in range(0, self.maxshift+1):
       if sl > 0:
-        cfglayer = self.get_layer_by_name(cfgaction, "Shift_{}".format(sl))
+        cfglayer = self.get_layer_by_name(cfgactions[actionidx], "Shift_{}".format(sl))
       else:
-        cfglayer = cfgaction.layers[0]
+        cfglayer = cfgactions[actionidx].layers[0]
       for shiftsym,shiftspec in self.shifters.items():
         (style, bitmask) = shiftspec
-        cfgevspec = self.shifter_bind(cfgaction, sl, shiftsym, style, bitmask)
+        cfgevspec = self.shifter_bind(cfgactions, actionidx, sl, shiftsym, style, bitmask)
         cfglayer.bind_point(None, shiftsym, cfgevspec)
 
-      prelayer = self.get_layer_by_name(cfgaction, "Preshift_{}".format(sl))
+      prelayer = self.get_layer_by_name(cfgactions[actionidx], "Preshift_{}".format(sl))
       if prelayer:
-        self.preshift_binds(cfgaction, prelayer, sl, shiftsym, style, bitmask)
+        self.preshift_binds(cfgactions, actionidx, prelayer, sl, shiftsym, style, bitmask)
 
 
 class CfgMaker (object):
@@ -1582,7 +1620,9 @@ actions:
       sccfg.timestamp = self.timestamp
 
     for action in list(self.actions):
-      action.export_scconfig(sccfg)
+      action.export_scconfig(sccfg, phase=0)
+    for action in list(self.actions):
+      action.export_scconfig(sccfg, phase=1)
 
     return sccfg
 
