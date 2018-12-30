@@ -217,11 +217,11 @@ class Srcspec (object):
 
 class Evsym (object):
   """'bindings' fork in 'activator'."""
+  REGEX_SYM = """(<[A-Za-z0-9_]+>|\[[A-Za-z0-9_]+\]|\([A-Za-z0-9_]+\)|{[^}]*})"""
+
   def __init__ (self, evtype=None, evcode=None):
     self.evtype = evtype  # EventSym physical device
     self.evcode = evcode  # EventSym code
-
-  REGEX_SYM = """(<[A-Za-z0-9_]+>|\[[A-Za-z0-9_]+\]|\([A-Za-z0-9_]+\)|{[^}]*})"""
 
   def __str__ (self):
     parts = []
@@ -499,7 +499,11 @@ class CfgEvspec (object):
     elif evsym.evtype == "gamepad":
       retval = scconfig.EvgenFactory.make_gamepad(evsym.evcode)
     elif evsym.evtype == "host":
-      retval = scconfig.EvgenFactory.make__literal(evsym.evcode)
+      retval = scconfig.EvgenFactory.make_hostcall(evsym.evcode)
+    elif evsym.evtype == "overlay":
+      retval = scconfig.EvgenFactory.make_overlay(*evsym.evcode)
+    else:
+      retval = scconfig.EvgenFactory.make__literal(evsym.evcode[1:-1])
     return retval
 
   def export_signal (self):
@@ -880,6 +884,11 @@ layer:
     "RP": "right_trackpad",
     "RJ": "right_joystick",
     }
+  SW_SYMS = set([
+    "BK", "ST",
+    "LB", "RB",
+    "LG", "RG"
+    ])
 
   def filter_bind (self, v_dict):
     retval = {}
@@ -903,11 +912,32 @@ For inlined subparts.
 """
     if not clustername in self.clusters:
       mode = self.auto_mode(subpartname)
+      print("using mode {} / {}.{}".format(mode, clustername, subpartname))
       self.pave_cluster(clustername, mode)
     return True
 
   def bind_point (self, clustername, subpartname, bindspec):
     # bindspec: (dict, str, CfgEvspec, [ CfgEvspec ])
+    if clustername in ("LT", "RT"):
+      self.pave_cluster(clustername, "trigger")
+    elif clustername is None:
+      if subpartname in CfgClusterSwitches.SUBPARTS:
+        # directly inlined switch subpart: BK, ST, LB, RB, LG, RG
+        clustername = "SW"
+        self.pave_cluster(clustername, "switches")
+      elif len(subpartname) > 2 and subpartname[2] == '.' and subpartname[:2] in self.CLUSTERS:
+        # inline subpart "XX.y".
+        prefix = subpartname[:3]
+        clustername = subpartname[:2]
+        subpartname = subpartname[3:]
+        cluster = self.clusters.get(clustername, None)
+        if cluster is None:
+          if clustername in ("LT", "RT"):
+            self.pave_cluster(clustername, "trigger")
+          else:
+            subparts = [ x[3] for x in py_dict if x.startswith(prefix) ]
+            mode = self.auto_mode(subparts)
+            self.pave_cluster(clustername, mode)
     self.pave_subpart(clustername, subpartname)
     self.clusters[clustername].bind_subpart(subpartname, bindspec)
 
@@ -921,11 +951,11 @@ For inlined subparts.
       return CfgClusterFace.mode
     def _intlike (x):
       try: int(x)
-      except TypeError: return False
+      except (TypeError, ValueError): return False
       else: return True
     def _intOrNegOne(x):
       try: return int(x)
-      except TypeError: return -1
+      except (ValueError, TypeError): return -1
     numerics = [ _intOrNegOne(x) for x in subparts ]
     if any([_intlike(x) for x in subparts ]):
       zero = 0 in numerics
@@ -1111,6 +1141,330 @@ class CfgAction (object):
       else:
         lyr.export_scconfig(sccfg, parent_set_name=self.name, index=None)
     return sccfg
+
+
+class CfgShiftState (object):
+  def __init__ (self, py_dict=None):
+    self.overlays = []  # list of overlaid action layers involved in state.
+    self.transits = {}  # map srcsym to next state by name.
+
+    self.load(py_dict)
+
+  def load (self, py_dict):
+    for k,v in py_dict.items():
+      if k == 'overlays':
+        for stname in v:
+          self.overlays.append(stname)
+      elif k[0] in "+-":
+        self.transits[k] = v
+    return True
+
+class CfgShifting (object):
+  r"""
+shifting:
+  sanity: <srcsym>
+  <layer_name>:
+    <edge><srcsym>: <destination_state>
+    overlays: [ <layer_name>, ... ]
+"""
+  # TODO: transition graphs, to validate all states are enterable and exitable.
+  # TODO: compilation of involved layers for bind to sanity.
+  # TODO: unbind sanity in non-default layers.
+  def __init__ (self):
+    self.states = {}    # map of state name to state object.
+    self.graph = {}     # map of state name to list of next-states.
+    self.involved = []  # list of layers involved in any state (for sanity key).
+
+  def load (self, py_dict):
+    # Load state transitions.
+    for k,v in py_dict.items():
+      self.states[k] = CfgShiftState(v)
+      if not k in self.graph:
+        self.graph[k] = []
+
+    # Build transition graph.
+    for srck,stateobj in self.states.items():
+      for transitsym,nextstate in stateobj.transits.items():
+        self.graph[srck].append(nextstate)
+
+    # Compile sanity de-layering.
+    self.involved = []
+    for stname,stobj in self.states.items():
+      for ov in stobj.overlays:
+        self.involved.append(ov)
+
+    # Check transition graph for inconsistencies.
+    all_states = []
+    all_states.extend([k for k in self.states.keys()])
+    for stname,stobj in self.states.items():
+      for nextstate in stobj.transits.values():
+        all_states.append(nextstate)
+    all_states = set(all_states)
+
+    reachable = set()
+    leaveable = set()
+    for stname,stobj in self.states.items():
+      if stobj.transits:
+        leaveable.add(stname)
+      for nextstate in stobj.transits.values():
+        reachable.add(nextstate)
+
+    unreachable = all_states - reachable
+    unleaveable = all_states - leaveable
+    retval = True
+    if unreachable:
+      print("Unreachable states: {}".format(unreachable))
+      retval = False
+    if unleaveable:
+      print("Dead-end states: {}".format(unleaveable))
+      retval = False
+    return retval
+
+  def export_scconfig (self, conmap):
+    pass
+
+
+class CfgShifters (object):
+  # Alternative to CfgShifting
+  r"""
+shifters:
+  <srcsym>: <style> <bitmask>
+shiftlayers:
+  <shiftnum>: [ <layer>, ... ]
+ 
+style:
+  hold
+  lock
+  latch
+  bounce
+
+  sanity
+
+
+shift: chord while holding induce shifted behavior
+lock: after release, all keys induce shifted behavior until next lock event.
+latch: chord while holding induce shifted behavior;
+       empty release causes next key to be shifted, unshift afterwards.
+       (similar to keyboard accessibility, "sticky" shift)
+bounce: chord while holding induce shifted behavior;
+        empty release (release without any chorded presses) generates keystroke.
+sanity: revoke all shift state and shift-state overlays.
+"""
+  STYLE_HOLD = "hold"
+  STYLE_LOCK = "toggle"
+  STYLE_LATCH = "latch"
+  STYLE_BOUNCE = "bounce"
+  STYLE_SANITY = "sanity"
+  def __init__ (self):
+    self.shifters = {}    # map srcsym to shift behavior (style, bitmask)
+    self.overlays = {}    # map of shift level (int) to list of layers in level.
+    self.involved = []    # all layers involved in shifts, for sanity.
+    self.maxshift = 0     # Highest shift level to expect.
+
+  def load (self, py_dict):
+    self.maxshift = 0
+    for k,v in py_dict.items():
+      if k == "shifters":
+        for srcsym,shiftspec in v.items():
+          parts = shiftspec.split()
+          style = parts[0]
+          bitmask = int(parts[1]) if len(parts) > 1 else 0
+          if not style in (self.STYLE_HOLD, self.STYLE_LOCK, self.STYLE_LATCH, self.STYLE_BOUNCE, self.STYLE_SANITY):
+            print("Unknown shift style: {}".format(style))
+          self.shifters[srcsym] = (style, bitmask)
+          if bitmask:
+            self.maxshift |= bitmask
+      elif k == "shiftlayers":
+        for shiftlevel,layerlist in v.items():
+          shiftnum = int(shiftlevel)
+          # TODO: all layer names in one string, space-delimited.
+          shiftlayers = layerlist
+          for layername in shiftlayers:
+            self.involved.append(layername)
+          self.overlays[shiftnum] = shiftlayers
+
+  def shifter_bind (self, from_level, shiftsym, shiftstyle, shiftbits):
+    # TODO: map shift level to action serialid.
+    shift_base = 0
+    evspec = None
+    if shiftstyle == "hold":
+      if from_level & shiftbits:
+        # release is shift-out.
+        nextlevel = from_level & ~shiftbits
+        nextlevel += shift_base
+      else:
+        # press is shift-in.
+        nextlevel = from_level | shiftbits
+        nextlevel += shift_base
+
+      evsyms = []
+
+      # Apply overlays for next state.
+      if nextlevel != 0:  # Can't apply layer 0 (is ActionSet with no layers).
+        ovparms = ("apply", "$Shift_{}".format(nextlevel), 0, 0)
+        evsym = Evsym('overlay', ovparms)
+        evsyms.append(evsym)
+        # apply overlays of next level.
+        if nextlevel in self.overlays:
+          for ov in self.overlays[nextlevel]:
+            ovparms = ("apply", "${}".format(ov), 0, 0)
+            evsym = Evsym('overlay', ovparms)
+            evsyms.append(evsym)
+
+      # Remove overlays from state.
+      if from_level != 0:  # Can't remove 0.
+        # remove overlays of currnet level.
+        if from_level in self.overlays:
+          for ov in self.overlays[from_level]:
+            ovparms = ("peel", "${}".format(ov), 0, 0)
+            evsym = Evsym('overlay', ovparms)
+            evsyms.append(evsym)
+        # last: remove shift state 'from_level'.
+        ovparms = ("peel", "$Shift_{}".format(from_level), 0, 0)
+        evsym = Evsym('overlay', ovparms)
+        evsyms.append(evsym)
+
+      evspec = Evspec('-', evsyms, None)
+    elif shiftstyle == "bounce":
+      # Create two groups: one for the Preshift, one for the actual Shift.
+      if from_level & shiftbits:
+        # release is shift-out.
+        nextlevel = from_level & ~shiftbits
+        nextlevel += shift_base
+      else:
+        # press is shift-in.
+        nextlevel = from_level | shiftbits
+        nextlevel += shift_base
+
+      evsyms = []
+
+      # Apply overlays for next state.
+      if nextlevel != 0:  # Can't apply layer 0 (is ActionSet with no layers).
+        if from_level & shiftbits:
+          # leave on negative edge: skip to stable shift.
+          ovparms = ("apply", "$Shift_{}".format(nextlevel), 0, 0)
+        else:
+          # enter on positive edge: preshift.
+          ovparms = ("apply", "$Preshift_{}".format(nextlevel), 0, 0)
+        evsym = Evsym('overlay', ovparms)
+        evsyms.append(evsym)
+        # apply overlays of next level.
+        if nextlevel in self.overlays:
+          for ov in self.overlays[nextlevel]:
+            ovparms = ("apply", "${}".format(ov), 0, 0)
+            evsym = Evsym('overlay', ovparms)
+            evsyms.append(evsym)
+
+      # Remove overlays from state.
+      if from_level != 0:  # Can't remove 0.
+        # remove overlays of currnet level.
+        if from_level in self.overlays:
+          for ov in self.overlays[from_level]:
+            ovparms = ("peel", "${}".format(ov), 0, 0)
+            evsym = Evsym('overlay', ovparms)
+            evsyms.append(evsym)
+        # last: remove shift state 'from_level'.
+        ovparms = ("peel", "$Preshift_{}".format(from_level), 0, 0)
+        evsym = Evsym('overlay', ovparms)
+        evsyms.append(evsym)
+        # also remove stable shift.
+        ovparms = ("peel", "$Shift_{}".format(from_level), 0, 0)
+        evsym = Evsym('overlay', ovparms)
+        evsyms.append(evsym)
+
+      # TODO: examine all clusters involved in debounced state Shift_{from_level}
+      #  set all involved clusters to dpad/trigger/switches to shift to Shift_{from_level}
+      proxies = []
+
+      evspec = Evspec('-', evsyms, None)
+
+    if evspec:
+      cfgevspec = CfgEvspec(evspec)
+      return cfgevspec
+    return None
+
+  @staticmethod
+  def get_layer_by_name (cfgaction, layer_name):
+    for lyr in cfgaction.layers:
+      if lyr.name == layer_name:
+        return lyr
+    else:
+      return None
+
+  def preshift_binds (self, cfgaction, lyr, from_level, shiftsym, shiftstyle, bitmask):
+    # Examine all clusters involved in current debounced state Shift_{from_level}
+    # Set all involved clusters to dpad/trigger/switches to shift from Preshift_{from_level} to Shift_{from_level}
+    proxies = []   # clusters that need to proxy into Shift_{from_level}
+    for debounced_layernames in self.overlays.get(from_level, []):
+      debounced_layer = self.get_layer_by_name(cfgaction, debounced_layernames)
+      if debounced_layer:
+        for k,v in debounced_layer.clusters.items():
+          if k == "SW":
+            # Switches special-case.
+            for srcsym,evspec in v.items():
+              if srcsym in CfgLayer.SW_SYMS:
+                proxies.append(srcsym)
+          elif k in CfgLayer.CLUSTERS:
+            # is a cluster.
+            proxies.append(k)
+
+    for shiftsym,shiftspec in self.shifters.items():
+      (style, bitmask) = shiftspec
+      cfgevspec = self.shifter_bind(from_level, shiftsym, style, bitmask)
+      lyr.bind_point(None, shiftsym, cfgevspec)
+
+    proxyevspec = CfgEvspec(Evspec('+', [ Evsym('overlay', ('apply', '$Shift_{}'.format(from_level), 0, 0)) ], None))
+    for proxied_clustername in proxies:
+      if proxied_clustername in ('LT', 'RT'):
+        lyr.bind_point(proxied_clustername, 'c', proxyevspec)
+        lyr.bind_point(proxied_clustername, 'o', proxyevspec)
+      elif proxied_clustername in CfgLayer.SW_SYMS:
+        lyr.bind_point("SW", proxied_clustername, proxyevspec)
+      else:
+        lyr.bind_point(proxied_clustername, 'u', proxyevspec)
+        lyr.bind_point(proxied_clustername, 'd', proxyevspec)
+        lyr.bind_point(proxied_clustername, 'l', proxyevspec)
+        lyr.bind_point(proxied_clustername, 'r', proxyevspec)
+
+  def update_cfgaction (self, cfgaction):
+    # Can only operate on extant layers and binds.
+    # Generate the shift FSM layers.
+    cfgaction.name = 'Default'
+    parent_set_name = cfgaction.name
+    layers = cfgaction.layers
+    # Generate shifter binds for each layer in action.
+    for sl in range(0, self.maxshift+1):
+      # Prepare preshifts (bounce keys).
+      prelayer = None
+      for shiftsym,shiftspec in self.shifters.items():
+        (style, bitmask) = shiftspec
+        if (style == "bounce") and (sl & bitmask):
+          # Prepare preshift.
+          d = {
+            "name": "Preshift_{}".format(sl),
+            }
+          prelayer = CfgLayer()
+          prelayer.load(d)
+          layers.append(prelayer)
+
+      if ((sl == 0) and len(layers) < 1) or (sl > 0):
+        d = {
+          "name": "Shift_{}".format(sl),
+          }
+        # Create a new layer representing state exit transitions.
+        cfglayer = CfgLayer()
+        cfglayer.load(d)
+        layers.append(cfglayer)
+      else:
+        cfglayer = layers[0]
+      # Set shifter binds.
+      for shiftsym,shiftspec in self.shifters.items():
+        (style, bitmask) = shiftspec
+        cfgevspec = self.shifter_bind(sl, shiftsym, style, bitmask)
+        cfglayer.bind_point(None, shiftsym, cfgevspec)
+
+      if prelayer:
+        self.preshift_binds(cfgaction, prelayer, sl, shiftsym, style, bitmask)
 
 
 class CfgMaker (object):

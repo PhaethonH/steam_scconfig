@@ -1081,6 +1081,80 @@ class TestCfgMaker (unittest.TestCase):
       ]
     self.assertEqual(d, res)
 
+  def test_cfgshifting (self):
+    d = {
+      "0": {
+        "+LB": "1",
+        "+RB": "4",
+        },
+      "1": {
+        "-LB": "0",
+        "+RB": "5",
+        },
+      "4": {
+        "+LB": "5",
+        "-RB": "0",
+        },
+      "5": {
+        "-LB": "4",
+        "-RB": "1",
+        },
+    }
+    cfg = cfgmaker.CfgShifting()
+    cfg.load(d)
+
+  def test_cfgshifters (self):
+    d = {
+      "actions": [
+        {
+          "name": "Default",
+          "layers": [
+            { "name": "Default",
+              "BQ.s": "(A)",
+              },
+            { "name": "LeftHanded",
+              "DP.u": "(DUP)",
+              "LT.c": "(A)",
+              },
+            { "name": "RightHanded",
+              "BQ.n": "(Y)",
+              },
+            { "name": "Alternate",
+              "BQ.n": "<n>",
+              },
+            ],
+          "shifters": {
+#            "LB": "hold 1",
+#            "RB": "hold 2",
+            "LB": "bounce 1",
+            "RB": "hold 2",
+            },
+          "shiftlayers": {
+            0: [ "Base" ],
+            1: [ "LeftHanded" , "RightHanded" ],
+            2: [ "Alternate" ],
+            },
+          },
+        ]
+      }
+
+    uppercfg = cfgmaker.CfgMaker()
+    uppercfg.load(d)
+#    action = cfgmaker.CfgAction()
+#    action.load(d["actions"])
+#    uppercfg.actions.append(action)
+    action = uppercfg.actions[0]
+
+    cfg = cfgmaker.CfgShifters()
+    d2 = d['actions'][0]
+    cfg.load(d2)
+    cfg.update_cfgaction(uppercfg.actions[0])
+
+    sccfg = uppercfg.export_scconfig()
+    d = scconfig.toVDF(sccfg)
+    pprint.pprint(d, width=180)
+
+
   def test_load2 (self):
     with open("../examples/x3tc_1.yaml") as f:
       d = yaml.load(f)
