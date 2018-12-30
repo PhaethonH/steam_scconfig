@@ -7,7 +7,7 @@ import re
 import scconfig, scvdf
 
 r"""
-	cfg:
+cfg:
   .name
   actions[]:
     layers[]:
@@ -125,7 +125,7 @@ LB:
   Release:
     bindings: - Down
     settings: {}
- 
+
 """
 
 
@@ -851,7 +851,7 @@ class CfgLayer (object):
   r"""
 # abbreviated
 layer:
-  name: 
+  name:
   <SrcSym>: <Evgen> <Evgen> <Evgen>
 
 
@@ -912,7 +912,6 @@ For inlined subparts.
 """
     if not clustername in self.clusters:
       mode = self.auto_mode(subpartname)
-      print("using mode {} / {}.{}".format(mode, clustername, subpartname))
       self.pave_cluster(clustername, mode)
     return True
 
@@ -1122,6 +1121,15 @@ class CfgAction (object):
     self.name = 'Default'
     self.layers = []
 
+  def find (self, lyrobj):
+    offset = 0
+    try:
+      retval = self.layers.index(lyrobj)
+      return retval
+    except ValueError:
+      # not found.
+      return -1
+
   def load (self, py_dict):
     if 'name' in py_dict:
       self.name = py_dict['name']
@@ -1231,7 +1239,7 @@ shifters:
   <srcsym>: <style> <bitmask>
 shiftlayers:
   <shiftnum>: [ <layer>, ... ]
- 
+
 style:
   hold
   lock
@@ -1249,11 +1257,40 @@ latch: chord while holding induce shifted behavior;
 bounce: chord while holding induce shifted behavior;
         empty release (release without any chorded presses) generates keystroke.
 sanity: revoke all shift state and shift-state overlays.
+
+
+SHIFT
+Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
+OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
+ActiveLvl 0 1 0 0 0 0 0 0 0 1 1 1 1 1 1 1 0 1 0 1 0 0 0 0 0 0 0 1 1 1 1 1 0 0 0
+
+LOCK
+Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
+OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
+ActiveLvl 0 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 1 1 1 1 1 1 0 0
+
+LATCH
+Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
+OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
+ActiveLvl 0 1 1 1 0 0 0 0 0 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 1 0 0
+
+BOUNCE / LAZY-EMIT
+Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
+OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
+ActiveLvl 0 <2> 0 0 0 0 0 0 ? 1 1 1 1 1 1 0 <2> <2> 0 0 0 0 0 0 ? 1 1 1 1 0 0<2>
+
+(active while press, release on tap other)
+POP / BURST / DEFLATE / EAGER-EMIT
+Shifter   -<#>-------------<#############>-<#>-<#>-------------<#############>-
+OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>-------<#>-<#>---
+ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
 """
   STYLE_HOLD = "hold"
   STYLE_LOCK = "toggle"
   STYLE_LATCH = "latch"
   STYLE_BOUNCE = "bounce"
+  STYLE_LAZY = "lazy"     # Lazy emit - emit event if no chord occured.
+  STYLE_EAGER = "eager"   # Eager emit - emit until chord occurs.
   STYLE_SANITY = "sanity"
   def __init__ (self):
     self.shifters = {}    # map srcsym to shift behavior (style, bitmask)
@@ -1283,100 +1320,108 @@ sanity: revoke all shift state and shift-state overlays.
             self.involved.append(layername)
           self.overlays[shiftnum] = shiftlayers
 
-  def shifter_bind (self, from_level, shiftsym, shiftstyle, shiftbits):
+  @staticmethod
+  def get_layer_num (cfgaction, layer_name):
+    lyr = CfgShifters.get_layer_by_name(cfgaction, layer_name)
+    lyrnum = cfgaction.find(lyr)
+    return lyrnum
+
+  def shifter_bind (self, cfgaction, from_level, shiftsym, shiftstyle, shiftbits):
     # TODO: map shift level to action serialid.
     shift_base = 0
     evspec = None
+
+    def apply_overlay (evsyms, overlay_name):
+      lyrid = self.get_layer_num(cfgaction, overlay_name)
+      #ovparms = ("apply", "${}({})".format(overlay_name, lyrid), 0, 0)
+      ovparms = ("apply", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
+      evsym = Evsym('overlay', ovparms)
+      evsyms.append(evsym)
+
+    def peel_overlay (evsyms, overlay_name):
+      lyrid = self.get_layer_num(cfgaction, overlay_name)
+#      ovparms = ("peel", "${}({})".format(overlay_name, lyrid), 0, 0)
+      ovparms = ("peel", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
+      evsym = Evsym('overlay', ovparms)
+      evsyms.append(evsym)
+
     if shiftstyle == "hold":
       if from_level & shiftbits:
         # release is shift-out.
         nextlevel = from_level & ~shiftbits
         nextlevel += shift_base
+        actsig = '-'
       else:
         # press is shift-in.
         nextlevel = from_level | shiftbits
         nextlevel += shift_base
+        actsig = '+'
 
       evsyms = []
 
       # Apply overlays for next state.
       if nextlevel != 0:  # Can't apply layer 0 (is ActionSet with no layers).
-        ovparms = ("apply", "$Shift_{}".format(nextlevel), 0, 0)
-        evsym = Evsym('overlay', ovparms)
-        evsyms.append(evsym)
-        # apply overlays of next level.
+        apply_overlay(evsyms, "Shift_{}".format(nextlevel))
         if nextlevel in self.overlays:
           for ov in self.overlays[nextlevel]:
-            ovparms = ("apply", "${}".format(ov), 0, 0)
-            evsym = Evsym('overlay', ovparms)
-            evsyms.append(evsym)
+            apply_overlay(evsyms, ov)
 
       # Remove overlays from state.
       if from_level != 0:  # Can't remove 0.
-        # remove overlays of currnet level.
+        # remove overlays of current level.
         if from_level in self.overlays:
           for ov in self.overlays[from_level]:
-            ovparms = ("peel", "${}".format(ov), 0, 0)
-            evsym = Evsym('overlay', ovparms)
-            evsyms.append(evsym)
+            peel_overlay(evsyms, ov)
         # last: remove shift state 'from_level'.
-        ovparms = ("peel", "$Shift_{}".format(from_level), 0, 0)
-        evsym = Evsym('overlay', ovparms)
-        evsyms.append(evsym)
+        peel_overlay(evsyms, "Shift_{}".format(from_level))
 
-      evspec = Evspec('-', evsyms, None)
-    elif shiftstyle == "bounce":
+      evspec = Evspec(actsig, evsyms, None)
+    elif shiftstyle == "bounce" or shiftstyle == "lazy":
       # Create two groups: one for the Preshift, one for the actual Shift.
-      if from_level & shiftbits:
+      if (from_level & shiftbits) == shiftbits:
         # release is shift-out.
         nextlevel = from_level & ~shiftbits
         nextlevel += shift_base
+        actsig = '-'
       else:
         # press is shift-in.
         nextlevel = from_level | shiftbits
         nextlevel += shift_base
+        actsig = '+'
 
       evsyms = []
 
+      # apply next state transition.
+      if actsig == '-':
+        # leave on negative edge: skip to stable shift.
+        if nextlevel > 0:  # Moving to level 0 is removing all layers.
+          apply_overlay(evsyms, "Shift_{}".format(nextlevel))
+      elif actsig == '+':
+        # enter on positive edge: preshift.
+        apply_overlay(evsyms, "Preshift_{}".format(nextlevel))
+
       # Apply overlays for next state.
       if nextlevel != 0:  # Can't apply layer 0 (is ActionSet with no layers).
-        if from_level & shiftbits:
-          # leave on negative edge: skip to stable shift.
-          ovparms = ("apply", "$Shift_{}".format(nextlevel), 0, 0)
-        else:
-          # enter on positive edge: preshift.
-          ovparms = ("apply", "$Preshift_{}".format(nextlevel), 0, 0)
-        evsym = Evsym('overlay', ovparms)
-        evsyms.append(evsym)
         # apply overlays of next level.
         if nextlevel in self.overlays:
           for ov in self.overlays[nextlevel]:
-            ovparms = ("apply", "${}".format(ov), 0, 0)
-            evsym = Evsym('overlay', ovparms)
-            evsyms.append(evsym)
+            apply_overlay(evsyms, ov)
 
       # Remove overlays from state.
       if from_level != 0:  # Can't remove 0.
-        # remove overlays of currnet level.
+        # remove overlays of current level.
         if from_level in self.overlays:
           for ov in self.overlays[from_level]:
-            ovparms = ("peel", "${}".format(ov), 0, 0)
-            evsym = Evsym('overlay', ovparms)
-            evsyms.append(evsym)
-        # last: remove shift state 'from_level'.
-        ovparms = ("peel", "$Preshift_{}".format(from_level), 0, 0)
-        evsym = Evsym('overlay', ovparms)
-        evsyms.append(evsym)
+            peel_overlay(evsyms, ov)
+        # last: remove preshift state.
+        if (from_level & shiftbits) == shiftbits:  # old state was bounceable == has Preshift.
+          peel_overlay(evsyms, "Preshift_{}".format(from_level))
         # also remove stable shift.
-        ovparms = ("peel", "$Shift_{}".format(from_level), 0, 0)
-        evsym = Evsym('overlay', ovparms)
-        evsyms.append(evsym)
+        peel_overlay(evsyms, "Shift_{}".format(from_level))
 
-      # TODO: examine all clusters involved in debounced state Shift_{from_level}
-      #  set all involved clusters to dpad/trigger/switches to shift to Shift_{from_level}
       proxies = []
 
-      evspec = Evspec('-', evsyms, None)
+      evspec = Evspec(actsig, evsyms, None)
 
     if evspec:
       cfgevspec = CfgEvspec(evspec)
@@ -1410,7 +1455,7 @@ sanity: revoke all shift state and shift-state overlays.
 
     for shiftsym,shiftspec in self.shifters.items():
       (style, bitmask) = shiftspec
-      cfgevspec = self.shifter_bind(from_level, shiftsym, style, bitmask)
+      cfgevspec = self.shifter_bind(cfgaction, from_level, shiftsym, style, bitmask)
       lyr.bind_point(None, shiftsym, cfgevspec)
 
     proxyevspec = CfgEvspec(Evspec('+', [ Evsym('overlay', ('apply', '$Shift_{}'.format(from_level), 0, 0)) ], None))
@@ -1432,7 +1477,7 @@ sanity: revoke all shift state and shift-state overlays.
     cfgaction.name = 'Default'
     parent_set_name = cfgaction.name
     layers = cfgaction.layers
-    # Generate shifter binds for each layer in action.
+    # Generate shifter layers.
     for sl in range(0, self.maxshift+1):
       # Prepare preshifts (bounce keys).
       prelayer = None
@@ -1457,12 +1502,18 @@ sanity: revoke all shift state and shift-state overlays.
         layers.append(cfglayer)
       else:
         cfglayer = layers[0]
-      # Set shifter binds.
+    # Set shifter binds.
+    for sl in range(0, self.maxshift+1):
+      if sl > 0:
+        cfglayer = self.get_layer_by_name(cfgaction, "Shift_{}".format(sl))
+      else:
+        cfglayer = cfgaction.layers[0]
       for shiftsym,shiftspec in self.shifters.items():
         (style, bitmask) = shiftspec
-        cfgevspec = self.shifter_bind(sl, shiftsym, style, bitmask)
+        cfgevspec = self.shifter_bind(cfgaction, sl, shiftsym, style, bitmask)
         cfglayer.bind_point(None, shiftsym, cfgevspec)
 
+      prelayer = self.get_layer_by_name(cfgaction, "Preshift_{}".format(sl))
       if prelayer:
         self.preshift_binds(cfgaction, prelayer, sl, shiftsym, style, bitmask)
 

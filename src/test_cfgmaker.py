@@ -1114,7 +1114,7 @@ class TestCfgMaker (unittest.TestCase):
               },
             { "name": "LeftHanded",
               "DP.u": "(DUP)",
-              "LT.c": "(A)",
+              "LT.c": "(LT)",
               },
             { "name": "RightHanded",
               "BQ.n": "(Y)",
