@@ -3,7 +3,7 @@
 aliases:
   LeftAnalog: (LJ)
   RightAnalog: (RJ)
-  Fire: <RightControl>
+  Fire: <Right_Control>
   MenuUp: <Up>
   MenuDown: <Down>
   MenuLeft: <Left>
@@ -12,18 +12,20 @@ aliases:
   MenuCancel: <Escape>
   MenuPrior: <PageUp>
   MenuNext: <PageDown>
-  TargetNearest: <T>
+  TargetNearestEnemy: <T>
   SelectMissile: <M>
   BoostExtension: <Tab>
   BrakeToStop: <Backspace>
   ThrottleUp: <Z>
   ThrottleDown: <X>
+  TrackTarget: <T>
   TargetNextAny: <PageUp>
   TargetPrevAny: <PageDown>
   TargetNextEnemy: <Home>
   TargetPrevEnemy: <End>
   TargetNextOwned: <Insert>
   TargetPrevOwned: <Delete>
+  MatchTargetSpeed: <Left_Shift><F>
   HeaveUp: <W>
   HeaveDown: <S>
   SwayLeft: <A>
@@ -34,8 +36,8 @@ aliases:
   PitchDown: <Up>
   YawLeft: <Left>
   YawRight: <Right>
-  SectorMap: <FullStop>
-  UniverseMap: <comma>
+  SectorMap: <Period>
+  UniverseMap: <Comma>
 
 name: "GeneratedSample_1"
 revision: 2
@@ -46,27 +48,26 @@ actions:
   - name: Default
     LJ: (LJ)
     RJ: (RJ)
-    BK: sanity
     ST: <Pause>
-    RT.c: <RightControl>
-    DP.u: <Up>
-    DP.l: <Left>
-    DP.r: <Right>
-    DP.d: <Down>
-    BQ.n: <T>
-    BQ.w: <M>
-    BQ.e: <Tab>
-    BQ.s: <Backspace>
+    RT.c: $Fire
+    DP.u: $MenuUp
+    DP.l: $MenuLeft
+    DP.r: $MenuRight
+    DP.d: $MenuDown
+    BQ.n: $TrackTarget
+    BQ.w: $SelectMissile
+    BQ.e: $BoostExtension
+    BQ.s: $BrakeToStop
     LS: "{apply 6th_axis}"
 
   - name: dummy
 
   - name: 6th_axis
     LS: "{peel 6th_axis}"
-    RJ.u: <W>
-    RJ.d: <S>
-    RJ.l: <Q>
-    RJ.r: <E>
+    RJ.u: $HeaveUp
+    RJ.d: $HeaveDown
+    RJ.l: $RollLeft
+    RJ.r: $RollRight
 
   - name: Commerce1
     DP.u: <PageUp>
@@ -75,9 +76,9 @@ actions:
     DP.r: <End>
 
   - name: Combat1
-    BQ.n: <Shift> <T>
+    BQ.n: $TargetNearestEnemy
     BQ.w: <>
-    BQ.e: <Shift> <F>
+    BQ.e: $MatchTargetSpeed
     BQ.s: <>
 
   shifters:
