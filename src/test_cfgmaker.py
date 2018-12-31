@@ -1148,21 +1148,26 @@ class TestCfgMaker (unittest.TestCase):
 
     uppercfg = cfgmaker.CfgMaker()
     uppercfg.load(d)
-#    action = cfgmaker.CfgAction()
-#    action.load(d["actions"])
-#    uppercfg.actions.append(action)
 
-    action = uppercfg.actions[0]
-    shiftcfg = cfgmaker.CfgShifters()
-    d2 = d['actions'][1]
-    shiftcfg.load(d2)
-    #shiftcfg.update_cfgaction(uppercfg.actions[0])
-    #shiftcfg.update_cfgaction(uppercfg.actions, 0)
-    shiftcfg.update_cfgaction(uppercfg.actions, 1)
+#    action = uppercfg.actions[1]
+#    shiftcfg = cfgmaker.CfgShifters()
+#    d2 = d['actions'][1]
+#    shiftcfg.load(d2)
+#    shiftcfg.generate_layers(action)
+#
+    self.assertEqual(len(uppercfg.actions), 2)
+    self.assertEqual(len(uppercfg.actions[0].layers), 1)
+    self.assertEqual(len(uppercfg.actions[1].layers),
+                     9)  # Default, LH, RH, Alt, Pre1, Sh1, Sh2, Pre3, Sh3
+    self.assertEqual( [ lyr.name for lyr in uppercfg.actions[1].layers ],
+      [ "Default", "LeftHanded", "RightHanded", "Alternate",
+        "Preshift_1", "Shift_1", "Shift_2", "Preshift_3", "Shift_3" ])
+
+#    shiftcfg.bind_shifters(1, action)
 
     sccfg = uppercfg.export_scconfig()
     d = scconfig.toVDF(sccfg)
-    pprint.pprint(d, width=180)
+#    pprint.pprint(d, width=180)
 
 
   def test_load2 (self):

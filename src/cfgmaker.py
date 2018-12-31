@@ -588,7 +588,8 @@ class CfgClusterBase (object):
           collate.append(cfgevspec)
       self.subparts[subpartname] = collate
     elif isinstance(bindspec, CfgEvspec):
-      if not subpartname in self.subparts:
+      if ((not subpartname in self.subparts) or
+          (self.subparts[subpartname] is None)):
         self.subparts[subpartname] = []
       self.subparts[subpartname].append(bindspec)
     else:
@@ -1118,53 +1119,6 @@ For inlined subparts.
     return sccfg
 
 
-class CfgAction (object):
-  def __init__ (self):
-    self.name = 'Default'
-    self.layers = []
-
-  def find (self, lyrobj):
-    offset = 0
-    try:
-      retval = self.layers.index(lyrobj)
-      return retval
-    except ValueError:
-      # not found.
-      return -1
-
-  def load (self, py_dict):
-    if 'name' in py_dict:
-      self.name = py_dict['name']
-    for k,v in py_dict.items():
-      if k == 'layers':
-        for v in py_dict[k]:
-          lyr = CfgLayer()
-          lyr.load(v)
-          self.layers.append(lyr)
-    return
-
-  def export_scconfig (self, sccfg, phase=0):
-    # Add first layer as Action Set, other layers as Action Layers.
-    if self.layers:
-      if phase == 0:
-        lyr = self.layers[0]
-        lyr.export_scconfig(sccfg, title=self.name)
-      elif phase == 1:
-        for lyr in self.layers[1:]:
-          lyr.export_scconfig(sccfg, parent_set_name=self.name)
-
-#    for lyr in self.layers:
-#      if lyr == self.layers[0]:
-#        if phase != 0:
-#          continue
-#        lyr.export_scconfig(sccfg, title=self.name)
-#      else:
-#        if phase == 0:
-#          break
-#        lyr.export_scconfig(sccfg, parent_set_name=self.name)
-    return sccfg
-
-
 class CfgShiftState (object):
   def __init__ (self, py_dict=None):
     self.overlays = []  # list of overlaid action layers involved in state.
@@ -1273,31 +1227,35 @@ bounce: chord while holding induce shifted behavior;
 sanity: revoke all shift state and shift-state overlays.
 
 
+(active while held)
 SHIFT
 Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
 OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
 ActiveLvl 0 1 0 0 0 0 0 0 0 1 1 1 1 1 1 1 0 1 0 1 0 0 0 0 0 0 0 1 1 1 1 1 0 0 0
 
+(activate/deactivate with press)
 LOCK
 Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
 OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
 ActiveLvl 0 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 1 1 1 1 1 1 0 0
 
+(active while held/chord; remain active until other press; double press=lock)
 LATCH
 Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
 OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
 ActiveLvl 0 1 1 1 0 0 0 0 0 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 1 0 0
 
+(active while held, emit if released without chord)
 BOUNCE / LAZY-EMIT
 Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
 OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
-ActiveLvl 0 <2> 0 0 0 0 0 0 ? 1 1 1 1 1 1 0 <2> <2> 0 0 0 0 0 0 ? 1 1 1 1 0 0<2>
+ActiveLvl 0 <E> 0 0 0 0 0 0 ? 1 1 1 1 1 1 0 <E> <E> 0 0 0 0 0 0 ? 1 1 1 1 0 0<E>
 
-(active while press, release on tap other)
+(active while held, emit while held, stop emit on other press)
 POP / BURST / DEFLATE / EAGER-EMIT
 Shifter   -<#>-------------<#############>-<#>-<#>-------------<#############>-
 OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>-------<#>-<#>---
-ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
+ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
 """
   STYLE_HOLD = "hold"
   STYLE_LOCK = "toggle"
@@ -1310,6 +1268,8 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
     self.shifters = {}    # map srcsym to shift behavior (style, bitmask)
     self.overlays = {}    # map of shift level (int) to list of layers in level.
     self.involved = []    # all layers involved in shifts, for sanity.
+    self.proxies = {}     # map, shift_level:int to list(bounce state cluster).
+    self.debouncer = {}   # map, shift_level:int to CfgEvspec in a preshift.
     self.maxshift = 0     # Highest shift level to expect.
 
   def load (self, py_dict):
@@ -1335,43 +1295,51 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
           self.overlays[shiftnum] = shiftlayers
 
   @staticmethod
-  def get_layer_num (cfgactions, layer_name, specific_action=None):
-    if specific_action:
-      lyr = CfgShifters.get_layer_by_name(specific_action, layer_name)
-    else:
-      specific_action, lyr = CfgShifters.get_action_layer_by_name(cfgactions, layer_name)
+  def get_layer_by_name (cfgaction, layer_name):
+    for lyr in cfgaction.layers:
+      if lyr.name == layer_name:
+        return lyr
+    return None
 
-    offset = len(cfgactions)
-    # More offset due to layers in preceding actions.
+  @staticmethod
+  def get_action_layer_by_name (cfgactions, layer_name):
     for cfgaction in cfgactions:
-      if cfgaction != specific_action:
-        break
-      delta = len(cfgaction.layers) - 1
-      if delta < 0:
-        delta = 0
-      offset += delta
+      lyr = CfgShifters.get_layer_by_name(cfgaction, layer_name)
+      return (cfgaction, lyr)
+    return None
 
-    lyrnum = cfgaction.find(lyr)
-    lyrnum += offset - 1   # base layer in this action already counted in original offset.
 
-    return lyrnum
+  def get_layer_sccid (self, actionid_offset, cfgaction, layer_name):
+    """Return action set/layer id as found in controller mapping vdf."""
+    lyrobj = self.get_layer_by_name(cfgaction, layer_name)
+    lyrid = cfgaction.find(lyrobj)
+    if lyrid < 0:
+      return -1
+    lyrid += actionid_offset
+    return lyrid
 
-  def shifter_bind (self, cfgactions, actionidx, from_level, shiftsym, shiftstyle, shiftbits):
+  def make_shifter (self, actionid_offset, cfgaction, cfglayer, from_level, shiftsym, shiftstyle, shiftbits):
+    """Create shifter transition.
+
+* Within CfgAction 'cfgactin',
+ * Within CfgLayer 'cfglayer',
+  * Within state level 'from_level',
+   * Assigned to shifter 'shiftsym'
+   * using shift style 'shiftstyle'
+   * affecting shift bits 'bitmask'
+"""
     # TODO: map shift level to action serialid.
-    cfgaction = cfgactions[actionidx]
     shift_base = 0
     evspec = None
 
     def apply_overlay (evsyms, overlay_name):
-      lyrid = self.get_layer_num(cfgactions, overlay_name)
-      #ovparms = ("apply", "${}({})".format(overlay_name, lyrid), 0, 0)
+      lyrid = self.get_layer_sccid(actionid_offset, cfgaction, overlay_name)
       ovparms = ("apply", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
       evsym = Evsym('overlay', ovparms)
       evsyms.append(evsym)
 
     def peel_overlay (evsyms, overlay_name):
-      lyrid = self.get_layer_num(cfgactions, overlay_name)
-#      ovparms = ("peel", "${}({})".format(overlay_name, lyrid), 0, 0)
+      lyrid = self.get_layer_sccid(actionid_offset, cfgaction, overlay_name)
       ovparms = ("peel", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
       evsym = Evsym('overlay', ovparms)
       evsyms.append(evsym)
@@ -1390,14 +1358,14 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
 
       evsyms = []
 
-      # Apply overlays for next state.
       if nextlevel != 0:  # Can't apply layer 0 (is ActionSet with no layers).
+        # Apply next shift state.
         apply_overlay(evsyms, "Shift_{}".format(nextlevel))
+        # Apply overlays for next shift state.
         if nextlevel in self.overlays:
           for ov in self.overlays[nextlevel]:
             apply_overlay(evsyms, ov)
 
-      # Remove overlays from state.
       if from_level != 0:  # Can't remove 0.
         # remove overlays of current level.
         if from_level in self.overlays:
@@ -1450,8 +1418,6 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
         # also remove stable shift.
         peel_overlay(evsyms, "Shift_{}".format(from_level))
 
-      proxies = []
-
       evspec = Evspec(actsig, evsyms, None)
 
     if evspec:
@@ -1459,26 +1425,11 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
       return cfgevspec
     return None
 
-  @staticmethod
-  def get_layer_by_name (cfgaction, layer_name):
-    for lyr in cfgaction.layers:
-      if lyr.name == layer_name:
-        return lyr
-    return None
-
-  @staticmethod
-  def get_action_layer_by_name (cfgactions, layer_name):
-    for cfgaction in cfgactions:
-      lyr = CfgShifters.get_layer_by_name(cfgaction, layer_name)
-      return (cfgaction, lyr)
-    return None
-
-  def preshift_binds (self, cfgactions, actionidx, lyr, from_level, shiftsym, shiftstyle, bitmask):
-    # Examine all clusters involved in current debounced state Shift_{from_level}
-    # Set all involved clusters to dpad/trigger/switches to shift from Preshift_{from_level} to Shift_{from_level}
-    cfgaction = cfgactions[actionidx]
-    proxies = []   # clusters that need to proxy into Shift_{from_level}
-    for debounced_layernames in self.overlays.get(from_level, []):
+  def bind_preshifts (self, actionid_offset, cfgaction, cfglayer, sl):
+    # Examine all clusters involved in current debounced state Shift_{sl}
+    # Set all involved clusters to dpad/trigger/switches to shift from Preshift_{sl} to Shift_{sl}
+    proxies = []   # clusters that need to proxy into Shift_{sl}
+    for debounced_layernames in self.overlays.get(sl, []):
       debounced_layer = self.get_layer_by_name(cfgaction, debounced_layernames)
       if debounced_layer:
         for k,v in debounced_layer.clusters.items():
@@ -1493,28 +1444,42 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
 
     for shiftsym,shiftspec in self.shifters.items():
       (style, bitmask) = shiftspec
-      cfgevspec = self.shifter_bind(cfgactions, actionidx, from_level, shiftsym, style, bitmask)
-      lyr.bind_point(None, shiftsym, cfgevspec)
+      cfgevspec = self.make_shifter(actionid_offset, cfgaction, cfglayer, sl, shiftsym, style, bitmask)
+      cfglayer.bind_point(None, shiftsym, cfgevspec)
 
-    proxyevspec = CfgEvspec(Evspec('+', [ Evsym('overlay', ('apply', '$Shift_{}'.format(from_level), 0, 0)) ], None))
+    overlay_name = "Shift_{}".format(sl)
+    lyrid = self.get_layer_sccid(actionid_offset, cfgaction, overlay_name)
+    proxyevspec = CfgEvspec(
+                    Evspec(
+                      '+',
+                      [ Evsym('overlay', ('apply', lyrid, 0, 0)) ],
+                      None))
     for proxied_clustername in proxies:
       if proxied_clustername in ('LT', 'RT'):
-        lyr.bind_point(proxied_clustername, 'c', proxyevspec)
-        lyr.bind_point(proxied_clustername, 'o', proxyevspec)
+        cfglayer.bind_point(proxied_clustername, 'c', proxyevspec)
+        cfglayer.bind_point(proxied_clustername, 'o', proxyevspec)
       elif proxied_clustername in CfgLayer.SW_SYMS:
-        lyr.bind_point("SW", proxied_clustername, proxyevspec)
+        cfglayer.bind_point("SW", proxied_clustername, proxyevspec)
       else:
-        lyr.bind_point(proxied_clustername, 'u', proxyevspec)
-        lyr.bind_point(proxied_clustername, 'd', proxyevspec)
-        lyr.bind_point(proxied_clustername, 'l', proxyevspec)
-        lyr.bind_point(proxied_clustername, 'r', proxyevspec)
+        cfglayer.bind_point(proxied_clustername, 'u', proxyevspec)
+        cfglayer.bind_point(proxied_clustername, 'd', proxyevspec)
+        cfglayer.bind_point(proxied_clustername, 'l', proxyevspec)
+        cfglayer.bind_point(proxied_clustername, 'r', proxyevspec)
 
-  def update_cfgaction (self, cfgactions, actionidx):
-    # Can only operate on extant layers and binds.
-    # Generate the shift FSM layers.
-#    cfgaction.name = 'Default'
-    parent_set_name = cfgactions[actionidx].name
-    layers = cfgactions[actionidx].layers
+  def add_shift_layer (self, cfgaction, layer_prefix, level_num):
+    layer_name = "{}_{}".format(layer_prefix, level_num)
+    if self.get_layer_by_name(cfgaction, layer_name):
+      return True
+    d = {
+      "name": layer_name,
+    }
+    shiftlayer = CfgLayer()
+    shiftlayer.load(d)
+    cfgaction.layers.append(shiftlayer)
+    return True
+
+  def generate_layers (self, cfgaction):
+    """Generate state-transition layers (CfgLayer) in the provided CfgAction."""
     # Generate shifter layers.
     for sl in range(0, self.maxshift+1):
       # Prepare preshifts (bounce keys).
@@ -1523,37 +1488,78 @@ ActiveLvl 0<2>0 0 0 0 0 0 0<2>1 1 1 1 1 1 0<2>0<2>0 0 0 0 0 0 0<22222>1 1 1 1 0
         (style, bitmask) = shiftspec
         if (style == "bounce") and (sl & bitmask):
           # Prepare preshift.
-          d = {
-            "name": "Preshift_{}".format(sl),
-            }
-          prelayer = CfgLayer()
-          prelayer.load(d)
-          layers.append(prelayer)
+          self.add_shift_layer(cfgaction, "Preshift", sl)
 
-      if ((sl == 0) and len(layers) < 1) or (sl > 0):
-        d = {
-          "name": "Shift_{}".format(sl),
-          }
+      if ((sl == 0) and len(cfgaction.layers) < 1) or (sl > 0):
         # Create a new layer representing state exit transitions.
-        cfglayer = CfgLayer()
-        cfglayer.load(d)
-        layers.append(cfglayer)
-      else:
-        cfglayer = layers[0]
+        self.add_shift_layer(cfgaction, "Shift", sl)
+      # else, layer 0 is the action set already existing.
+
+  def bind_shifters (self, actionid_offset, cfgaction):
+    # Prepare preshifters.
+    #self.scan_preshifts(actionid_offset, cfgaction)
+
     # Set shifter binds.
     for sl in range(0, self.maxshift+1):
       if sl > 0:
-        cfglayer = self.get_layer_by_name(cfgactions[actionidx], "Shift_{}".format(sl))
+        cfglayer = self.get_layer_by_name(cfgaction, "Shift_{}".format(sl))
       else:
-        cfglayer = cfgactions[actionidx].layers[0]
+        cfglayer = cfgaction.layers[0]
       for shiftsym,shiftspec in self.shifters.items():
         (style, bitmask) = shiftspec
-        cfgevspec = self.shifter_bind(cfgactions, actionidx, sl, shiftsym, style, bitmask)
+        cfgevspec = self.make_shifter(actionid_offset, cfgaction, cfglayer, sl, shiftsym, style, bitmask)
         cfglayer.bind_point(None, shiftsym, cfgevspec)
 
-      prelayer = self.get_layer_by_name(cfgactions[actionidx], "Preshift_{}".format(sl))
-      if prelayer:
-        self.preshift_binds(cfgactions, actionidx, prelayer, sl, shiftsym, style, bitmask)
+        if style in ("bounce", "lazy"):
+          # Mark all the involved clusters to debounce into stable shift state.
+          prelayer = self.get_layer_by_name(cfgaction, "Preshift_{}".format(sl))
+          if prelayer:
+            self.bind_preshifts(actionid_offset, cfgaction, prelayer, sl)
+
+
+class CfgAction (object):
+  def __init__ (self):
+    self.name = 'Default'
+    self.layers = []
+    self.shifters = None    # instance of CfgShifters.
+
+  def find (self, lyrobj):
+    offset = 0
+    try:
+      retval = self.layers.index(lyrobj)
+      return retval
+    except ValueError:
+      # not found.
+      return -1
+
+  def load (self, py_dict):
+    if 'name' in py_dict:
+      self.name = py_dict['name']
+    for k,v in py_dict.items():
+      if k == 'layers':
+        for v in py_dict[k]:
+          lyr = CfgLayer()
+          lyr.load(v)
+          self.layers.append(lyr)
+      elif k == 'shifters':
+        self.shifters = CfgShifters()
+        self.shifters.load(py_dict)
+    if self.shifters:
+      self.shifters.generate_layers(self)
+      self.shifters.bind_shifters(0, self)
+    return
+
+  def export_scconfig (self, sccfg, phase=0):
+    # Add first layer as Action Set, other layers as Action Layers.
+
+    if self.layers:
+      if phase == 0:
+        lyr = self.layers[0]
+        lyr.export_scconfig(sccfg, title=self.name)
+      elif phase == 1:
+        for lyr in self.layers[1:]:
+          lyr.export_scconfig(sccfg, parent_set_name=self.name)
+    return sccfg
 
 
 class CfgMaker (object):
