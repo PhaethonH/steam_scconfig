@@ -32,11 +32,14 @@ class TestEvspec (unittest.TestCase):
 
     obj = Evspec.parse("_(B)(A)s1000h2tcd0,200/100")
     res = repr(obj)
-    self.assertEqual(res, "Evspec(actsig='_', evsyms='(B)(A)', evfrob=':1000%@0,200~2|/100')")
+#    self.assertEqual(res, "Evspec(actsig='_', evsyms='(B)(A)', evfrob=':1000%@0,200~2|/100')")
+    self.assertEqual(res, "Evspec(actsig='_', evsyms=[Evsym(evtype='gamepad', evcode='B'), Evsym(evtype='gamepad', evcode='A')], evfrob=Evfrob(specific=1000, toggle=True, interrupt=None, delay_start=0, delay_end=200, haptic=2, cycle=True, repeat=100)")
+
 
     obj = Evspec.parse("{foobar bletch}")
     res = repr(obj)
-    self.assertEqual(res, "Evspec(actsig=None, evsyms='{foobar bletch}', evfrob=None)")
+#    self.assertEqual(res, "Evspec(actsig=None, evsyms='{foobar bletch}', evfrob=None)")
+    self.assertEqual(res, "Evspec(actsig=None, evsyms=[Evsym(evtype='host', evcode='foobar bletch')], evfrob=None)")
 
 class TestSrcspec (unittest.TestCase):
   def test_parse1 (self):
@@ -1169,6 +1172,50 @@ class TestCfgMaker (unittest.TestCase):
     sccfg = uppercfg.export_scconfig()
     d = dict(scconfig.toVDF(sccfg))
 #    pprint.pprint(d, width=180)
+
+  def test_aliases (self):
+    d = {
+      'aliases': {
+        'Pause': '<Escape>',
+        'Jump': {
+          'actsig': 'Full_Press',
+          'syms': [
+            { 'type': 'gamepad', 'code': 'B' }
+            ]
+        },
+        'Run': '(A)',
+        'Left': '(DLT)',
+        'Right': '(DRT)',
+        'Down': '(DDN)',
+        'Up': '(DUP)',
+        'Select': '(BK)',
+      },
+      'actions': [
+        { 'layers': [
+          { 'ST': "$Pause"
+          }, ]
+        },
+      ],
+    }
+    uppercfg = cfgmaker.CfgMaker()
+    uppercfg.load(d)
+
+    # test verbose evspec.
+    ref = uppercfg.exportctx.aliases.get("Jump", None)
+    self.assertEqual(str(ref.evspec), "(B)")
+
+    # test string shorthand evspec.
+    ref = uppercfg.exportctx.aliases.get("Pause", None)
+    self.assertEqual(ref.evspec.evsyms[0].evcode, "Escape")
+    #self.assertIn("evcode='Escape'", repr(ref))
+
+    sccfg = uppercfg.export_scconfig()
+    d = scconfig.toVDF(sccfg)
+    grp = d['group',0]
+    inp = grp['inputs']['button_menu']
+    actv = inp['activators']['Full_Press']
+    binding = actv['bindings']['binding']
+    self.assertEqual(binding, "key_press Escape")
 
 
   def test_load2 (self):

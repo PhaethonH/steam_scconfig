@@ -409,25 +409,62 @@ class Evspec (object):
     self.icon = iconinfo    # instance of scconfig.IconInfo
 
   def __str__ (self):
-    evsymspec = "".join(map(str, self.evsyms))
+    evsymspec = "".join(map(str, self.evsyms)) if self.evsyms else ''
+    evfrobspec = str(self.evfrob) if self.evfrob else ''
     retval = """{}{}{}""".format(
       self.actsig if self.actsig else "",
       evsymspec,
-      str(self.evfrob),
+      evfrobspec,
       )
     return retval
 
   def __repr__ (self):
-    evsymspec = "".join(map(str, self.evsyms))
-#    evsymspec = self.evsyms
-    evfrobspec = str(self.evfrob) if self.evfrob is not None else None
-    retval = """{}(actsig={!r}, evsyms='{!s}', evfrob={!r})""".format(
+    retval = """{}(actsig={!r}, evsyms={!r}, evfrob={!r})""".format(
       self.__class__.__name__,
       self.actsig,
-      evsymspec,    # list of Evsym
-      evfrobspec,   # list of Evfrob
+      self.evsyms,  # list of Evsym
+      self.evfrob,  # list of Evfrob
       )
     return retval
+
+  def load (self, py_dict):
+    """Build Evspec from python dictionary."""
+    for k,v in py_dict.items():
+      if k == 'actsig':
+        lv = v.lower()
+        actsig = ''
+        if lv in ('full_press', 'press', 'regular'):
+          actsig = None
+        elif lv in ('release', '-'):
+          actsig = '-'
+        elif lv in ('long_press', 'long', '_'):
+          actsig = '_'
+        elif lv in ('start_press', 'start', '+'):
+          actsig = '+'
+        elif lv in ('chord', '&'):
+          actsig = '&'
+        elif lv in ('double_press', 'double', ':', '='):
+          actsig = ':'
+        else:
+          actsig = None
+        self.actsig = actsig
+      elif k == 'syms':
+        # evtype, evcode.
+        evsyms = []
+        for symnode in v:
+          evtype = symnode.get("type", None)
+          evcode = symnode.get("code", None)
+          evsym = Evsym(evtype, evcode)
+          evsyms.append(evsym)
+        self.evsyms = evsyms
+      elif k == 'frob':
+        frob = Evfrob(**v)
+        self.evfrob = frob
+      elif k == 'label':
+        self.label = str(v)
+      elif k == 'icon':
+        iconinfo = scconfig.IconInfo(**v)
+        self.icon = iconinfo
 
   @staticmethod
   def _parse (s):
@@ -475,6 +512,11 @@ class CfgEvspec (object):
 """
   def __init__ (self, evspec=None):
     self.evspec = evspec
+
+  def __repr__ (self):
+    return "{}(evspec={!r})".format(
+      self.__class__.__name__,
+      self.evspec)
 
   def export_scbind (self, evsym):
     retval = None
@@ -572,11 +614,12 @@ class CfgClusterBase (object):
     ])
   MODE = mode = None
   SUBPARTS = dict()
-  def __init__ (self, py_dict=None):
+  def __init__ (self, exportctx=None, py_dict=None):
     self.index = 0
     self.subparts = {}  # key <- subpart name; value <- list of CfgEvspec
     if py_dict:
       self.load(py_dict)
+    self.exportctx = exportctx
 
   def bind_subpart (self, subpartname, bindspec):
     if _stringlike(bindspec):
@@ -584,7 +627,14 @@ class CfgClusterBase (object):
       collate = []
       evspecs = bindspec.split()
       for evspec in evspecs:
-        cfgevspec = CfgEvspec(Evspec.parse(evspec))
+        effspec = evspec
+        if evspec[0] == '$':  # "$AliasTerm" or "${AliasTerm}"
+          if evspec[1] == '{': term = evspec[2:-1]
+          else: term = evspec[1:]
+          effspec = self.exportctx.aliases.get(term, term)
+          cfgevspec = effspec
+        else:
+          cfgevspec = CfgEvspec(Evspec.parse(effspec))
         if cfgevspec:
           collate.append(cfgevspec)
       self.subparts[subpartname] = collate
@@ -797,35 +847,35 @@ class CfgClusterTrigger (CfgClusterBase):
 
 class CfgClusterFactory (object):
   @staticmethod
-  def make_pen (py_dict): return CfgClusterPen(py_dict)
+  def make_pen (exctx, pd): return CfgClusterPen(exctx, pd)
   @staticmethod
-  def make_dpad (py_dict): return CfgClusterDpad(py_dict)
+  def make_dpad (exctx, pd): return CfgClusterDpad(exctx, pd)
   @staticmethod
-  def make_face (py_dict): return CfgClusterFace(py_dict)
+  def make_face (exctx, pd): return CfgClusterFace(exctx, pd)
   @staticmethod
-  def make_jsmove (py_dict): return CfgClusterJoystickMove(py_dict)
+  def make_jsmove (exctx, pd): return CfgClusterJoystickMove(exctx, pd)
   @staticmethod
-  def make_jscam (py_dict): return CfgClusterJoystickCamera(py_dict)
+  def make_jscam (exctx, pd): return CfgClusterJoystickCamera(exctx, pd)
   @staticmethod
-  def make_jsmouse (py_dict): return CfgClusterJoystickMouse(py_dict)
+  def make_jsmouse (exctx, pd): return CfgClusterJoystickMouse(exctx, pd)
   @staticmethod
-  def make_mousejs (py_dict): return CfgClusterMouseJoystick(py_dict)
+  def make_mousejs (exctx, pd): return CfgClusterMouseJoystick(exctx, pd)
   @staticmethod
-  def make_pie (py_dict): return CfgClusterPie(py_dict)
+  def make_pie (exctx, pd): return CfgClusterPie(exctx, pd)
   @staticmethod
-  def make_region (py_dict): return CfgClusterRegion(py_dict)
+  def make_region (exctx, pd): return CfgClusterRegion(exctx, pd)
   @staticmethod
-  def make_scroll (py_dict): return CfgClusterScroll(py_dict)
+  def make_scroll (exctx, pd): return CfgClusterScroll(exctx, pd)
   @staticmethod
-  def make_single (py_dict): return CfgClusterSingle(py_dict)
+  def make_single (exctx, pd): return CfgClusterSingle(exctx, pd)
   @staticmethod
-  def make_switches (py_dict): return CfgClusterSwitches(py_dict)
+  def make_switches (exctx, pd): return CfgClusterSwitches(exctx, pd)
   @staticmethod
-  def make_menu (py_dict): return CfgClusterMenu(py_dict)
+  def make_menu (exctx, pd): return CfgClusterMenu(exctx, pd)
   @staticmethod
-  def make_trigger (py_dict): return CfgClusterTrigger(py_dict)
+  def make_trigger (exctx, pd): return CfgClusterTrigger(exctx, pd)
   @staticmethod
-  def make_cluster (py_dict):
+  def make_cluster (exportctx, py_dict):
     DELEGATE = {
       CfgClusterPen.MODE: CfgClusterFactory.make_pen,
       CfgClusterDpad.MODE: CfgClusterFactory.make_dpad,
@@ -844,7 +894,7 @@ class CfgClusterFactory (object):
       }
     delegate = DELEGATE[py_dict["mode"]]
     if delegate:
-      retval = delegate(py_dict)
+      retval = delegate(exportctx, py_dict)
       return retval
     return None
 
@@ -866,9 +916,10 @@ layer:
   ...
 
 """
-  def __init__ (self):
+  def __init__ (self, exportctx=None):
     self.name = None
     self.clusters = {}    # map to list of CfgCluster*
+    self.exportctx = exportctx
 
   ORDERING = [ "SW", "BQ", "LP", "RP", "LJ", "LT", "RT", "RJ", "DP" ]
   CLUSTER_SYMS = set([
@@ -904,7 +955,7 @@ layer:
   def pave_cluster (self, clustername, create_mode=None):
     """Ensure cluster entry exists, with specified mode if create needed."""
     if not clustername in self.clusters:
-      cluster = CfgClusterFactory.make_cluster({"mode": create_mode})
+      cluster = CfgClusterFactory.make_cluster(self.exportctx, {"mode": create_mode})
       self.clusters[clustername] = cluster
     return True
 
@@ -1029,7 +1080,7 @@ For inlined subparts.
         # whole cluster full spec.
         v = py_dict[k]
         if _dictlike(v):
-          self.clusters[k] = CfgClusterFactory.make_cluster(v)
+          self.clusters[k] = CfgClusterFactory.make_cluster(self.exportctx, v)
         else:
           # whole-cluster single bind.
           if k in ('LT', 'RT'):
@@ -1226,6 +1277,7 @@ reset after export.
 
   def reset (self):
     self.layerlist = []     # List of (CfgAction,CfgLayer) in VDF order.
+    self.aliases = {}
 
 
 class CfgShifters (object):
@@ -1549,7 +1601,7 @@ StableShiftLayer.ShifterKey <- Shifts
     d = {
       "name": layer_name,
     }
-    shiftlayer = CfgLayer()
+    shiftlayer = CfgLayer(self.exportctx)
     shiftlayer.load(d)
     cfgaction.layers.append(shiftlayer)
     self.involved.append(layer_name)
@@ -1625,7 +1677,7 @@ class CfgAction (object):
     for k,v in py_dict.items():
       if k == 'layers':
         for v in py_dict[k]:
-          lyr = CfgLayer()
+          lyr = CfgLayer(self.exportctx)
           lyr.load(v)
           self.layers.append(lyr)
       elif k == 'shifters':
@@ -1674,6 +1726,10 @@ actions:
     self.exportctx = CfgExportContext()
 
   def load (self, py_dict):
+    if 'aliases' in py_dict:
+      v = py_dict['aliases']
+      self.load_aliases(v)
+
     for k,v in py_dict.items():
       if k == "actions":
         actions_list = py_dict["actions"]
@@ -1693,6 +1749,16 @@ actions:
         self.devtype = v
       elif k in ('timestamp', 'Timestamp'):
         self.timestamp = int(v)
+
+  def load_aliases (self, py_dict):
+    for k,v in py_dict.items():
+      if _stringlike(v):
+        cfgevspec = CfgEvspec(Evspec.parse(v))
+      else:
+        evspec = Evspec()
+        evspec.load(v)
+        cfgevspec = CfgEvspec(evspec)
+      self.exportctx.aliases[k] = cfgevspec
 
   def export_scconfig (self, sccfg=None):
     if sccfg is None:
@@ -1730,6 +1796,9 @@ actions:
     conmap = self.export_scconfig()
     sccfg.add_mapping(conmap)
     return sccfg
+
+
+
 
 
 def cli (argv):
