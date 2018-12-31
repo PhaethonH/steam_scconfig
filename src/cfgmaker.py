@@ -660,7 +660,9 @@ class CfgClusterBase (object):
         if evspec[0] == '$':  # "$AliasTerm" or "${AliasTerm}"
           if evspec[1] == '{': term = evspec[2:-1]
           else: term = evspec[1:]
-          effspec = self.exportctx.aliases.get(term, term)
+          effspec = self.exportctx.aliases.get(term, None)
+          if (effspec is None):
+            raise ValueError("Unknown alias '{}'".format(term))
           cfgevspec = effspec
         else:
           cfgevspec = CfgEvspec(Evspec.parse(effspec))
