@@ -391,7 +391,27 @@ class Evfrob (object):
 
 
 class Evspec (object):
-  """Event specification: combine Evsym and Evfrob."""
+  """Event specification: combine Evsym and Evfrob.
+
+Shorthand notation
+1. signal indicator: one of '', '+', '-', '_', ':', '&'
+2. sequence of evsym:
+  * angle brackets indicate a keyboard event, "<Return>"
+  * parentheses indicate a gamepad event, "(LB)"
+  * square brackets indicate a mouse event, "[1]" for mouse button 1 (left).
+  * curly braces indicate host/special command, e.g. "{host screenshot}".
+3. frobs that correlate to settings.
+  * ':' to mark signal-specific setting (long press time, double press time,...)
+  * '@' to indicate delay start and delay end (default "@0,0").
+  * '/' to indicate repeat rate (0 to disable repeat).
+  * '~' to indicate haptic intensity (0,1,2,3)
+  * '%' to indicate toggle on
+  * '^' to indicate interruptible on
+  * '|' to indicate cycle on
+4. label suffices indicated by '#'.
+   Subsequent '#' indicate word to concatenate after a space.
+   Or think of it as all '#' become space.
+"""
   REGEX_SIGNAL = """([-/+_=:\&])"""
   REGEX_SYM = Evsym.REGEX_SYM
   REGEX_FROB = Evfrob.REGEX_FROB
@@ -1762,11 +1782,13 @@ actions:
   def load_aliases (self, py_dict):
     for k,v in py_dict.items():
       if _stringlike(v):
-        cfgevspec = CfgEvspec(Evspec.parse(v))
+        evspec = Evspec.parse(v)
       else:
         evspec = Evspec()
         evspec.load(v)
-        cfgevspec = CfgEvspec(evspec)
+      if evspec.label is None:  # Auto-label reminiscent of InGameActions.
+        evspec.label = "#{}".format(k)
+      cfgevspec = CfgEvspec(evspec)
       self.exportctx.aliases[k] = cfgevspec
 
   def export_scconfig (self, sccfg=None):

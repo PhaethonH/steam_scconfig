@@ -1218,7 +1218,7 @@ class TestCfgMaker (unittest.TestCase):
     inp = grp['inputs']['button_menu']
     actv = inp['activators']['Full_Press']
     binding = actv['bindings']['binding']
-    self.assertEqual(binding, "key_press Escape")
+    self.assertEqual(binding, "key_press Escape, #Pause")
 
 
   def test_load2 (self):
