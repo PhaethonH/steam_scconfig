@@ -1,0 +1,91 @@
+# Second draft, X3:TC configuration
+
+aliases:
+  LeftAnalog: (LJ)
+  RightAnalog: (RJ)
+  Fire: <RightControl>
+  MenuUp: <Up>
+  MenuDown: <Down>
+  MenuLeft: <Left>
+  MenuRight: <Right>
+  MenuSelect: <Return>
+  MenuCancel: <Escape>
+  MenuPrior: <PageUp>
+  MenuNext: <PageDown>
+  TargetNearest: <T>
+  SelectMissile: <M>
+  BoostExtension: <Tab>
+  BrakeToStop: <Backspace>
+  ThrottleUp: <Z>
+  ThrottleDown: <X>
+  TargetNextAny: <PageUp>
+  TargetPrevAny: <PageDown>
+  TargetNextEnemy: <Home>
+  TargetPrevEnemy: <End>
+  TargetNextOwned: <Insert>
+  TargetPrevOwned: <Delete>
+  HeaveUp: <W>
+  HeaveDown: <S>
+  SwayLeft: <A>
+  SwayRight: <D>
+  RollLeft: <Q>
+  RollRight: <E>
+  PitchUp: <Down>
+  PitchDown: <Up>
+  YawLeft: <Left>
+  YawRight: <Right>
+  SectorMap: <FullStop>
+  UniverseMap: <comma>
+
+name: "GeneratedSample_1"
+revision: 2
+devtype: controller_ps4
+actions:
+- name: Default
+  layers:
+  - name: Default
+    LJ: (LJ)
+    RJ: (RJ)
+    BK: sanity
+    ST: <Pause>
+    RT.c: <RightControl>
+    DP.u: <Up>
+    DP.l: <Left>
+    DP.r: <Right>
+    DP.d: <Down>
+    BQ.n: <T>
+    BQ.w: <M>
+    BQ.e: <Tab>
+    BQ.s: <Backspace>
+    LS: "{apply 6th_axis}"
+
+  - name: dummy
+
+  - name: 6th_axis
+    LS: "{peel 6th_axis}"
+    RJ.u: <W>
+    RJ.d: <S>
+    RJ.l: <Q>
+    RJ.r: <E>
+
+  - name: Commerce1
+    DP.u: <PageUp>
+    DP.d: <PageDown>
+    DP.l: <Home>
+    DP.r: <End>
+
+  - name: Combat1
+    BQ.n: <Shift> <T>
+    BQ.w: <>
+    BQ.e: <Shift> <F>
+    BQ.s: <>
+
+  shifters:
+    LB: hold 1
+    RB: hold 4
+
+  shiftlayers:
+    1: [ Commerce1 ]
+    4: [ Combat1 ]
+    5: [ Command1 ]
+
