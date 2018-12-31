@@ -395,11 +395,12 @@ class Evspec (object):
   REGEX_SIGNAL = """([-/+_=:\&])"""
   REGEX_SYM = Evsym.REGEX_SYM
   REGEX_FROB = Evfrob.REGEX_FROB
+  REGEX_LABEL = r"(#.*)"
 
 #  REGEX_MAIN = REGEX_SIGNAL + "?" + \
 #               "(" + REGEX_SYM + "+)" + \
 #               "(" + REGEX_FROBS + "+)?"
-  REGEX_MAIN = "{}?({}+)({}+)?".format(REGEX_SIGNAL, REGEX_SYM, REGEX_FROB)
+  REGEX_MAIN = "{}?({}+)({}+)?{}?".format(REGEX_SIGNAL, REGEX_SYM, REGEX_FROB, REGEX_LABEL)
 
   def __init__ (self, actsig=None, evsyms=None, evfrob=None, label=None, iconinfo=None):
     self.actsig = actsig    # one character of REGEX_SIGNAL
@@ -411,10 +412,12 @@ class Evspec (object):
   def __str__ (self):
     evsymspec = "".join(map(str, self.evsyms)) if self.evsyms else ''
     evfrobspec = str(self.evfrob) if self.evfrob else ''
-    retval = """{}{}{}""".format(
+    labelspec = "#" + self.label.replace(" ", "#") if self.label else ''
+    retval = """{}{}{}{}""".format(
       self.actsig if self.actsig else "",
       evsymspec,
       evfrobspec,
+      labelspec,
       )
     return retval
 
@@ -468,6 +471,7 @@ class Evspec (object):
 
   @staticmethod
   def _parse (s):
+    """Split shorthand string into parts: signal, syms, frob, label, icon."""
     evsymre = re.compile(Evspec.REGEX_MAIN)
     evsyms = evsymre.match(s)
 
@@ -475,14 +479,16 @@ class Evspec (object):
       signal = evsyms.group(1)
       evsymspec = evsyms.group(2)
       evfrobspec = evsyms.group(4)
+      label = evsyms.group(6)
     else:
-      signal, evsymspec, evfrobspec = None, None, None
+      signal, evsymspec, evfrobspec, label = None, None, None, None
 
-    return (signal, evsymspec, evfrobspec)
+    return (signal, evsymspec, evfrobspec, label)
 
   @staticmethod
   def parse (s):
-    signal, evsymspec, evfrobspec = Evspec._parse(s)
+    """Convert _parse() parts into forms passable to Evspec."""
+    signal, evsymspec, evfrobspec, label = Evspec._parse(s)
 
     re_signal = re.compile(Evspec.REGEX_SIGNAL)
     re_evsym = re.compile(Evsym.REGEX_SYM)
@@ -491,8 +497,11 @@ class Evspec (object):
     matches_evsym = re_evsym.findall(evsymspec) if evsymspec else None
     evsyms = [ Evsym.parse(s) for s in matches_evsym ] if matches_evsym else None
     evfrobs = Evfrob.parse(evfrobspec) if evfrobspec else None
+    if label is not None:
+      # TODO: escaping '#".
+      label = label[1:].replace('#', ' ')
 
-    return Evspec(signal, evsyms, evfrobs)
+    return Evspec(signal, evsyms, evfrobs, label)
 
 
 

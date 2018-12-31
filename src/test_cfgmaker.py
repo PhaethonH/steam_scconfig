@@ -14,13 +14,15 @@ class TestEvspec (unittest.TestCase):
 
   def test_parse1 (self):
     res = Evspec._parse("(B)")
-    self.assertEqual(res, (None, "(B)", None))
+    self.assertEqual(res, (None, "(B)", None, None))
     res = Evspec._parse("+(B):1000~2%^@0,200/100")
-    self.assertEqual(res, ("+", "(B)", ":1000~2%^@0,200/100"))
+    self.assertEqual(res, ("+", "(B)", ":1000~2%^@0,200/100", None))
     res = Evspec._parse("+(B)s1000h2tcd0,200/100")
-    self.assertEqual(res, ("+", "(B)", "s1000h2tcd0,200/100"))
+    self.assertEqual(res, ("+", "(B)", "s1000h2tcd0,200/100", None))
     res = Evspec._parse("_(B)(A)s1000h2tcd0,200/100")
-    self.assertEqual(res, ("_", "(B)(A)", "s1000h2tcd0,200/100"))
+    self.assertEqual(res, ("_", "(B)(A)", "s1000h2tcd0,200/100", None))
+    res = Evspec._parse("_(B)(A)s1000h2tcd0,200/100#Example#Label")
+    self.assertEqual(res, ("_", "(B)(A)", "s1000h2tcd0,200/100", '#Example#Label'))
 
     obj = cfgmaker.Evfrob(toggle=True, interrupt=True, delay_start=0, delay_end=100, haptic=1, cycle=True, repeat=120)
     res = str(obj)
@@ -1181,7 +1183,8 @@ class TestCfgMaker (unittest.TestCase):
           'actsig': 'Full_Press',
           'syms': [
             { 'type': 'gamepad', 'code': 'B' }
-            ]
+            ],
+          'label': "Make player jump",
         },
         'Run': '(A)',
         'Left': '(DLT)',
@@ -1202,7 +1205,7 @@ class TestCfgMaker (unittest.TestCase):
 
     # test verbose evspec.
     ref = uppercfg.exportctx.aliases.get("Jump", None)
-    self.assertEqual(str(ref.evspec), "(B)")
+    self.assertEqual(str(ref.evspec), "(B)#Make#player#jump")
 
     # test string shorthand evspec.
     ref = uppercfg.exportctx.aliases.get("Pause", None)
