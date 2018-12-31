@@ -36,6 +36,7 @@ Mapping: # top-level object, "controller-mapping"
         .bindings     # collection of Binding
           Binding:
             Evgen
+            .label
             IconInfo
         Settings  # activator-level settings.
     Settings    # group-level settingss.
@@ -545,6 +546,9 @@ class EvgenFactory (object):
     else:
       mangled = mangle_vdfliteral(' '.join(args))
       return Evgen_Empty("UNKNOWN_CONTROLLER_ACTION({})".format(mangled))
+  @staticmethod
+  def make__literal (litsym):
+    return EvgenBase(' ', litsym)
 
   @staticmethod
   def _parse (bindstr):
@@ -598,7 +602,9 @@ class IconInfo (object):
     self.bg = bg
     self.fg = fg
   def __str__ (self):
-    return ' '.join([self.path, self.bg, self.fg])
+    if self.path and self.bg and self.fg:
+      return ' '.join([self.path, self.bg, self.fg])
+    return ''
   def __repr__ (self):
     return "{}(path={!r},bg={!r},fg={!r})".format(
             self.__class__.__name__,
@@ -2086,6 +2092,14 @@ The native actions bypass the entire notion of physical devices (keyboard, mouse
       kv['Button'] = toVDF(self.button, maptype)
     return kv
 
+  def __repr__ (self):
+    return "{}(index={!r}, py_title={!r}, py_legacy={!r}, py_parent={!r})".format(
+      self.__class__.__name__,
+      self.index,
+      self.title,
+      self.legacy,
+      self.parent_set_name)
+
 
 class ActionLayer (Overlay):
   """tuple_key='action_layer'
@@ -2127,6 +2141,13 @@ class GroupSourceBindingValue (object):
     self._groupsrc = None
     # self.groupsrc is a property
     self.groupsrc = groupsrc
+
+  def __repr__ (self):
+    return "{}(groupsrc={!r}, active={!r}, modeshift={!r})".format(
+      self.__class__.__name__,
+      self._groupsrc,
+      self.active,
+      self.modeshift)
 
   @property
   def groupsrc (self):
@@ -2188,6 +2209,13 @@ class Preset (object):
     kv['group_source_bindings'] = kv_gsb
 
     return kv
+
+  def __repr__ (self):
+    return "{}(index={!r}, py_name={!r}, py_gsb={!r}".format(
+      self.__class__.__name__,
+      self.index,
+      self.name,
+      self.gsb)
 
 
 class Mapping (object):

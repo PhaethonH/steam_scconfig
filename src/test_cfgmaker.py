@@ -34,6 +34,9 @@ class TestEvspec (unittest.TestCase):
     res = repr(obj)
     self.assertEqual(res, "Evspec(actsig='_', evsyms='(B)(A)', evfrob=':1000%@0,200~2|/100')")
 
+    obj = Evspec.parse("{foobar bletch}")
+    res = repr(obj)
+    self.assertEqual(res, "Evspec(actsig=None, evsyms='{foobar bletch}', evfrob=None)")
 
 class TestSrcspec (unittest.TestCase):
   def test_parse1 (self):
@@ -148,6 +151,44 @@ class TestCfgMaker (unittest.TestCase):
         CfgEvspec(Evspec.parse("+<a><b>%")),
         CfgEvspec(Evspec.parse("_<2>%")),
         ],
+      "d": None,
+      "l": None,
+      "r": None,
+      }
+    cfg = cfgmaker.CfgClusterDpad()
+    cfg.load(d)
+    obj = cfg.export_scconfig(None)
+    d = scconfig.toVDF(obj)
+    ref = {
+      "id": "0",
+      "mode": "dpad",
+      "inputs": {
+        "dpad_north": {
+          "activators": {  # One/first activator.
+            "Start_Press": {
+              "bindings": {
+                "binding": [ "key_press a", "key_press b" ],
+                },
+              "settings": { "toggle": "1" },
+              },
+            "Long_Press": {
+              "bindings": {
+                "binding": "key_press 2"
+                },
+              "settings": { "toggle": "1" },
+              }
+            },
+          },
+        "dpad_south": {},
+        "dpad_west": {},
+        "dpad_east": {},
+        }
+      }
+    self.assertEqual(d, ref)
+
+    d = {
+      "mode": "dpad",
+      "u": "+<a><b>% _<2>%",
       "d": None,
       "l": None,
       "r": None,
@@ -332,7 +373,7 @@ class TestCfgMaker (unittest.TestCase):
       'Timestamp': '-1',
       'settings': {},
       'action_layers': {
-        '0': {
+        'Default': {
           'legacy_set': '1',
 					'set_layer': '1',
 					'title': 'DefaultLayer',
@@ -1039,6 +1080,96 @@ class TestCfgMaker (unittest.TestCase):
         },
       ]
     self.assertEqual(d, res)
+
+  def test_cfgshifting (self):
+    d = {
+      "0": {
+        "+LB": "1",
+        "+RB": "4",
+        },
+      "1": {
+        "-LB": "0",
+        "+RB": "5",
+        },
+      "4": {
+        "+LB": "5",
+        "-RB": "0",
+        },
+      "5": {
+        "-LB": "4",
+        "-RB": "1",
+        },
+    }
+    cfg = cfgmaker.CfgShifting()
+    cfg.load(d)
+
+  def test_cfgshifters (self):
+    d = {
+      "actions": [
+        {
+          "name": "Default",
+          "layers": [
+            {
+              "ST": "<escape>",
+              },
+            ],
+        },
+        {
+          "name": "TestShifts",
+          "layers": [
+            { "name": "Default",
+              "BQ.s": "(A)",
+              },
+            { "name": "LeftHanded",
+              "DP.u": "(DUP)",
+              "LT.c": "(LT)",
+              },
+            { "name": "RightHanded",
+              "BQ.n": "(Y)",
+              },
+            { "name": "Alternate",
+              "BQ.n": "<n>",
+              },
+            ],
+          "shifters": {
+#            "LB": "hold 1",
+#            "RB": "hold 2",
+            "BK": "sanity",
+            "LB": "bounce 1",
+            "RB": "hold 2",
+            },
+          "shiftlayers": {
+            0: [ "Base" ],
+            1: [ "LeftHanded" , "RightHanded" ],
+            2: [ "Alternate" ],
+            },
+          },
+        ]
+      }
+
+    uppercfg = cfgmaker.CfgMaker()
+    uppercfg.load(d)
+
+#    action = uppercfg.actions[1]
+#    shiftcfg = cfgmaker.CfgShifters()
+#    d2 = d['actions'][1]
+#    shiftcfg.load(d2)
+#    shiftcfg.generate_layers(action)
+#
+    self.assertEqual(len(uppercfg.actions), 2)
+    self.assertEqual(len(uppercfg.actions[0].layers), 1)
+    self.assertEqual(len(uppercfg.actions[1].layers),
+                     9)  # Default, LH, RH, Alt, Pre1, Sh1, Sh2, Pre3, Sh3
+    self.assertEqual( [ lyr.name for lyr in uppercfg.actions[1].layers ],
+      [ "Default", "LeftHanded", "RightHanded", "Alternate",
+        "Preshift_1", "Shift_1", "Shift_2", "Preshift_3", "Shift_3" ])
+
+#    shiftcfg.bind_shifters(1, action)
+
+    sccfg = uppercfg.export_scconfig()
+    d = dict(scconfig.toVDF(sccfg))
+#    pprint.pprint(d, width=180)
+
 
   def test_load2 (self):
     with open("../examples/x3tc_1.yaml") as f:
