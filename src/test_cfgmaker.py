@@ -1167,7 +1167,7 @@ class TestCfgMaker (unittest.TestCase):
 #    shiftcfg.bind_shifters(1, action)
 
     sccfg = uppercfg.export_scconfig()
-    d = scconfig.toVDF(sccfg)
+    d = dict(scconfig.toVDF(sccfg))
 #    pprint.pprint(d, width=180)
 
 

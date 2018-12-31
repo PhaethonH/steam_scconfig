@@ -5,6 +5,7 @@
 
 import re
 import scconfig, scvdf
+import sys, argparse
 
 r"""
 cfg:
@@ -1729,4 +1730,46 @@ actions:
     conmap = self.export_scconfig()
     sccfg.add_mapping(conmap)
     return sccfg
+
+
+def cli (argv):
+  parser = argparse.ArgumentParser()
+  parser.add_argument('-i', '--input', metavar='FILE', nargs=1,
+                      help='Input configuration file [-]')
+  parser.add_argument('-f', '--format', metavar='FMT', type=str, nargs=1,
+                      help='Expected format of input config file [yaml]')
+  parser.add_argument('-o', '--output', metavar='FILE', nargs=1,
+                      help='Output VDF file for Steam Client [-]')
+
+  args = parser.parse_args(argv[1:])
+
+  srcname = args.input[-1] if args.input else None
+  dstname = args.output[-1] if args.output else None
+  fmt = args.format[-1] if args.format else None
+
+  if fmt == 'yaml' or fmt is None:
+    import yaml
+    if srcname:
+      with open(srcname, "rt") as infile:
+        cfg = yaml.load(infile)
+    else:
+      cfg = yaml.load(sys.stdin)
+
+  cfgmaker = CfgMaker()
+  cfgmaker.load(cfg)
+  sccfg = cfgmaker.export_controller_config()
+  vdf = scconfig.toVDF(sccfg)
+
+  if dstname:
+    with open(dstname, "wt") as outfile:
+      scvdf.dump(vdf, outfile)
+  else:
+    scvdf.dump(vdf, sys.stdout)
+
+  return 0
+
+
+if __name__ == "__main__":
+  errcode = cli(sys.argv)
+  sys.exit(errcode)
 
