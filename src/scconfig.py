@@ -36,6 +36,7 @@ Mapping: # top-level object, "controller-mapping"
         .bindings     # collection of Binding
           Binding:
             Evgen
+            .label
             IconInfo
         Settings  # activator-level settings.
     Settings    # group-level settingss.
@@ -601,7 +602,9 @@ class IconInfo (object):
     self.bg = bg
     self.fg = fg
   def __str__ (self):
-    return ' '.join([self.path, self.bg, self.fg])
+    if self.path and self.bg and self.fg:
+      return ' '.join([self.path, self.bg, self.fg])
+    return ''
   def __repr__ (self):
     return "{}(path={!r},bg={!r},fg={!r})".format(
             self.__class__.__name__,

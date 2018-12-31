@@ -400,10 +400,12 @@ class Evspec (object):
 #               "(" + REGEX_FROBS + "+)?"
   REGEX_MAIN = "{}?({}+)({}+)?".format(REGEX_SIGNAL, REGEX_SYM, REGEX_FROB)
 
-  def __init__ (self, actsig=None, evsyms=None, evfrob=None):
+  def __init__ (self, actsig=None, evsyms=None, evfrob=None, label=None, iconinfo=None):
     self.actsig = actsig    # one character of REGEX_SIGNAL
     self.evsyms = evsyms    # list of Evsym instances.
     self.evfrob = evfrob    # Evfrob instance.
+    self.label = label      # str
+    self.icon = iconinfo    # instance of scconfig.IconInfo
 
   def __str__ (self):
     evsymspec = "".join(map(str, self.evsyms))
@@ -457,23 +459,6 @@ class Evspec (object):
 
 
 
-class CfgEvgen (object):
-  def __init__ (self):
-    pass
-  pass
-
-
-class CfgBind (object):
-  r"""
-<SrcSym>: <Evgen>+
-
-"""
-  def __init__ (self):
-    # List of event generators.
-    self.evgen = []
-  pass
-
-
 class CfgEvspec (object):
   r"""
 
@@ -493,17 +478,33 @@ class CfgEvspec (object):
   def export_scbind (self, evsym):
     retval = None
     if evsym.evtype == "keyboard":
-      retval = scconfig.EvgenFactory.make_keystroke(evsym.evcode)
+      evgen = scconfig.EvgenFactory.make_keystroke(evsym.evcode)
     elif evsym.evtype == "mouse":
-      retval = scconfig.EvgenFactory.make_mouseswitch(evsym.evcode)
+      evgen = scconfig.EvgenFactory.make_mouseswitch(evsym.evcode)
     elif evsym.evtype == "gamepad":
-      retval = scconfig.EvgenFactory.make_gamepad(evsym.evcode)
+      evgen = scconfig.EvgenFactory.make_gamepad(evsym.evcode)
     elif evsym.evtype == "host":
-      retval = scconfig.EvgenFactory.make_hostcall(evsym.evcode)
+      evgen = scconfig.EvgenFactory.make_hostcall(evsym.evcode)
     elif evsym.evtype == "overlay":
-      retval = scconfig.EvgenFactory.make_overlay(*evsym.evcode)
+      evgen = scconfig.EvgenFactory.make_overlay(*evsym.evcode)
+    elif evsym.evtype == "SHIFT":
+      (cmd, exportctx, cfgaction, overlay_name) = evsym.evcode
+      for (actset,lyr) in exportctx.layerlist:
+        if (actset == cfgaction) and (lyr.name == overlay_name):
+          tgtlayer = lyr
+          break
+      else:
+        tgtlayer = None
+      if tgtlayer:
+        lyrid = exportctx.layerlist.index((cfgaction,tgtlayer))
+      else:
+        lyrid = -1
+      #evgen = scconfig.EvgenFactory.make__literal("shifter.{} {} {}/{}".format(cmd, cfgaction.name, overlay_name))
+      evgen = scconfig.EvgenFactory.make_overlay(cmd, lyrid, 0, 0)
     else:
-      retval = scconfig.EvgenFactory.make__literal(evsym.evcode[1:-1])
+      evgen = scconfig.EvgenFactory.make__literal(evsym.evcode[1:-1])
+    if evgen:
+      retval = scconfig.Binding(evgen, label=self.evspec.label, iconinfo=self.evspec.icon)
     return retval
 
   def export_signal (self):
@@ -1200,6 +1201,17 @@ shifting:
     pass
 
 
+class CfgExportContext (object):
+  """Instantiated with CfgMaker,
+initialized into CfgShifters,
+references copied at shift-generation time,
+updated at export time,
+reset after export.
+"""
+  def __init__ (self):
+    self.layerlist = []     # List of (CfgAction,CfgLayer) in VDF order.
+
+
 class CfgShifters (object):
   # Alternative to CfgShifting
   r"""
@@ -1264,13 +1276,16 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
   STYLE_LAZY = "lazy"     # Lazy emit - emit event if no chord occured.
   STYLE_EAGER = "eager"   # Eager emit - emit until chord occurs.
   STYLE_SANITY = "sanity"
-  def __init__ (self):
+  def __init__ (self, exportctx=None):
     self.shifters = {}    # map srcsym to shift behavior (style, bitmask)
     self.overlays = {}    # map of shift level (int) to list of layers in level.
     self.involved = []    # all layers involved in shifts, for sanity.
     self.proxies = {}     # map, shift_level:int to list(bounce state cluster).
     self.debouncer = {}   # map, shift_level:int to CfgEvspec in a preshift.
     self.maxshift = 0     # Highest shift level to expect.
+    if exportctx is None:
+      exportctx = CfgExportContext()
+    self.exportctx = exportctx    # CfgExportContext; help export shifters.
 
   def load (self, py_dict):
     self.maxshift = 0
@@ -1309,16 +1324,7 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
     return None
 
 
-  def get_layer_sccid (self, actionid_offset, cfgaction, layer_name):
-    """Return action set/layer id as found in controller mapping vdf."""
-    lyrobj = self.get_layer_by_name(cfgaction, layer_name)
-    lyrid = cfgaction.find(lyrobj)
-    if lyrid < 0:
-      return -1
-    lyrid += actionid_offset
-    return lyrid
-
-  def make_shifter (self, actionid_offset, cfgaction, cfglayer, from_level, shiftsym, shiftstyle, shiftbits):
+  def make_shifter (self, cfgaction, cfglayer, from_level, shiftsym, shiftstyle, shiftbits):
     """Create shifter transition.
 
 * Within CfgAction 'cfgactin',
@@ -1333,15 +1339,21 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
     evspec = None
 
     def apply_overlay (evsyms, overlay_name):
-      lyrid = self.get_layer_sccid(actionid_offset, cfgaction, overlay_name)
-      ovparms = ("apply", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
-      evsym = Evsym('overlay', ovparms)
+      #lyrid = self.get_layer_sccid(actionid_offset, cfgaction, overlay_name)
+      #ovparms = ("apply", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
+      #ovparms = ("apply", "{}".format(lyrid), 0, 0)
+      ovparms = ("apply", self.exportctx, cfgaction, overlay_name)
+      #evsym = Evsym('overlay', ovparms)
+      evsym = Evsym('SHIFT', ovparms)
       evsyms.append(evsym)
 
     def peel_overlay (evsyms, overlay_name):
-      lyrid = self.get_layer_sccid(actionid_offset, cfgaction, overlay_name)
-      ovparms = ("peel", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
-      evsym = Evsym('overlay', ovparms)
+      #lyrid = self.get_layer_sccid(actionid_offset, cfgaction, overlay_name)
+      #ovparms = ("peel", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
+      #ovparms = ("peel", "{}".format(lyrid), 0, 0)
+      ovparms = ("peel", self.exportctx, cfgaction, overlay_name)
+      #evsym = Evsym('overlay', ovparms)
+      evsym = Evsym('SHIFT', ovparms)
       evsyms.append(evsym)
 
     if shiftstyle == "hold":
@@ -1374,7 +1386,7 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
         # last: remove shift state 'from_level'.
         peel_overlay(evsyms, "Shift_{}".format(from_level))
 
-      evspec = Evspec(actsig, evsyms, None)
+      evspec = Evspec(actsig, evsyms, None, label="{}Hold.{} from {} to {}".format(actsig, shiftbits, from_level, nextlevel))
     elif shiftstyle == "bounce" or shiftstyle == "lazy":
       # Create two groups: one for the Preshift, one for the actual Shift.
       if (from_level & shiftbits) == shiftbits:
@@ -1418,14 +1430,14 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
         # also remove stable shift.
         peel_overlay(evsyms, "Shift_{}".format(from_level))
 
-      evspec = Evspec(actsig, evsyms, None)
+      evspec = Evspec(actsig, evsyms, None, label="{}Bounce.{} goes {} to {}".format(actsig, shiftbits, from_level, nextlevel))
 
     if evspec:
       cfgevspec = CfgEvspec(evspec)
       return cfgevspec
     return None
 
-  def bind_preshifts (self, actionid_offset, cfgaction, cfglayer, sl):
+  def bind_preshifts (self, cfgaction, cfglayer, sl):
     # Examine all clusters involved in current debounced state Shift_{sl}
     # Set all involved clusters to dpad/trigger/switches to shift from Preshift_{sl} to Shift_{sl}
     proxies = []   # clusters that need to proxy into Shift_{sl}
@@ -1444,15 +1456,15 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
 
     for shiftsym,shiftspec in self.shifters.items():
       (style, bitmask) = shiftspec
-      cfgevspec = self.make_shifter(actionid_offset, cfgaction, cfglayer, sl, shiftsym, style, bitmask)
+      cfgevspec = self.make_shifter(cfgaction, cfglayer, sl, shiftsym, style, bitmask)
       cfglayer.bind_point(None, shiftsym, cfgevspec)
 
     overlay_name = "Shift_{}".format(sl)
-    lyrid = self.get_layer_sccid(actionid_offset, cfgaction, overlay_name)
     proxyevspec = CfgEvspec(
                     Evspec(
                       '+',
-                      [ Evsym('overlay', ('apply', lyrid, 0, 0)) ],
+#                      [ Evsym('overlay', ('apply', lyrid, 0, 0)) ],
+                      [ Evsym('SHIFT', ('apply', self.exportctx, cfgaction, overlay_name)) ],
                       None))
     for proxied_clustername in proxies:
       if proxied_clustername in ('LT', 'RT'):
@@ -1495,7 +1507,7 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
         self.add_shift_layer(cfgaction, "Shift", sl)
       # else, layer 0 is the action set already existing.
 
-  def bind_shifters (self, actionid_offset, cfgaction):
+  def bind_shifters (self, cfgaction):
     # Prepare preshifters.
     #self.scan_preshifts(actionid_offset, cfgaction)
 
@@ -1507,21 +1519,24 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
         cfglayer = cfgaction.layers[0]
       for shiftsym,shiftspec in self.shifters.items():
         (style, bitmask) = shiftspec
-        cfgevspec = self.make_shifter(actionid_offset, cfgaction, cfglayer, sl, shiftsym, style, bitmask)
+        cfgevspec = self.make_shifter(cfgaction, cfglayer, sl, shiftsym, style, bitmask)
         cfglayer.bind_point(None, shiftsym, cfgevspec)
 
         if style in ("bounce", "lazy"):
           # Mark all the involved clusters to debounce into stable shift state.
           prelayer = self.get_layer_by_name(cfgaction, "Preshift_{}".format(sl))
           if prelayer:
-            self.bind_preshifts(actionid_offset, cfgaction, prelayer, sl)
+            self.bind_preshifts(cfgaction, prelayer, sl)
 
 
 class CfgAction (object):
-  def __init__ (self):
+  def __init__ (self, exportctx=None):
     self.name = 'Default'
     self.layers = []
     self.shifters = None    # instance of CfgShifters.
+    if exportctx is None:
+      exportctx = CfgExportContext()
+    self.exportctx = exportctx
 
   def find (self, lyrobj):
     offset = 0
@@ -1542,24 +1557,19 @@ class CfgAction (object):
           lyr.load(v)
           self.layers.append(lyr)
       elif k == 'shifters':
-        self.shifters = CfgShifters()
+        self.shifters = CfgShifters(self.exportctx)
         self.shifters.load(py_dict)
+    # TODO: store shifts symbolically, resolve to layerid on export.
     if self.shifters:
       self.shifters.generate_layers(self)
-      self.shifters.bind_shifters(0, self)
+      self.shifters.bind_shifters(self)
     return
 
-  def export_scconfig (self, sccfg, phase=0):
+  def export_scconfig (self, sccfg):
     # Add first layer as Action Set, other layers as Action Layers.
 
-    if self.layers:
-      if phase == 0:
-        lyr = self.layers[0]
-        lyr.export_scconfig(sccfg, title=self.name)
-      elif phase == 1:
-        for lyr in self.layers[1:]:
-          lyr.export_scconfig(sccfg, parent_set_name=self.name)
-    return sccfg
+    for lyr in self.layers:
+      lyr.export_scconfig(sccfg, parent_set_name=self.name)
 
 
 class CfgMaker (object):
@@ -1568,7 +1578,7 @@ name:
 title:
 revision:
 ...
-settings:
+scettings:
 ...
 actions:
   name:
@@ -1586,13 +1596,14 @@ actions:
     self.devtype = None
     self.timestamp = None
     self.actions = []
+    self.exportctx = CfgExportContext()
 
   def load (self, py_dict):
     for k,v in py_dict.items():
       if k == "actions":
         actions_list = py_dict["actions"]
         for action_dict in actions_list:
-          action = CfgAction()
+          action = CfgAction(self.exportctx)
           action.load(action_dict)
           self.actions.append(action)
       elif k in ('name', 'title'):
@@ -1625,10 +1636,16 @@ actions:
     if self.timestamp is not None:
       sccfg.timestamp = self.timestamp
 
+    # collate sc_actions, all the base layers first, then non-base.
+    for action in self.actions:
+      lyr = action.layers[0]
+      self.exportctx.layerlist.append((action, lyr))
+    for action in self.actions:
+      for lyr in action.layers[1:]:
+        self.exportctx.layerlist.append((action, lyr))
+
     for action in list(self.actions):
-      action.export_scconfig(sccfg, phase=0)
-    for action in list(self.actions):
-      action.export_scconfig(sccfg, phase=1)
+      action.export_scconfig(sccfg)
 
     return sccfg
 
