@@ -1203,6 +1203,14 @@ shifting:
     pass
 
 
+class ShiftSpec (object):
+  def __init__ (self, shiftsym, shiftstyle, shiftbits, shiftemission=None):
+    self.sym = shiftsym
+    self.style = shiftstyle
+    self.bitmask = shiftbits
+    self.emission = shiftemission   # Lazy or eager.
+
+
 class CfgExportContext (object):
   """Exporter state information.
 
@@ -1307,6 +1315,17 @@ ActiveLvl 0 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 1 1 1 1 1 1 0 0
 Overload  -------------------------------------<E>-----------------------------
 
 """
+  r"""
+lazy/eager generalized into Hermit
+
+For BackingLayer binding to a ShifterKey,
+Import BackingLayer.ShifterKey into PreShiftLayer.ShifterKey, extend shifts.
+StableShiftLayer.ShifterKey becomes pure shifts.
+(activating re-shifter shuts out Hermit bind)
+
+PreShiftLayer.ShifterKey <- Preshifts + Hermit
+StableShiftLayer.ShifterKey <- Shifts
+"""
   STYLE_HOLD = "hold"
   STYLE_LOCK = "toggle"
   STYLE_LATCH = "latch"
@@ -1314,6 +1333,7 @@ Overload  -------------------------------------<E>-----------------------------
   STYLE_LAZY = "lazy"     # Lazy emit - emit event if no chord occured.
   STYLE_EAGER = "eager"   # Eager emit - emit until chord occurs.
   STYLE_SANITY = "sanity"
+  STYLE_HERMIT = "hermit"
 
   def __init__ (self, exportctx=None):
     self.shifters = {}    # map srcsym to shift behavior (style, bitmask)
@@ -1344,6 +1364,8 @@ Overload  -------------------------------------<E>-----------------------------
             self.maxshift |= bitmask
       elif k == "shiftlayers":
         for shiftlevel,layerlist in v.items():
+          if shiftlevel == 0:
+            continue
           shiftnum = int(shiftlevel)
           # TODO: parse many layer names in one string, space-delimited.
           shiftlayers = layerlist
@@ -1465,6 +1487,18 @@ Overload  -------------------------------------<E>-----------------------------
       return cfgevspec
     return None
 
+  def make_sanitizer (self, cfgaction, cfglayer, scrublayers):
+    evsyms = []
+    for layer_name in scrublayers:
+      ovparms = ('peel', self.exportctx, cfgaction, layer_name)
+      evsym = Evsym('Shifter', ovparms)
+      evsyms.append(evsym)
+    if evsyms:
+      evspec = Evspec('+', evsyms, None, label="Shifter Reset")
+      cfgevspec = CfgEvspec(evspec)
+      return cfgevspec
+    return None
+
   def bind_preshifts (self, cfgaction, cfglayer, sl):
     # Examine all clusters involved in current debounced state Shift_{sl}
     # Set all involved clusters to dpad/trigger/switches to shift from Preshift_{sl} to Shift_{sl}
@@ -1517,6 +1551,7 @@ Overload  -------------------------------------<E>-----------------------------
     shiftlayer = CfgLayer()
     shiftlayer.load(d)
     cfgaction.layers.append(shiftlayer)
+    self.involved.append(layer_name)
     return True
 
   def generate_layers (self, cfgaction):
@@ -1540,6 +1575,8 @@ Overload  -------------------------------------<E>-----------------------------
     # Prepare preshifters.
     #self.scan_preshifts(actionid_offset, cfgaction)
 
+    # TODO: scrub shift-conflicting binds in backing layers.
+
     # Set shifter binds.
     for sl in range(0, self.maxshift+1):
       if sl > 0:
@@ -1548,6 +1585,11 @@ Overload  -------------------------------------<E>-----------------------------
         cfglayer = cfgaction.layers[0]
       for shiftsym,shiftspec in self.shifters.items():
         (style, bitmask) = shiftspec
+        if style in ("sanity",) and sl == 0:
+          cfgevspec = self.make_sanitizer(cfgaction, cfglayer, self.involved)
+          cfglayer.bind_point(None, shiftsym, cfgevspec)
+          # TODO: scrub sanity button from all non-base layers.
+          continue
         cfgevspec = self.make_shifter(cfgaction, cfglayer, sl, shiftsym, style, bitmask)
         cfglayer.bind_point(None, shiftsym, cfgevspec)
 
