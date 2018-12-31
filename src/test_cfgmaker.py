@@ -116,6 +116,14 @@ class TestCfgMaker (unittest.TestCase):
         }
       })
 
+    evspec = Evspec.parse("{overlay apply 1}")
+    cfg = CfgEvspec(evspec)
+    obj = cfg.export_scconfig()
+    d = scconfig.toVDF(obj)
+    self.assertEqual(d, { 'bindings':
+      { 'binding': "controller_action add_layer 1 0 0" }
+    })
+
   def test_cfgcluster_dpad (self):
     d = {
       "mode": "dpad",
@@ -125,6 +133,7 @@ class TestCfgMaker (unittest.TestCase):
       "d": None,
       "l": None,
       "r": None,
+      "c": [ CfgEvspec(Evspec.parse("[1]")) ],
       }
     cfg = cfgmaker.CfgClusterDpad()
     cfg.load(d)
@@ -147,7 +156,16 @@ class TestCfgMaker (unittest.TestCase):
         "dpad_south": {},
         "dpad_west": {},
         "dpad_east": {},
-        }
+        "click": {
+          "activators": {
+            "Full_Press": {
+              "bindings": {
+                "binding": "mouse_button LEFT",
+                },
+              },
+            },
+          },
+        },
       })
 
     d = {
@@ -820,6 +838,7 @@ class TestCfgMaker (unittest.TestCase):
       'name': 'inline joystick',
       'LJ': 'LJ',
       'RJ': 'RJ',
+      'LS': "(LS)",
       }
     cfg = cfgmaker.CfgLayer()
     cfg.load(d)
@@ -832,7 +851,8 @@ class TestCfgMaker (unittest.TestCase):
       { 'id': '0',
         'inputs': {},
         'mode': 'joystick_move',
-        'settings': {'output_joystick': '0'}
+        'settings': {'output_joystick': '0'},
+        'inputs': {'click': {'activators': {'Full_Press': {'bindings': {'binding': 'xinput_button JOYSTICK_LEFT'}}}}},
         },
       { 'id': '1',
         'inputs': {},

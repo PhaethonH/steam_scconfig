@@ -446,7 +446,7 @@ class Evgen_Host (EvgenBase):
   def __init__ (self, details):
     vdfliteral = filter_enum(self.TRANSLATION, details)
     if vdfliteral is None:
-      mangle = mangle_vdfliteral(details)
+      mangled = mangle_vdfliteral(details)
       raise ValueError("Unknown host action '{}'".format(mangled))
     EvgenBase.__init__(self, VSC_CONTROLLERACTION, vdfliteral)
 

@@ -233,7 +233,8 @@ class Evsym (object):
     elif self.evtype == "gamepad":
       parts.append("({})".format(self.evcode))
     elif self.evtype == "host":
-      parts.append("{}{}{}".format("{", self.evcode, "}"))
+      codestr = " ".join(self.evcode)
+      parts.append("{}{}{}".format("{", codestr, "}"))
     else:
       parts.append("{}".format(self.evcode))
     return "".join(parts)
@@ -267,10 +268,17 @@ class Evsym (object):
       if evcode[-1] == ')':
         evcode = evcode[:-1]
     elif evsymspec[0] == '{':
-      evtype = "host"
-      evcode = evsymspec[1:]
-      if evcode[-1] == '}':
-        evcode = evcode[:-1]
+      # strip trailing '}'
+      payload = evsymspec[1:(-1 if evsymspec[-1] == '}' else None)]
+      # probe for host variant.
+      words = payload.split()
+      if words[0] in ("overlay",):
+        evtype = "overlay"
+        parts = words[1:]
+        evcode = parts
+      else:
+        evtype = "host"
+        evcode = payload
     return (evtype, evcode)
 
   @staticmethod
@@ -526,6 +534,23 @@ Shorthand notation
 
 
 
+class CfgExportContext (object):
+  """Exporter state information.
+
+Instantiated with CfgMaker,
+initialized into CfgShifters,
+references copied at shift-generation time,
+updated at export time,
+reset after export.
+"""
+  def __init__ (self):
+    self.reset()
+
+  def reset (self):
+    self.layerlist = []     # List of (CfgAction,CfgLayer) in VDF order.
+    self.aliases = {}
+
+
 class CfgEvspec (object):
   r"""
 
@@ -539,13 +564,15 @@ class CfgEvspec (object):
     toggle: ...
     repeat: ...
 """
-  def __init__ (self, evspec=None):
+  def __init__ (self, evspec=None, exportctx=None):
     self.evspec = evspec
+    self.exportctx = exportctx
 
   def __repr__ (self):
-    return "{}(evspec={!r})".format(
+    return "{}(evspec={!r}, exportctx={!r})".format(
       self.__class__.__name__,
-      self.evspec)
+      self.evspec,
+      self.exportctx)
 
   def export_scbind (self, evsym):
     retval = None
@@ -558,16 +585,38 @@ class CfgEvspec (object):
     elif evsym.evtype == "host":
       evgen = scconfig.EvgenFactory.make_hostcall(evsym.evcode)
     elif evsym.evtype == "overlay":
-      evgen = scconfig.EvgenFactory.make_overlay(*evsym.evcode)
+      (cmd, layer_name) = evsym.evcode
+      evgen = None
+      try:
+        lyrid = int(layer_name)
+      except ValueError:
+        # try resolving layer name.
+        exportctx = self.exportctx
+        if exportctx:
+          for (actset,lyr) in exportctx.layerlist:
+            if (actset == cfgaction) and (lyr.name == overlay_name):
+              lyrid = exportctx.layerlist.index((cfgaction, lyr))
+              evspec.label = layer_name
+              evgen = scconfig.EvgenFactory.make_overlay(cmd, lyrid, 0, 0)
+              break
+          else:
+            lyrid = -1
+        else:
+          lyrid = -1
+      if lyrid < 0:
+        print("failed to resolve {!r}".format(layer_name))
+      #evgen = scconfig.EvgenFactory.make_overlay(*evsym.evcode)
     elif evsym.evtype == "Shifter":
       (cmd, exportctx, cfgaction, overlay_name) = evsym.evcode
       for (actset,lyr) in exportctx.layerlist:
         if (actset == cfgaction) and (lyr.name == overlay_name):
           lyrid = exportctx.layerlist.index((cfgaction, lyr))
+          evgen = scconfig.EvgenFactory.make_overlay(cmd, lyrid, 0, 0)
           break
       else:
+#        print("Failed to resolve {!r}".format(overlay_name))
         lyrid = -1
-      evgen = scconfig.EvgenFactory.make_overlay(cmd, lyrid, 0, 0)
+        evgen = None
       #evgen = scconfig.EvgenFactory.make__literal("shifter.{} {} {}/{}".format(cmd, cfgaction.name, overlay_name))
     else:
       lit = evsym.evcode
@@ -646,9 +695,9 @@ class CfgClusterBase (object):
   def __init__ (self, exportctx=None, py_dict=None):
     self.index = 0
     self.subparts = {}  # key <- subpart name; value <- list of CfgEvspec
+    self.exportctx = exportctx
     if py_dict:
       self.load(py_dict)
-    self.exportctx = exportctx
 
   def bind_subpart (self, subpartname, bindspec):
     if _stringlike(bindspec):
@@ -665,7 +714,7 @@ class CfgClusterBase (object):
             raise ValueError("Unknown alias '{}'".format(term))
           cfgevspec = effspec
         else:
-          cfgevspec = CfgEvspec(Evspec.parse(effspec))
+          cfgevspec = CfgEvspec(Evspec.parse(effspec), self.exportctx)
         if cfgevspec:
           collate.append(cfgevspec)
       self.subparts[subpartname] = collate
@@ -1008,6 +1057,11 @@ For inlined subparts.
         # directly inlined switch subpart: BK, ST, LB, RB, LG, RG
         clustername = "SW"
         self.pave_cluster(clustername, "switches")
+      # Remap LS,RS to LJ.c,RJ.c
+      elif clustername in ("LS", "RS"):
+        clustername = { "LS": "LJ", "RS": "RJ" }[clustername]
+        subpartname = "c"
+        self.pave_cluster(clustername, "jsmove")
       elif len(subpartname) > 2 and subpartname[2] == '.' and subpartname[:2] in self.CLUSTERS:
         # inline subpart "XX.y".
         prefix = subpartname[:3]
@@ -1129,6 +1183,11 @@ For inlined subparts.
         clustername = "SW"
         subpartname = k
         self.pave_cluster(clustername, "switches")
+        self.bind_point(clustername, subpartname, v)
+      elif k in ("LS", "RS"):
+        clustername = { "LS":"LJ", "RS":"RJ" }[k]
+        subpartname = "c"
+        self.pave_cluster(clustername, "jsmove")
         self.bind_point(clustername, subpartname, v)
       elif len(k) > 2 and k[2] == '.' and k[:2] in self.CLUSTERS:
         # inline subpart "XX.y".
@@ -1292,23 +1351,6 @@ class ShiftSpec (object):
     self.style = shiftstyle
     self.bitmask = shiftbits
     self.emission = shiftemission   # Lazy or eager.
-
-
-class CfgExportContext (object):
-  """Exporter state information.
-
-Instantiated with CfgMaker,
-initialized into CfgShifters,
-references copied at shift-generation time,
-updated at export time,
-reset after export.
-"""
-  def __init__ (self):
-    self.reset()
-
-  def reset (self):
-    self.layerlist = []     # List of (CfgAction,CfgLayer) in VDF order.
-    self.aliases = {}
 
 
 class CfgShifters (object):
@@ -1567,7 +1609,7 @@ StableShiftLayer.ShifterKey <- Shifts
       evspec = Evspec(actsig, evsyms, None, label="{}Bounce.{} goes {} to {}".format(actsig, shiftbits, from_level, nextlevel))
 
     if evspec:
-      cfgevspec = CfgEvspec(evspec)
+      cfgevspec = CfgEvspec(evspec, self.exportctx)
       return cfgevspec
     return None
 
@@ -1579,7 +1621,7 @@ StableShiftLayer.ShifterKey <- Shifts
       evsyms.append(evsym)
     if evsyms:
       evspec = Evspec('+', evsyms, None, label="Shifter Reset")
-      cfgevspec = CfgEvspec(evspec)
+      cfgevspec = CfgEvspec(evspec, self.exportctx)
       return cfgevspec
     return None
 
@@ -1612,7 +1654,8 @@ StableShiftLayer.ShifterKey <- Shifts
                       '+',
                       [ Evsym('Shifter', ovparms) ],
                       None,
-                      label="Debounce Preshift_{}".format(sl)))
+                      label="Debounce Preshift_{}".format(sl)),
+                    self.exportctx)
     for proxied_clustername in proxies:
       if proxied_clustername in ('LT', 'RT'):
         cfglayer.bind_point(proxied_clustername, 'c', proxyevspec)
