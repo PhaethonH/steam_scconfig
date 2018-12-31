@@ -1134,6 +1134,7 @@ class TestCfgMaker (unittest.TestCase):
           "shifters": {
 #            "LB": "hold 1",
 #            "RB": "hold 2",
+            "BK": "sanity",
             "LB": "bounce 1",
             "RB": "hold 2",
             },

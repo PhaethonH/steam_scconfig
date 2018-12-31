@@ -487,22 +487,21 @@ class CfgEvspec (object):
       evgen = scconfig.EvgenFactory.make_hostcall(evsym.evcode)
     elif evsym.evtype == "overlay":
       evgen = scconfig.EvgenFactory.make_overlay(*evsym.evcode)
-    elif evsym.evtype == "SHIFT":
+    elif evsym.evtype == "Shifter":
       (cmd, exportctx, cfgaction, overlay_name) = evsym.evcode
       for (actset,lyr) in exportctx.layerlist:
         if (actset == cfgaction) and (lyr.name == overlay_name):
-          tgtlayer = lyr
+          lyrid = exportctx.layerlist.index((cfgaction, lyr))
           break
       else:
-        tgtlayer = None
-      if tgtlayer:
-        lyrid = exportctx.layerlist.index((cfgaction,tgtlayer))
-      else:
         lyrid = -1
-      #evgen = scconfig.EvgenFactory.make__literal("shifter.{} {} {}/{}".format(cmd, cfgaction.name, overlay_name))
       evgen = scconfig.EvgenFactory.make_overlay(cmd, lyrid, 0, 0)
+      #evgen = scconfig.EvgenFactory.make__literal("shifter.{} {} {}/{}".format(cmd, cfgaction.name, overlay_name))
     else:
-      evgen = scconfig.EvgenFactory.make__literal(evsym.evcode[1:-1])
+      lit = evsym.evcode
+      if lit[0] == '{':  # strip '{' and '}'.
+        lit = lit[1:(-1 if lit[-1] == '}' else None)]
+      evgen = scconfig.EvgenFactory.make__literal(lit)
     if evgen:
       retval = scconfig.Binding(evgen, label=self.evspec.label, iconinfo=self.evspec.icon)
     return retval
@@ -1138,6 +1137,9 @@ class CfgShiftState (object):
 
 class CfgShifting (object):
   r"""
+Specify level-shifting in terms of what inputs enter the shift-level,
+what inputs leave the shift-level.
+
 shifting:
   sanity: <srcsym>
   <layer_name>:
@@ -1202,22 +1204,27 @@ shifting:
 
 
 class CfgExportContext (object):
-  """Instantiated with CfgMaker,
+  """Exporter state information.
+
+Instantiated with CfgMaker,
 initialized into CfgShifters,
 references copied at shift-generation time,
 updated at export time,
 reset after export.
 """
   def __init__ (self):
+    self.reset()
+
+  def reset (self):
     self.layerlist = []     # List of (CfgAction,CfgLayer) in VDF order.
 
 
 class CfgShifters (object):
-  # Alternative to CfgShifting
-  r"""
-shifters:
+  r"""Specify level-shifting in terms bit-manipulation of the shift level value.
+
+shifters:   # inputs that manipulate shift level.
   <srcsym>: <style> <bitmask>
-shiftlayers:
+shiftlayers: # layers that provide non-shifter binds in the shift level.
   <shiftnum>: [ <layer>, ... ]
 
 style:
@@ -1244,30 +1251,61 @@ SHIFT
 Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
 OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
 ActiveLvl 0 1 0 0 0 0 0 0 0 1 1 1 1 1 1 1 0 1 0 1 0 0 0 0 0 0 0 1 1 1 1 1 0 0 0
+Overload  -<E>-------------<EEEEEEEEEEEEE>-<E>-<E>-------------<EEEEEEEEE>-<E>-
 
 (activate/deactivate with press)
 LOCK
 Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
 OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
 ActiveLvl 0 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 1 1 1 1 1 1 0 0
+Overload  -<E>-------------<EEEEEEEEEEEEE>-<E>-<E>-------------<EEEEEEEEE>-<E>-
 
 (active while held/chord; remain active until other press; double press=lock)
 LATCH
 Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
 OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
 ActiveLvl 0 1 1 1 0 0 0 0 0 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 1 0 0
+Overload  -<E>-------------<EEEEEEEEEEEEE>-<E>-<E>-------------<EEEEEEEEE>-<E>-
 
 (active while held, emit if released without chord)
 BOUNCE / LAZY-EMIT
 Shifter   -<#>-------------<#############>-<#>-<#>-------------<#########>-<#>-
 OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
-ActiveLvl 0 <E> 0 0 0 0 0 0 ? 1 1 1 1 1 1 0 <E> <E> 0 0 0 0 0 0 ? 1 1 1 1 0 0<E>
+ActiveLvl 0 1 0 0 0 0 0 0 0 1 1 1 1 1 1 1 0 1 0 1 0 0 0 0 0 0 0 1 1 1 1 1 0 1 0
+Overload  --<E>-------------------------<E>-<E>-<E>---------------------<E>-<E>
 
 (active while held, emit while held, stop emit on other press)
 POP / BURST / DEFLATE / EAGER-EMIT
 Shifter   -<#>-------------<#############>-<#>-<#>-------------<#############>-
 OtherKey  -----<#>-<#>-<#>---<#>-<#>-<#>-----------<#>-<#>-<#>-------<#>-<#>---
-ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
+ActiveLvl 0 1 0 0 0 0 0 0 0 1 1 1 1 1 1 1 0 1 0 1 0 0 0 0 0 0 0 1 1 1 1 1 1 1 0
+Overload  -<E>-------------<EEEEEEEEEEEEE>-<E>-<E>-------------<EEEEEEEEEEEEE>-
+
+
+SHIFT, EAGER
+Shifter   -<#>---------<#################>-<#>-<#>-------------<#########>-<#>-
+OtherKey  -----<#>-<#>-------<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
+ActiveLvl 0 1 0 0 0 0 0 1 1 1 1 1 1 1 1 1 0 1 0 1 0 0 0 0 0 0 0 1 1 1 1 1 0 0 0
+Overload  -<E>---------<EEEEE>-------------<E>-<E>------------<E>---------<E>-
+
+SHIFT, LAZY
+Shifter   -<#>---------<#################>-<#>-<#>-------------<#########>-<#>-
+OtherKey  -----<#>-<#>-------<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
+ActiveLvl 0 1 0 0 0 0 0 1 1 1 1 1 1 1 1 1 0 1 0 1 0 0 0 0 0 0 0 1 1 1 1 1 0 0 0
+Overload  ---<E>-----------------------------<E>-<E>-------------------------<E>
+
+LOCK, EAGER 
+Shifter   -<#>---------<#################>-<#>-<#>-------------<#########>-<#>-
+OtherKey  -----<#>-<#>-------<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
+ActiveLvl 0 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 1 1 1 1 1 1 0 0
+Overload  -<EEE>---------------------------<EEE>-------------------------------
+
+LOCK, LAZY
+Shifter   -<#>---------<#################>-<#>-<#>-------------<#########>-<#>-
+OtherKey  -----<#>-<#>-------<#>-<#>-<#>-----------<#>-<#>-<#>---<#>-<#>-------
+ActiveLvl 0 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 1 1 1 1 1 1 0 0
+Overload  -------------------------------------<E>-----------------------------
+
 """
   STYLE_HOLD = "hold"
   STYLE_LOCK = "toggle"
@@ -1276,6 +1314,7 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
   STYLE_LAZY = "lazy"     # Lazy emit - emit event if no chord occured.
   STYLE_EAGER = "eager"   # Eager emit - emit until chord occurs.
   STYLE_SANITY = "sanity"
+
   def __init__ (self, exportctx=None):
     self.shifters = {}    # map srcsym to shift behavior (style, bitmask)
     self.overlays = {}    # map of shift level (int) to list of layers in level.
@@ -1295,7 +1334,10 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
           parts = shiftspec.split()
           style = parts[0]
           bitmask = int(parts[1]) if len(parts) > 1 else 0
-          if not style in (self.STYLE_HOLD, self.STYLE_LOCK, self.STYLE_LATCH, self.STYLE_BOUNCE, self.STYLE_SANITY):
+          if not style in (self.STYLE_SANITY,
+              self.STYLE_HOLD, self.STYLE_LOCK,
+              self.STYLE_LATCH, self.STYLE_BOUNCE,
+              self.STYLE_LAZY, self.STYLE_EAGER):
             print("Unknown shift style: {}".format(style))
           self.shifters[srcsym] = (style, bitmask)
           if bitmask:
@@ -1303,7 +1345,7 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
       elif k == "shiftlayers":
         for shiftlevel,layerlist in v.items():
           shiftnum = int(shiftlevel)
-          # TODO: all layer names in one string, space-delimited.
+          # TODO: parse many layer names in one string, space-delimited.
           shiftlayers = layerlist
           for layername in shiftlayers:
             self.involved.append(layername)
@@ -1334,38 +1376,26 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
    * using shift style 'shiftstyle'
    * affecting shift bits 'bitmask'
 """
-    # TODO: map shift level to action serialid.
-    shift_base = 0
     evspec = None
 
     def apply_overlay (evsyms, overlay_name):
-      #lyrid = self.get_layer_sccid(actionid_offset, cfgaction, overlay_name)
-      #ovparms = ("apply", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
-      #ovparms = ("apply", "{}".format(lyrid), 0, 0)
       ovparms = ("apply", self.exportctx, cfgaction, overlay_name)
-      #evsym = Evsym('overlay', ovparms)
-      evsym = Evsym('SHIFT', ovparms)
+      evsym = Evsym('Shifter', ovparms)
       evsyms.append(evsym)
 
     def peel_overlay (evsyms, overlay_name):
-      #lyrid = self.get_layer_sccid(actionid_offset, cfgaction, overlay_name)
-      #ovparms = ("peel", "{} 0 0, ${}".format(lyrid, overlay_name), 0, 0)
-      #ovparms = ("peel", "{}".format(lyrid), 0, 0)
       ovparms = ("peel", self.exportctx, cfgaction, overlay_name)
-      #evsym = Evsym('overlay', ovparms)
-      evsym = Evsym('SHIFT', ovparms)
+      evsym = Evsym('Shifter', ovparms)
       evsyms.append(evsym)
 
     if shiftstyle == "hold":
       if from_level & shiftbits:
         # release is shift-out.
         nextlevel = from_level & ~shiftbits
-        nextlevel += shift_base
         actsig = '-'
       else:
         # press is shift-in.
         nextlevel = from_level | shiftbits
-        nextlevel += shift_base
         actsig = '+'
 
       evsyms = []
@@ -1392,12 +1422,10 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
       if (from_level & shiftbits) == shiftbits:
         # release is shift-out.
         nextlevel = from_level & ~shiftbits
-        nextlevel += shift_base
         actsig = '-'
       else:
         # press is shift-in.
         nextlevel = from_level | shiftbits
-        nextlevel += shift_base
         actsig = '+'
 
       evsyms = []
@@ -1460,12 +1488,13 @@ ActiveLvl 0<E>0 0 0 0 0 0 0<E>1 1 1 1 1 1 0<E>0<E>0 0 0 0 0 0 0<E E E>1 1 1 1 0
       cfglayer.bind_point(None, shiftsym, cfgevspec)
 
     overlay_name = "Shift_{}".format(sl)
+    ovparms = ('apply', self.exportctx, cfgaction, overlay_name)
     proxyevspec = CfgEvspec(
                     Evspec(
                       '+',
-#                      [ Evsym('overlay', ('apply', lyrid, 0, 0)) ],
-                      [ Evsym('SHIFT', ('apply', self.exportctx, cfgaction, overlay_name)) ],
-                      None))
+                      [ Evsym('Shifter', ovparms) ],
+                      None,
+                      label="Debounce Preshift_{}".format(sl)))
     for proxied_clustername in proxies:
       if proxied_clustername in ('LT', 'RT'):
         cfglayer.bind_point(proxied_clustername, 'c', proxyevspec)
@@ -1569,7 +1598,10 @@ class CfgAction (object):
     # Add first layer as Action Set, other layers as Action Layers.
 
     for lyr in self.layers:
-      lyr.export_scconfig(sccfg, parent_set_name=self.name)
+      if lyr == self.layers[0]:
+        lyr.export_scconfig(sccfg, title=self.name)
+      else:
+        lyr.export_scconfig(sccfg, parent_set_name=self.name)
 
 
 class CfgMaker (object):
