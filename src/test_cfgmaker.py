@@ -14,13 +14,15 @@ class TestEvspec (unittest.TestCase):
 
   def test_parse1 (self):
     res = Evspec._parse("(B)")
-    self.assertEqual(res, (None, "(B)", None))
+    self.assertEqual(res, (None, "(B)", None, None))
     res = Evspec._parse("+(B):1000~2%^@0,200/100")
-    self.assertEqual(res, ("+", "(B)", ":1000~2%^@0,200/100"))
+    self.assertEqual(res, ("+", "(B)", ":1000~2%^@0,200/100", None))
     res = Evspec._parse("+(B)s1000h2tcd0,200/100")
-    self.assertEqual(res, ("+", "(B)", "s1000h2tcd0,200/100"))
+    self.assertEqual(res, ("+", "(B)", "s1000h2tcd0,200/100", None))
     res = Evspec._parse("_(B)(A)s1000h2tcd0,200/100")
-    self.assertEqual(res, ("_", "(B)(A)", "s1000h2tcd0,200/100"))
+    self.assertEqual(res, ("_", "(B)(A)", "s1000h2tcd0,200/100", None))
+    res = Evspec._parse("_(B)(A)s1000h2tcd0,200/100#Example#Label")
+    self.assertEqual(res, ("_", "(B)(A)", "s1000h2tcd0,200/100", '#Example#Label'))
 
     obj = cfgmaker.Evfrob(toggle=True, interrupt=True, delay_start=0, delay_end=100, haptic=1, cycle=True, repeat=120)
     res = str(obj)
@@ -32,11 +34,14 @@ class TestEvspec (unittest.TestCase):
 
     obj = Evspec.parse("_(B)(A)s1000h2tcd0,200/100")
     res = repr(obj)
-    self.assertEqual(res, "Evspec(actsig='_', evsyms='(B)(A)', evfrob=':1000%@0,200~2|/100')")
+#    self.assertEqual(res, "Evspec(actsig='_', evsyms='(B)(A)', evfrob=':1000%@0,200~2|/100')")
+    self.assertEqual(res, "Evspec(actsig='_', evsyms=[Evsym(evtype='gamepad', evcode='B'), Evsym(evtype='gamepad', evcode='A')], evfrob=Evfrob(specific=1000, toggle=True, interrupt=None, delay_start=0, delay_end=200, haptic=2, cycle=True, repeat=100)")
+
 
     obj = Evspec.parse("{foobar bletch}")
     res = repr(obj)
-    self.assertEqual(res, "Evspec(actsig=None, evsyms='{foobar bletch}', evfrob=None)")
+#    self.assertEqual(res, "Evspec(actsig=None, evsyms='{foobar bletch}', evfrob=None)")
+    self.assertEqual(res, "Evspec(actsig=None, evsyms=[Evsym(evtype='host', evcode='foobar bletch')], evfrob=None)")
 
 class TestSrcspec (unittest.TestCase):
   def test_parse1 (self):
@@ -111,6 +116,14 @@ class TestCfgMaker (unittest.TestCase):
         }
       })
 
+    evspec = Evspec.parse("{overlay apply 1}")
+    cfg = CfgEvspec(evspec)
+    obj = cfg.export_scconfig()
+    d = scconfig.toVDF(obj)
+    self.assertEqual(d, { 'bindings':
+      { 'binding': "controller_action add_layer 1 0 0" }
+    })
+
   def test_cfgcluster_dpad (self):
     d = {
       "mode": "dpad",
@@ -120,6 +133,7 @@ class TestCfgMaker (unittest.TestCase):
       "d": None,
       "l": None,
       "r": None,
+      "c": [ CfgEvspec(Evspec.parse("[1]")) ],
       }
     cfg = cfgmaker.CfgClusterDpad()
     cfg.load(d)
@@ -142,7 +156,16 @@ class TestCfgMaker (unittest.TestCase):
         "dpad_south": {},
         "dpad_west": {},
         "dpad_east": {},
-        }
+        "click": {
+          "activators": {
+            "Full_Press": {
+              "bindings": {
+                "binding": "mouse_button LEFT",
+                },
+              },
+            },
+          },
+        },
       })
 
     d = {
@@ -815,6 +838,7 @@ class TestCfgMaker (unittest.TestCase):
       'name': 'inline joystick',
       'LJ': 'LJ',
       'RJ': 'RJ',
+      'LS': "{overlay,apply,2}",
       }
     cfg = cfgmaker.CfgLayer()
     cfg.load(d)
@@ -827,7 +851,8 @@ class TestCfgMaker (unittest.TestCase):
       { 'id': '0',
         'inputs': {},
         'mode': 'joystick_move',
-        'settings': {'output_joystick': '0'}
+        'settings': {'output_joystick': '0'},
+        'inputs': {'click': {'activators': {'Full_Press': {'bindings': {'binding': 'controller_action add_layer 2 0 0'}}}}},
         },
       { 'id': '1',
         'inputs': {},
@@ -856,9 +881,10 @@ class TestCfgMaker (unittest.TestCase):
       'Timestamp': '-1',
       'actions': {
         'Default': {
-          'legacy_set': '1', 'title': 'Default',
-          }
+          'legacy_set': '1',
+          'title': 'Default',
         },
+      },
       'group': [
         {
           'id': '0',
@@ -869,83 +895,81 @@ class TestCfgMaker (unittest.TestCase):
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button SELECT',
-                    }
-                  }
-                }
+                  },
+                },
               },
+            },
             'button_menu': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button START',
-                    },
-                  }
-                }
+                  },
+                },
               },
+            },
             'left_bumper': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button SHOULDER_LEFT',
-                    }
-                  }
-                }
+                  },
+                },
               },
+            },
             'right_bumper': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button SHOULDER_RIGHT',
-                    }
-                  }
-                }
-              }
+                  },
+                },
+              },
             },
           },
-
-         {
+        },
+        {
           'id': '1',
-           'mode': 'four_buttons',
-           'inputs': {
-             'button_a': {
-               'activators': {
-                 'Full_Press': {
-                   'bindings': {
-                     'binding': 'xinput_button A',
-                     }
-                   }
-                 }
-               },
-             'button_b': {
-               'activators': {
-                 'Full_Press': {
-                   'bindings': {
-                     'binding': 'xinput_button B',
-                     }
-                   }
-                 }
-               },
-             'button_x': {
-               'activators': {
-                 'Full_Press': {
-                   'bindings': {
-                     'binding': 'xinput_button X',
-                     }
-                   }
-                 }
-               },
-             'button_y': {
-               'activators': {
-                 'Full_Press': {
-                   'bindings': {
-                     'binding': 'xinput_button Y',
-                     }
-                   }
-                 }
-               }
-             },
-           },
-
+          'mode': 'four_buttons',
+          'inputs': {
+            'button_a': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button A',
+                  },
+                },
+              },
+            },
+            'button_b': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button B',
+                  },
+                },
+              },
+            },
+            'button_x': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button X',
+                  },
+                },
+              },
+            },
+            'button_y': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button Y',
+                  },
+                },
+              },
+            },
+          },
+        },
         {
           'id': '2',
           'mode': 'dpad',
@@ -955,61 +979,63 @@ class TestCfgMaker (unittest.TestCase):
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button DPAD_RIGHT',
-                    }
-                  }
-                }
+                  },
+                },
               },
+            },
             'dpad_north': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button DPAD_UP',
-                    }
-                  }
-                }
+                  },
+                },
               },
+            },
             'dpad_south': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button DPAD_DOWN',
-                    }
-                  }
-                }
+                  },
+                },
               },
+            },
             'dpad_west': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button DPAD_LEFT',
-                    }
-                  }
-                }
-              }
+                  },
+                },
+              },
             },
           },
+        },
         {
           'id': '3',
-          'inputs': {},
           'mode': 'joystick_camera',
-          'settings': {'output_joystick': '0'}
+          'inputs': {
           },
+          'settings': {
+            'output_joystick': '0',
+          },
+        },
         {
           'id': '4',
-          'mode': 'trigger',
+          'mode': 'joystick_move',
           'inputs': {
             'click': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
-                    'binding': 'xinput_button TRIGGER_LEFT',
-                    }
-                  }
-                }
-              }
+                    'binding': 'xinput_button JOYSTICK_LEFT',
+                  },
+                },
+              },
             },
-          'settings': {'output_trigger': '1'}
           },
+        },
         {
           'id': '5',
           'mode': 'trigger',
@@ -1018,15 +1044,50 @@ class TestCfgMaker (unittest.TestCase):
               'activators': {
                 'Full_Press': {
                   'bindings': {
-                    'binding': 'xinput_button TRIGGER_RIGHT',
-                    }
-                  }
-                }
-              }
+                    'binding': 'xinput_button TRIGGER_LEFT',
+                  },
+                },
+              },
             },
-          'settings': {'output_trigger': '1'}
           },
-        ],
+          'settings': {
+            'output_trigger': '1',
+          },
+        },
+        {
+          'id': '6',
+          'mode': 'trigger',
+          'inputs': {
+            'click': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button TRIGGER_RIGHT',
+                  },
+                },
+              },
+            },
+          },
+          'settings': {
+            'output_trigger': '1',
+          },
+        },
+        {
+          'id': '7',
+          'mode': 'joystick_move',
+          'inputs': {
+            'click': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button JOYSTICK_RIGHT',
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
       'preset': {
         'id': '0',
         'name': 'Default',
@@ -1035,12 +1096,14 @@ class TestCfgMaker (unittest.TestCase):
           '1': 'button_diamond active',
           '2': 'left_trackpad active',
           '3': 'right_trackpad active',
-          '4': 'left_trigger active',
-          '5': 'right_trigger active',
-          },
+          '4': 'joystick active',
+          '5': 'left_trigger active',
+          '6': 'right_trigger active',
+          '7': 'right_joystick active'
         },
+      },
       'settings': {},
-      }
+    }
     self.assertEqual(d, res)
 
   def test_inline_touchpad (self):
@@ -1169,6 +1232,51 @@ class TestCfgMaker (unittest.TestCase):
     sccfg = uppercfg.export_scconfig()
     d = dict(scconfig.toVDF(sccfg))
 #    pprint.pprint(d, width=180)
+
+  def test_aliases (self):
+    d = {
+      'aliases': {
+        'Pause': '<Escape>',
+        'Jump': {
+          'actsig': 'Full_Press',
+          'syms': [
+            { 'type': 'gamepad', 'code': 'B' }
+            ],
+          'label': "Make player jump",
+        },
+        'Run': '(A)',
+        'Left': '(DLT)',
+        'Right': '(DRT)',
+        'Down': '(DDN)',
+        'Up': '(DUP)',
+        'Select': '(BK)',
+      },
+      'actions': [
+        { 'layers': [
+          { 'ST': "$Pause"
+          }, ]
+        },
+      ],
+    }
+    uppercfg = cfgmaker.CfgMaker()
+    uppercfg.load(d)
+
+    # test verbose evspec.
+    ref = uppercfg.exportctx.aliases.get("Jump", None)
+    self.assertEqual(str(ref.evspec), "(B)#Make#player#jump")
+
+    # test string shorthand evspec.
+    ref = uppercfg.exportctx.aliases.get("Pause", None)
+    self.assertEqual(ref.evspec.evsyms[0].evcode, "Escape")
+    #self.assertIn("evcode='Escape'", repr(ref))
+
+    sccfg = uppercfg.export_scconfig()
+    d = scconfig.toVDF(sccfg)
+    grp = d['group',0]
+    inp = grp['inputs']['button_menu']
+    actv = inp['activators']['Full_Press']
+    binding = actv['bindings']['binding']
+    self.assertEqual(binding, "key_press Escape, #Pause")
 
 
   def test_load2 (self):

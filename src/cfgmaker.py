@@ -233,7 +233,8 @@ class Evsym (object):
     elif self.evtype == "gamepad":
       parts.append("({})".format(self.evcode))
     elif self.evtype == "host":
-      parts.append("{}{}{}".format("{", self.evcode, "}"))
+      codestr = " ".join(self.evcode)
+      parts.append("{}{}{}".format("{", codestr, "}"))
     else:
       parts.append("{}".format(self.evcode))
     return "".join(parts)
@@ -267,10 +268,20 @@ class Evsym (object):
       if evcode[-1] == ')':
         evcode = evcode[:-1]
     elif evsymspec[0] == '{':
-      evtype = "host"
-      evcode = evsymspec[1:]
-      if evcode[-1] == '}':
-        evcode = evcode[:-1]
+      # strip trailing '}'
+      payload = evsymspec[1:(-1 if evsymspec[-1] == '}' else None)]
+      # probe for host variant.
+      if ',' in payload:
+        words = payload.split(',')
+      else:
+        words = payload.split()
+      if words[0] in ("overlay",):
+        evtype = "overlay"
+        parts = words[1:]
+        evcode = parts
+      else:
+        evtype = "host"
+        evcode = payload
     return (evtype, evcode)
 
   @staticmethod
@@ -391,15 +402,36 @@ class Evfrob (object):
 
 
 class Evspec (object):
-  """Event specification: combine Evsym and Evfrob."""
+  """Event specification: combine Evsym and Evfrob.
+
+Shorthand notation
+1. signal indicator: one of '', '+', '-', '_', ':', '&'
+2. sequence of evsym:
+  * angle brackets indicate a keyboard event, "<Return>"
+  * parentheses indicate a gamepad event, "(LB)"
+  * square brackets indicate a mouse event, "[1]" for mouse button 1 (left).
+  * curly braces indicate host/special command, e.g. "{host screenshot}".
+3. frobs that correlate to settings.
+  * ':' to mark signal-specific setting (long press time, double press time,...)
+  * '@' to indicate delay start and delay end (default "@0,0").
+  * '/' to indicate repeat rate (0 to disable repeat).
+  * '~' to indicate haptic intensity (0,1,2,3)
+  * '%' to indicate toggle on
+  * '^' to indicate interruptible on
+  * '|' to indicate cycle on
+4. label suffices indicated by '#'.
+   Subsequent '#' indicate word to concatenate after a space.
+   Or think of it as all '#' become space.
+"""
   REGEX_SIGNAL = """([-/+_=:\&])"""
   REGEX_SYM = Evsym.REGEX_SYM
   REGEX_FROB = Evfrob.REGEX_FROB
+  REGEX_LABEL = r"(#.*)"
 
 #  REGEX_MAIN = REGEX_SIGNAL + "?" + \
 #               "(" + REGEX_SYM + "+)" + \
 #               "(" + REGEX_FROBS + "+)?"
-  REGEX_MAIN = "{}?({}+)({}+)?".format(REGEX_SIGNAL, REGEX_SYM, REGEX_FROB)
+  REGEX_MAIN = "{}?({}+)({}+)?{}?".format(REGEX_SIGNAL, REGEX_SYM, REGEX_FROB, REGEX_LABEL)
 
   def __init__ (self, actsig=None, evsyms=None, evfrob=None, label=None, iconinfo=None):
     self.actsig = actsig    # one character of REGEX_SIGNAL
@@ -409,28 +441,68 @@ class Evspec (object):
     self.icon = iconinfo    # instance of scconfig.IconInfo
 
   def __str__ (self):
-    evsymspec = "".join(map(str, self.evsyms))
-    retval = """{}{}{}""".format(
+    evsymspec = "".join(map(str, self.evsyms)) if self.evsyms else ''
+    evfrobspec = str(self.evfrob) if self.evfrob else ''
+    labelspec = "#" + self.label.replace(" ", "#") if self.label else ''
+    retval = """{}{}{}{}""".format(
       self.actsig if self.actsig else "",
       evsymspec,
-      str(self.evfrob),
+      evfrobspec,
+      labelspec,
       )
     return retval
 
   def __repr__ (self):
-    evsymspec = "".join(map(str, self.evsyms))
-#    evsymspec = self.evsyms
-    evfrobspec = str(self.evfrob) if self.evfrob is not None else None
-    retval = """{}(actsig={!r}, evsyms='{!s}', evfrob={!r})""".format(
+    retval = """{}(actsig={!r}, evsyms={!r}, evfrob={!r})""".format(
       self.__class__.__name__,
       self.actsig,
-      evsymspec,    # list of Evsym
-      evfrobspec,   # list of Evfrob
+      self.evsyms,  # list of Evsym
+      self.evfrob,  # list of Evfrob
       )
     return retval
 
+  def load (self, py_dict):
+    """Build Evspec from python dictionary."""
+    for k,v in py_dict.items():
+      if k == 'actsig':
+        lv = v.lower()
+        actsig = ''
+        if lv in ('full_press', 'press', 'regular'):
+          actsig = None
+        elif lv in ('release', '-'):
+          actsig = '-'
+        elif lv in ('long_press', 'long', '_'):
+          actsig = '_'
+        elif lv in ('start_press', 'start', '+'):
+          actsig = '+'
+        elif lv in ('chord', '&'):
+          actsig = '&'
+        elif lv in ('double_press', 'double', ':', '='):
+          actsig = ':'
+        else:
+          actsig = None
+        self.actsig = actsig
+      elif k == 'syms':
+        # evtype, evcode.
+        evsyms = []
+        for symnode in v:
+          evtype = symnode.get("type", None)
+          evcode = symnode.get("code", None)
+          evsym = Evsym(evtype, evcode)
+          evsyms.append(evsym)
+        self.evsyms = evsyms
+      elif k == 'frob':
+        frob = Evfrob(**v)
+        self.evfrob = frob
+      elif k == 'label':
+        self.label = str(v)
+      elif k == 'icon':
+        iconinfo = scconfig.IconInfo(**v)
+        self.icon = iconinfo
+
   @staticmethod
   def _parse (s):
+    """Split shorthand string into parts: signal, syms, frob, label, icon."""
     evsymre = re.compile(Evspec.REGEX_MAIN)
     evsyms = evsymre.match(s)
 
@@ -438,14 +510,16 @@ class Evspec (object):
       signal = evsyms.group(1)
       evsymspec = evsyms.group(2)
       evfrobspec = evsyms.group(4)
+      label = evsyms.group(6)
     else:
-      signal, evsymspec, evfrobspec = None, None, None
+      signal, evsymspec, evfrobspec, label = None, None, None, None
 
-    return (signal, evsymspec, evfrobspec)
+    return (signal, evsymspec, evfrobspec, label)
 
   @staticmethod
   def parse (s):
-    signal, evsymspec, evfrobspec = Evspec._parse(s)
+    """Convert _parse() parts into forms passable to Evspec."""
+    signal, evsymspec, evfrobspec, label = Evspec._parse(s)
 
     re_signal = re.compile(Evspec.REGEX_SIGNAL)
     re_evsym = re.compile(Evsym.REGEX_SYM)
@@ -454,10 +528,30 @@ class Evspec (object):
     matches_evsym = re_evsym.findall(evsymspec) if evsymspec else None
     evsyms = [ Evsym.parse(s) for s in matches_evsym ] if matches_evsym else None
     evfrobs = Evfrob.parse(evfrobspec) if evfrobspec else None
+    if label is not None:
+      # TODO: escaping '#".
+      label = label[1:].replace('#', ' ')
 
-    return Evspec(signal, evsyms, evfrobs)
+    return Evspec(signal, evsyms, evfrobs, label)
 
 
+
+
+class CfgExportContext (object):
+  """Exporter state information.
+
+Instantiated with CfgMaker,
+initialized into CfgShifters,
+references copied at shift-generation time,
+updated at export time,
+reset after export.
+"""
+  def __init__ (self):
+    self.reset()
+
+  def reset (self):
+    self.layerlist = []     # List of (CfgAction,CfgLayer) in VDF order.
+    self.aliases = {}
 
 
 class CfgEvspec (object):
@@ -473,8 +567,15 @@ class CfgEvspec (object):
     toggle: ...
     repeat: ...
 """
-  def __init__ (self, evspec=None):
+  def __init__ (self, evspec=None, exportctx=None):
     self.evspec = evspec
+    self.exportctx = exportctx
+
+  def __repr__ (self):
+    return "{}(evspec={!r}, exportctx={!r})".format(
+      self.__class__.__name__,
+      self.evspec,
+      self.exportctx)
 
   def export_scbind (self, evsym):
     retval = None
@@ -487,16 +588,36 @@ class CfgEvspec (object):
     elif evsym.evtype == "host":
       evgen = scconfig.EvgenFactory.make_hostcall(evsym.evcode)
     elif evsym.evtype == "overlay":
-      evgen = scconfig.EvgenFactory.make_overlay(*evsym.evcode)
+      (cmd, layer_name) = evsym.evcode
+      evgen = None
+      lyrid = -1
+      try:
+        lyrid = int(layer_name)
+      except ValueError:
+        # try resolving layer name.
+        exportctx = self.exportctx
+        if exportctx:
+          for (actset,lyr) in exportctx.layerlist:
+            if (lyr.name == layer_name):
+              lyrid = exportctx.layerlist.index((actset, lyr))
+              self.evspec.label = layer_name
+              break
+      if lyrid < 0:
+        print("failed to resolve {!r}".format(layer_name))
+      else:
+        evgen = scconfig.EvgenFactory.make_overlay(cmd, lyrid, 0, 0)
+      #evgen = scconfig.EvgenFactory.make_overlay(*evsym.evcode)
     elif evsym.evtype == "Shifter":
       (cmd, exportctx, cfgaction, overlay_name) = evsym.evcode
       for (actset,lyr) in exportctx.layerlist:
         if (actset == cfgaction) and (lyr.name == overlay_name):
           lyrid = exportctx.layerlist.index((cfgaction, lyr))
+          evgen = scconfig.EvgenFactory.make_overlay(cmd, lyrid, 0, 0)
           break
       else:
+#        print("Failed to resolve {!r}".format(overlay_name))
         lyrid = -1
-      evgen = scconfig.EvgenFactory.make_overlay(cmd, lyrid, 0, 0)
+        evgen = None
       #evgen = scconfig.EvgenFactory.make__literal("shifter.{} {} {}/{}".format(cmd, cfgaction.name, overlay_name))
     else:
       lit = evsym.evcode
@@ -572,9 +693,10 @@ class CfgClusterBase (object):
     ])
   MODE = mode = None
   SUBPARTS = dict()
-  def __init__ (self, py_dict=None):
+  def __init__ (self, exportctx=None, py_dict=None):
     self.index = 0
     self.subparts = {}  # key <- subpart name; value <- list of CfgEvspec
+    self.exportctx = exportctx
     if py_dict:
       self.load(py_dict)
 
@@ -584,7 +706,16 @@ class CfgClusterBase (object):
       collate = []
       evspecs = bindspec.split()
       for evspec in evspecs:
-        cfgevspec = CfgEvspec(Evspec.parse(evspec))
+        effspec = evspec
+        if evspec[0] == '$':  # "$AliasTerm" or "${AliasTerm}"
+          if evspec[1] == '{': term = evspec[2:-1]
+          else: term = evspec[1:]
+          effspec = self.exportctx.aliases.get(term, None)
+          if (effspec is None):
+            raise ValueError("Unknown alias '{}'".format(term))
+          cfgevspec = effspec
+        else:
+          cfgevspec = CfgEvspec(Evspec.parse(effspec), self.exportctx)
         if cfgevspec:
           collate.append(cfgevspec)
       self.subparts[subpartname] = collate
@@ -797,35 +928,35 @@ class CfgClusterTrigger (CfgClusterBase):
 
 class CfgClusterFactory (object):
   @staticmethod
-  def make_pen (py_dict): return CfgClusterPen(py_dict)
+  def make_pen (exctx, pd): return CfgClusterPen(exctx, pd)
   @staticmethod
-  def make_dpad (py_dict): return CfgClusterDpad(py_dict)
+  def make_dpad (exctx, pd): return CfgClusterDpad(exctx, pd)
   @staticmethod
-  def make_face (py_dict): return CfgClusterFace(py_dict)
+  def make_face (exctx, pd): return CfgClusterFace(exctx, pd)
   @staticmethod
-  def make_jsmove (py_dict): return CfgClusterJoystickMove(py_dict)
+  def make_jsmove (exctx, pd): return CfgClusterJoystickMove(exctx, pd)
   @staticmethod
-  def make_jscam (py_dict): return CfgClusterJoystickCamera(py_dict)
+  def make_jscam (exctx, pd): return CfgClusterJoystickCamera(exctx, pd)
   @staticmethod
-  def make_jsmouse (py_dict): return CfgClusterJoystickMouse(py_dict)
+  def make_jsmouse (exctx, pd): return CfgClusterJoystickMouse(exctx, pd)
   @staticmethod
-  def make_mousejs (py_dict): return CfgClusterMouseJoystick(py_dict)
+  def make_mousejs (exctx, pd): return CfgClusterMouseJoystick(exctx, pd)
   @staticmethod
-  def make_pie (py_dict): return CfgClusterPie(py_dict)
+  def make_pie (exctx, pd): return CfgClusterPie(exctx, pd)
   @staticmethod
-  def make_region (py_dict): return CfgClusterRegion(py_dict)
+  def make_region (exctx, pd): return CfgClusterRegion(exctx, pd)
   @staticmethod
-  def make_scroll (py_dict): return CfgClusterScroll(py_dict)
+  def make_scroll (exctx, pd): return CfgClusterScroll(exctx, pd)
   @staticmethod
-  def make_single (py_dict): return CfgClusterSingle(py_dict)
+  def make_single (exctx, pd): return CfgClusterSingle(exctx, pd)
   @staticmethod
-  def make_switches (py_dict): return CfgClusterSwitches(py_dict)
+  def make_switches (exctx, pd): return CfgClusterSwitches(exctx, pd)
   @staticmethod
-  def make_menu (py_dict): return CfgClusterMenu(py_dict)
+  def make_menu (exctx, pd): return CfgClusterMenu(exctx, pd)
   @staticmethod
-  def make_trigger (py_dict): return CfgClusterTrigger(py_dict)
+  def make_trigger (exctx, pd): return CfgClusterTrigger(exctx, pd)
   @staticmethod
-  def make_cluster (py_dict):
+  def make_cluster (exportctx, py_dict):
     DELEGATE = {
       CfgClusterPen.MODE: CfgClusterFactory.make_pen,
       CfgClusterDpad.MODE: CfgClusterFactory.make_dpad,
@@ -844,7 +975,7 @@ class CfgClusterFactory (object):
       }
     delegate = DELEGATE[py_dict["mode"]]
     if delegate:
-      retval = delegate(py_dict)
+      retval = delegate(exportctx, py_dict)
       return retval
     return None
 
@@ -866,9 +997,10 @@ layer:
   ...
 
 """
-  def __init__ (self):
+  def __init__ (self, exportctx=None):
     self.name = None
     self.clusters = {}    # map to list of CfgCluster*
+    self.exportctx = exportctx
 
   ORDERING = [ "SW", "BQ", "LP", "RP", "LJ", "LT", "RT", "RJ", "DP" ]
   CLUSTER_SYMS = set([
@@ -904,7 +1036,7 @@ layer:
   def pave_cluster (self, clustername, create_mode=None):
     """Ensure cluster entry exists, with specified mode if create needed."""
     if not clustername in self.clusters:
-      cluster = CfgClusterFactory.make_cluster({"mode": create_mode})
+      cluster = CfgClusterFactory.make_cluster(self.exportctx, {"mode": create_mode})
       self.clusters[clustername] = cluster
     return True
 
@@ -926,6 +1058,11 @@ For inlined subparts.
         # directly inlined switch subpart: BK, ST, LB, RB, LG, RG
         clustername = "SW"
         self.pave_cluster(clustername, "switches")
+      # Remap LS,RS to LJ.c,RJ.c
+      elif clustername in ("LS", "RS"):
+        clustername = { "LS": "LJ", "RS": "RJ" }[clustername]
+        subpartname = "c"
+        self.pave_cluster(clustername, "jsmove")
       elif len(subpartname) > 2 and subpartname[2] == '.' and subpartname[:2] in self.CLUSTERS:
         # inline subpart "XX.y".
         prefix = subpartname[:3]
@@ -1029,7 +1166,7 @@ For inlined subparts.
         # whole cluster full spec.
         v = py_dict[k]
         if _dictlike(v):
-          self.clusters[k] = CfgClusterFactory.make_cluster(v)
+          self.clusters[k] = CfgClusterFactory.make_cluster(self.exportctx, v)
         else:
           # whole-cluster single bind.
           if k in ('LT', 'RT'):
@@ -1047,6 +1184,11 @@ For inlined subparts.
         clustername = "SW"
         subpartname = k
         self.pave_cluster(clustername, "switches")
+        self.bind_point(clustername, subpartname, v)
+      elif k in ("LS", "RS"):
+        clustername = { "LS":"LJ", "RS":"RJ" }[k]
+        subpartname = "c"
+        self.pave_cluster(clustername, "jsmove")
         self.bind_point(clustername, subpartname, v)
       elif len(k) > 2 and k[2] == '.' and k[:2] in self.CLUSTERS:
         # inline subpart "XX.y".
@@ -1210,22 +1352,6 @@ class ShiftSpec (object):
     self.style = shiftstyle
     self.bitmask = shiftbits
     self.emission = shiftemission   # Lazy or eager.
-
-
-class CfgExportContext (object):
-  """Exporter state information.
-
-Instantiated with CfgMaker,
-initialized into CfgShifters,
-references copied at shift-generation time,
-updated at export time,
-reset after export.
-"""
-  def __init__ (self):
-    self.reset()
-
-  def reset (self):
-    self.layerlist = []     # List of (CfgAction,CfgLayer) in VDF order.
 
 
 class CfgShifters (object):
@@ -1484,7 +1610,7 @@ StableShiftLayer.ShifterKey <- Shifts
       evspec = Evspec(actsig, evsyms, None, label="{}Bounce.{} goes {} to {}".format(actsig, shiftbits, from_level, nextlevel))
 
     if evspec:
-      cfgevspec = CfgEvspec(evspec)
+      cfgevspec = CfgEvspec(evspec, self.exportctx)
       return cfgevspec
     return None
 
@@ -1496,7 +1622,7 @@ StableShiftLayer.ShifterKey <- Shifts
       evsyms.append(evsym)
     if evsyms:
       evspec = Evspec('+', evsyms, None, label="Shifter Reset")
-      cfgevspec = CfgEvspec(evspec)
+      cfgevspec = CfgEvspec(evspec, self.exportctx)
       return cfgevspec
     return None
 
@@ -1529,7 +1655,8 @@ StableShiftLayer.ShifterKey <- Shifts
                       '+',
                       [ Evsym('Shifter', ovparms) ],
                       None,
-                      label="Debounce Preshift_{}".format(sl)))
+                      label="Debounce Preshift_{}".format(sl)),
+                    self.exportctx)
     for proxied_clustername in proxies:
       if proxied_clustername in ('LT', 'RT'):
         cfglayer.bind_point(proxied_clustername, 'c', proxyevspec)
@@ -1549,7 +1676,7 @@ StableShiftLayer.ShifterKey <- Shifts
     d = {
       "name": layer_name,
     }
-    shiftlayer = CfgLayer()
+    shiftlayer = CfgLayer(self.exportctx)
     shiftlayer.load(d)
     cfgaction.layers.append(shiftlayer)
     self.involved.append(layer_name)
@@ -1625,7 +1752,7 @@ class CfgAction (object):
     for k,v in py_dict.items():
       if k == 'layers':
         for v in py_dict[k]:
-          lyr = CfgLayer()
+          lyr = CfgLayer(self.exportctx)
           lyr.load(v)
           self.layers.append(lyr)
       elif k == 'shifters':
@@ -1674,6 +1801,10 @@ actions:
     self.exportctx = CfgExportContext()
 
   def load (self, py_dict):
+    if 'aliases' in py_dict:
+      v = py_dict['aliases']
+      self.load_aliases(v)
+
     for k,v in py_dict.items():
       if k == "actions":
         actions_list = py_dict["actions"]
@@ -1693,6 +1824,18 @@ actions:
         self.devtype = v
       elif k in ('timestamp', 'Timestamp'):
         self.timestamp = int(v)
+
+  def load_aliases (self, py_dict):
+    for k,v in py_dict.items():
+      if _stringlike(v):
+        evspec = Evspec.parse(v)
+      else:
+        evspec = Evspec()
+        evspec.load(v)
+      if evspec.label is None:  # Auto-label reminiscent of InGameActions.
+        evspec.label = "#{}".format(k)
+      cfgevspec = CfgEvspec(evspec)
+      self.exportctx.aliases[k] = cfgevspec
 
   def export_scconfig (self, sccfg=None):
     if sccfg is None:
@@ -1730,6 +1873,9 @@ actions:
     conmap = self.export_scconfig()
     sccfg.add_mapping(conmap)
     return sccfg
+
+
+
 
 
 def cli (argv):
