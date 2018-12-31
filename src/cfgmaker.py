@@ -598,9 +598,9 @@ class CfgEvspec (object):
         exportctx = self.exportctx
         if exportctx:
           for (actset,lyr) in exportctx.layerlist:
-            if (actset == cfgaction) and (lyr.name == overlay_name):
-              lyrid = exportctx.layerlist.index((cfgaction, lyr))
-              evspec.label = layer_name
+            if (lyr.name == layer_name):
+              lyrid = exportctx.layerlist.index((actset, lyr))
+              self.evspec.label = layer_name
               break
       if lyrid < 0:
         print("failed to resolve {!r}".format(layer_name))
