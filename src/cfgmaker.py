@@ -271,7 +271,10 @@ class Evsym (object):
       # strip trailing '}'
       payload = evsymspec[1:(-1 if evsymspec[-1] == '}' else None)]
       # probe for host variant.
-      words = payload.split()
+      if ',' in payload:
+        words = payload.split(',')
+      else:
+        words = payload.split()
       if words[0] in ("overlay",):
         evtype = "overlay"
         parts = words[1:]
@@ -587,6 +590,7 @@ class CfgEvspec (object):
     elif evsym.evtype == "overlay":
       (cmd, layer_name) = evsym.evcode
       evgen = None
+      lyrid = -1
       try:
         lyrid = int(layer_name)
       except ValueError:
@@ -597,14 +601,11 @@ class CfgEvspec (object):
             if (actset == cfgaction) and (lyr.name == overlay_name):
               lyrid = exportctx.layerlist.index((cfgaction, lyr))
               evspec.label = layer_name
-              evgen = scconfig.EvgenFactory.make_overlay(cmd, lyrid, 0, 0)
               break
-          else:
-            lyrid = -1
-        else:
-          lyrid = -1
       if lyrid < 0:
         print("failed to resolve {!r}".format(layer_name))
+      else:
+        evgen = scconfig.EvgenFactory.make_overlay(cmd, lyrid, 0, 0)
       #evgen = scconfig.EvgenFactory.make_overlay(*evsym.evcode)
     elif evsym.evtype == "Shifter":
       (cmd, exportctx, cfgaction, overlay_name) = evsym.evcode

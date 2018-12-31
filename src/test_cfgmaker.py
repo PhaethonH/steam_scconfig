@@ -838,7 +838,7 @@ class TestCfgMaker (unittest.TestCase):
       'name': 'inline joystick',
       'LJ': 'LJ',
       'RJ': 'RJ',
-      'LS': "(LS)",
+      'LS': "{overlay,apply,2}",
       }
     cfg = cfgmaker.CfgLayer()
     cfg.load(d)
@@ -852,7 +852,7 @@ class TestCfgMaker (unittest.TestCase):
         'inputs': {},
         'mode': 'joystick_move',
         'settings': {'output_joystick': '0'},
-        'inputs': {'click': {'activators': {'Full_Press': {'bindings': {'binding': 'xinput_button JOYSTICK_LEFT'}}}}},
+        'inputs': {'click': {'activators': {'Full_Press': {'bindings': {'binding': 'controller_action add_layer 2 0 0'}}}}},
         },
       { 'id': '1',
         'inputs': {},
@@ -881,9 +881,10 @@ class TestCfgMaker (unittest.TestCase):
       'Timestamp': '-1',
       'actions': {
         'Default': {
-          'legacy_set': '1', 'title': 'Default',
-          }
+          'legacy_set': '1',
+          'title': 'Default',
         },
+      },
       'group': [
         {
           'id': '0',
@@ -894,83 +895,81 @@ class TestCfgMaker (unittest.TestCase):
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button SELECT',
-                    }
-                  }
-                }
+                  },
+                },
               },
+            },
             'button_menu': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button START',
-                    },
-                  }
-                }
+                  },
+                },
               },
+            },
             'left_bumper': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button SHOULDER_LEFT',
-                    }
-                  }
-                }
+                  },
+                },
               },
+            },
             'right_bumper': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button SHOULDER_RIGHT',
-                    }
-                  }
-                }
-              }
+                  },
+                },
+              },
             },
           },
-
-         {
+        },
+        {
           'id': '1',
-           'mode': 'four_buttons',
-           'inputs': {
-             'button_a': {
-               'activators': {
-                 'Full_Press': {
-                   'bindings': {
-                     'binding': 'xinput_button A',
-                     }
-                   }
-                 }
-               },
-             'button_b': {
-               'activators': {
-                 'Full_Press': {
-                   'bindings': {
-                     'binding': 'xinput_button B',
-                     }
-                   }
-                 }
-               },
-             'button_x': {
-               'activators': {
-                 'Full_Press': {
-                   'bindings': {
-                     'binding': 'xinput_button X',
-                     }
-                   }
-                 }
-               },
-             'button_y': {
-               'activators': {
-                 'Full_Press': {
-                   'bindings': {
-                     'binding': 'xinput_button Y',
-                     }
-                   }
-                 }
-               }
-             },
-           },
-
+          'mode': 'four_buttons',
+          'inputs': {
+            'button_a': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button A',
+                  },
+                },
+              },
+            },
+            'button_b': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button B',
+                  },
+                },
+              },
+            },
+            'button_x': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button X',
+                  },
+                },
+              },
+            },
+            'button_y': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button Y',
+                  },
+                },
+              },
+            },
+          },
+        },
         {
           'id': '2',
           'mode': 'dpad',
@@ -980,61 +979,63 @@ class TestCfgMaker (unittest.TestCase):
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button DPAD_RIGHT',
-                    }
-                  }
-                }
+                  },
+                },
               },
+            },
             'dpad_north': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button DPAD_UP',
-                    }
-                  }
-                }
+                  },
+                },
               },
+            },
             'dpad_south': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button DPAD_DOWN',
-                    }
-                  }
-                }
+                  },
+                },
               },
+            },
             'dpad_west': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
                     'binding': 'xinput_button DPAD_LEFT',
-                    }
-                  }
-                }
-              }
+                  },
+                },
+              },
             },
           },
+        },
         {
           'id': '3',
-          'inputs': {},
           'mode': 'joystick_camera',
-          'settings': {'output_joystick': '0'}
+          'inputs': {
           },
+          'settings': {
+            'output_joystick': '0',
+          },
+        },
         {
           'id': '4',
-          'mode': 'trigger',
+          'mode': 'joystick_move',
           'inputs': {
             'click': {
               'activators': {
                 'Full_Press': {
                   'bindings': {
-                    'binding': 'xinput_button TRIGGER_LEFT',
-                    }
-                  }
-                }
-              }
+                    'binding': 'xinput_button JOYSTICK_LEFT',
+                  },
+                },
+              },
             },
-          'settings': {'output_trigger': '1'}
           },
+        },
         {
           'id': '5',
           'mode': 'trigger',
@@ -1043,15 +1044,50 @@ class TestCfgMaker (unittest.TestCase):
               'activators': {
                 'Full_Press': {
                   'bindings': {
-                    'binding': 'xinput_button TRIGGER_RIGHT',
-                    }
-                  }
-                }
-              }
+                    'binding': 'xinput_button TRIGGER_LEFT',
+                  },
+                },
+              },
             },
-          'settings': {'output_trigger': '1'}
           },
-        ],
+          'settings': {
+            'output_trigger': '1',
+          },
+        },
+        {
+          'id': '6',
+          'mode': 'trigger',
+          'inputs': {
+            'click': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button TRIGGER_RIGHT',
+                  },
+                },
+              },
+            },
+          },
+          'settings': {
+            'output_trigger': '1',
+          },
+        },
+        {
+          'id': '7',
+          'mode': 'joystick_move',
+          'inputs': {
+            'click': {
+              'activators': {
+                'Full_Press': {
+                  'bindings': {
+                    'binding': 'xinput_button JOYSTICK_RIGHT',
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
       'preset': {
         'id': '0',
         'name': 'Default',
@@ -1060,12 +1096,14 @@ class TestCfgMaker (unittest.TestCase):
           '1': 'button_diamond active',
           '2': 'left_trackpad active',
           '3': 'right_trackpad active',
-          '4': 'left_trigger active',
-          '5': 'right_trigger active',
-          },
+          '4': 'joystick active',
+          '5': 'left_trigger active',
+          '6': 'right_trigger active',
+          '7': 'right_joystick active'
         },
+      },
       'settings': {},
-      }
+    }
     self.assertEqual(d, res)
 
   def test_inline_touchpad (self):
