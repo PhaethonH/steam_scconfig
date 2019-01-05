@@ -709,7 +709,7 @@ Nested attributes:
 
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     # self.signal  is class-scope per derived class.
-    self.bindings = []
+    self.bindings = []    # List of Binding.
     self.settings = self.Settings(py_settings)
 
     if py_bindings:
