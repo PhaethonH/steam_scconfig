@@ -487,4 +487,13 @@ Shorthand
 
     return conmap
 
+  def export_config (self, dom_node, cfg=None):
+    if cfg is None:
+      cfg = scconfig.ControllerConfigFactory.make_from_dict({})
+
+    conmap = cfg.add_mapping()
+    self.export_conmap(dom_node, conmap)
+
+    return cfg
+
 
