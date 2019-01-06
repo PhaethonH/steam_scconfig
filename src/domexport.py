@@ -3,6 +3,11 @@
 # Convert from a DOM-like structure to Scconfig.
 
 import scconfig, scvdf
+import re
+
+def _stringlike (x):
+  try: return x.isalpha
+  except AttributeError: return False
 
 class ScconfigExporter (object):
   r"""
@@ -66,7 +71,8 @@ Shorthand
 </action>
 """
   def __init__ (self, toplevel):
-    pass
+    self.actions = []   # list of action sets/layers in Steam config order.
+    self.aliases = {}
 
 
   # Attributes: for machine-readable values.
@@ -76,13 +82,18 @@ Shorthand
     return dom_node.get(attr_name, default_value)
 
   def iter_children (self, dom_node, element_name):
-    r"""List of children nodes."""
-    probe = dom_node.get(element_name, None)
-    if probe:
-      if isinstance(probe, list):
-        return iter(probe)
-      else:
-        return [ probe ]
+    r"""iterate through multiple instances of child element.
+element_name of None to iterate through all children as (element_name,element_content) pairs.
+"""
+    if element_name is None:
+      return dom_node.items()
+    else:
+      probe = dom_node.get(element_name, None)
+      if probe:
+        if isinstance(probe, list):
+          return iter(probe)
+        else:
+          return [ probe ]
     return []
 
   def get_domtext (self, dom_node, element_name):
@@ -313,7 +324,126 @@ Shorthand
     },
   }
 
+  RE_ACTSIG = r"([:=_&+-])"
+  RE_EVENTS = r"(<[A-Za-z0-9_]+>|\[[A-Za-z0-9_]+\]|\([A-Za-z0-9]+\)|{[^}]*})"
+  RE_FROBS = r"(\||\%|\^|~[0-9]?|:[0-9]+|/[0-9]+|@[0-9]+,[0-9]+)"
+  RE_LABEL = r"(#[^#]*)"
+  RE_SYM = r"{}?({}+)({}*)({}*)".format(RE_ACTSIG, RE_EVENTS, RE_FROBS, RE_LABEL)
+  def expand_synthesis (self, evspec):
+    # TODO: rename variables to more reasonable ones.
+    re_actsig = re.compile(self.RE_ACTSIG)
+    re_events = re.compile(self.RE_EVENTS)
+    re_frobs = re.compile(self.RE_FROBS)
+    re_label = re.compile(self.RE_LABEL)
+    re_sym = re.compile(self.RE_SYM)
+
+    matches = re_sym.findall(evspec)[0]
+    sigspec = matches[0]
+    evspecs = matches[1]
+    frobspec = matches[3]
+    labelspec = matches[5]
+
+    SIGMAP = {
+      '': 'full',
+      '_': 'long',
+      ':': 'double',
+      '=': 'double',
+      '+': 'start',
+      '-': 'release',
+      '&': 'chord',
+      }
+    actsig = SIGMAP.get(sigspec, 'Full_Press')
+
+    matches = re_events.findall(evspecs)
+    evgenlist = []
+    for evspec in matches:
+      if evspec[0] == '<' and evspec[-1] == '>':
+        evtype = 'keyboard'
+        evcode = evspec[1:-1]
+      elif evspec[0] == '(' and evspec[-1] == ')':
+        evtype = 'gamepad'
+        evcode = evspec[1:-1]
+      elif evspec[0] == '[' and evspec[-1] == ']':
+        evtype = 'mouse'
+        evcode = evspec[1:-1]
+      elif evspec[0] == '{' and evspec[-1] == '}':
+        evcode = evspec[1:-1]
+        if ',' in evcode:
+          evcode = evcode.split(',')
+        if evcode[0] == 'overlay':
+          evtype = 'overlay'
+          evcode = evcode[1:]
+        else:
+          evtype = 'host'
+      else:
+        evcode = evspec[:]
+      d = {
+        "evtype": evtype,
+        "evcode": evcode,
+        }
+      ev = d
+      evgenlist.append(ev)
+
+    frobdef = {}
+    matches = re_frobs.findall(frobspec)
+    for frobmark in matches:
+      frobtype = frobmark[0]
+      if frobtype in ('%','t'):
+        frobdef['toggle'] = True
+      elif frobtype in ('^', 'i'):
+        frobdef['interrupt'] = True
+      elif frobtype in ('|', 'c'):
+        frobdef['cycle'] = True
+      elif frobtype in ('@', 'd'):
+        start,end = frobmark[1:].split(',')
+        frobdef['delay_start'] = int(start)
+        frobdef['delay_end'] = int(end)
+      elif frobtype in ('~', 'h'):
+        frobdef['haptic'] = int(frobmark[1:])
+      elif frobtype in (':', 's'):
+        frobdef['specific'] = int(frobmark[1:])
+      elif frobtype in ('/', 'r'):
+        frobdef['repeat'] = int(frobmark[1:])
+      else:
+        pass
+    if not frobdef:
+      frobdef = None
+
+    labelparts = None
+    matches = re_label.findall(labelspec)
+    for labelfragment in matches:
+      if labelparts is None:
+        labelparts = []
+      labelparts.append(labelfragment[1:])
+    if labelparts is not None:
+      label = " ".join(labelparts)
+    else:
+      label = None
+
+    d = {
+      "actsig": actsig,
+      "event": evgenlist,
+      "settings": frobdef,
+      "label": label,
+      "iconinfo": None,
+      }
+    return d
+
+
+  def expand_shorthand_syntheses (self, evlistspec):
+    if ' ' in evlistspec:
+      evspecs = evlistspec.split()
+    else:
+      evspecs = [ evlistspec ]
+    retval = []
+    for evspec in evspecs:
+      evsynth = self.expand_synthesis(evspec)
+      retval.append(evsynth)
+    return retval
+
+
   def export_component (self, dom_node, groupobj):
+    # Maps to scconfig.ControllerInput
     r"""
 {
   "sym": ...
@@ -335,12 +465,24 @@ Shorthand
     return True
 
   def export_settings (self, dom_node, settingsobj):
+    """Generalized Settings export."""
     for k in sorted(settingsobj._CONSTRAINTS.keys()):
       v = settingsobj[k]
       settingsobj.__dict__[k] = v
     return settingsobj
 
+  UNIQUE_COMPONENT_SYMS = {
+    "BK": ("SW", "BK"),
+    "ST": ("SW", "ST"),
+    "LB": ("SW", "LB"),
+    "RB": ("SW", "RB"),
+    "LG": ("SW", "LG"),
+    "RG": ("SW", "RG"),
+    "LS": ("LJ", "c"),
+    "RS": ("RJ", "c"),
+    }
   def export_cluster (self, dom_node, groupobj):
+    # Maps to scconfig.Group
     r"""
 {
   "mode": ...
@@ -349,6 +491,15 @@ Shorthand
     ...
   ]
 }
+
+
+shorthand
+{
+  "mode": ...
+  <ComponentSym>: [
+    `synthesis`,
+    ]
+  <ComponentSym>: <EvgenSpec>
 """
     clustermode = self.get_domattr(dom_node, "mode")
     for compspec in self.iter_children(dom_node, "component"):
@@ -356,7 +507,60 @@ Shorthand
     for ss in self.iter_children(dom_node, "settings"):
       self.export_settings(ss, groupobj.settings)
       break
+    for k,v in self.iter_children(dom_node, None):
+      cluster_sym, component_sym = None, None
+      if k in self.UNIQUE_COMPONENT_SYMS:
+        cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
+      elif len(k) == 1:
+        component_sym = k
+      if component_sym:
+        syntheses = None
+
+        if _stringlike(v):
+          # parse
+          syntheses = self.expand_shorthand_syntheses(v)
+        elif v:
+          # presume list of Synthesis
+          syntheses = v
+
+        if syntheses is not None:
+          compspec = {
+              "sym": component_sym,
+              "synthesis": syntheses
+            }
+          self.export_component(compspec, groupobj)
     return True
+
+  @staticmethod
+  def auto_mode (x):
+    if any(['u' in x, 'd' in x, 'l' in x, 'r' in x]):
+      return 'dpad'
+    if any(['a' in x, 'b' in x, 'x' in x, 'y' in x]):
+      return 'four_buttons'
+    if any(['s' in x, 'e' in x, 'w' in x, 'n' in x]):
+      return 'four_buttons'
+    if any(['c' in x, 'o' in x]):
+      return 'joystick_move'
+    if x in ('BK', 'ST', 'LB', 'RB', 'LG', 'RG'):
+      return 'switches'
+
+    def intOrNegOne(z):
+      try:
+        return int(z)
+      except ValueError:
+        return -1
+
+    nums = [ intOrNegOne(z) for z in x ]
+    m = max(nums)
+
+    if 0 in nums:
+      return 'radial'  # '00' - radial center/unselect
+    elif any([2 in nums, 4 in nums, 7 in nums, 9 in nums, 12 in nums, 13 in nums, 16 in nums]):
+      return 'touch_menu'
+    elif m > 0:
+      return 'radial_menu'
+
+    return 'dpad'
 
   # map cluster name to groupsrc name.
   GRPSRC_MAP = {
@@ -371,6 +575,21 @@ Shorthand
     "DP": "dpad",
     "RJ": "right_joystick",
   }
+  GRPMODE_MAP = {
+    'pen': 'absolute_mouse',
+    'face': 'four_buttons',
+    'jsmove': 'joystick_move',
+    'jscam': 'joystick_camera',
+    'jsmouse': 'joystick_mouse',
+    'mousejs': 'mouse_joystick',
+    'radial': 'radial_menu',
+    'region': 'mouse_region',
+    'scroll': 'scrollwheel',
+    'single': 'single_button',
+    'menu': 'touch_menu',
+    'switch': 'switches',
+    'trigger': 'trigger',
+    }
   def export_layer (self, dom_node, conmap, layeridx=0):
     r"""
 {
@@ -390,16 +609,81 @@ Shorthand
     else:
       presetkey = "Preset_{:07d}".format(presetid)
     presetobj = conmap.add_preset(presetid, presetkey)
+
+    def export_group (clusterspec, grpmode, clustersym, active, modeshift):
+      grpsrc = self.GRPSRC_MAP.get(clustersym, clustersym)
+      grp = None
+      # Find existing.
+      for grpid,gsbval in presetobj.gsb.items():
+        if gsbval.groupsrc == grpsrc:
+          for grpiter in conmap.groups:
+            if grpiter.index == grpid:
+              grp = grpiter
+              break
+      if not grp:  # Create.
+        grpsrc = self.GRPSRC_MAP.get(clustersym, clustersym)
+        grpid = len(conmap.groups)
+        # map shorthand mode name to full group mode.
+        grpmode = self.GRPMODE_MAP.get(grpmode, grpmode)
+        grp = conmap.add_group(grpid, grpmode) 
+        presetobj.add_gsb(grpid, grpsrc, active, modeshift)
+      self.export_cluster(clusterspec, grp)
+
+    # Scan shorthands.
+    paraclusters = {}   # Map cluster_sym to cluster contents.
+    for k,v in self.iter_children(dom_node, None):
+      cluster_sym = component_sym = None
+      if '.' in k:
+        cluster_sym, component_sym = k.split('.')
+      elif k in self.UNIQUE_COMPONENT_SYMS:
+        cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
+      # TODO: expand on a parallel struct.
+      if cluster_sym and component_sym:
+        # Find cluster.
+        if cluster_sym in paraclusters:
+          cluster = paraclusters[cluster_sym]
+        else:
+          automode = self.auto_mode(component_sym)
+          cluster = paraclusters[cluster_sym] = { "mode": automode, "component": [] }  # TODO: auto-mode
+        # Find component.
+        component = None
+        for comp in cluster['component']:
+          if cluster.get('sym', None) == component_sym:
+            component = comp
+        else: # create component.
+          component = {
+            'sym': component_sym,
+            'synthesis': []
+            }
+          # TODO: auto-mode here?
+          cluster['component'].append(component)
+        # Update cluster.
+        if _stringlike(v):
+          syntheses = self.expand_shorthand_syntheses(v)
+        else:
+          syntheses = v
+        component['synthesis'] = syntheses
+        # TODO: auto-mode from all components.
+        if cluster.get('mode', None) is None:
+          complist = [ x.get("sym") for x in cluster['component'] ]
+          automode = self.auto_mode(complist)
+          cluster['mode'] = automode
+
     for clusterspec in self.iter_children(dom_node, "cluster"):
       grpmode = self.get_domattr(clusterspec, "mode")
-      grp = conmap.add_group(grpid, grpmode)
-      self.export_cluster(clusterspec, grp)
       clustersym = self.get_domattr(clusterspec, "sym")
-      grpsrc = self.GRPSRC_MAP.get(clustersym, clustersym)
       active = True
       modeshift = False
-      presetobj.add_gsb(grpid, grpsrc, active, modeshift)
-      grpid += 1
+
+      export_group(clusterspec, grpmode, clustersym, active, modeshift)
+
+    for clustersym, clusterspec in paraclusters.items():
+      grpmode = self.get_domattr(clusterspec, "mode")  # TODO: auto-mode
+      active = True
+      modeshift = False
+
+      export_group(clusterspec, grpmode, clustersym, active, modeshift)
+
     # add to action_layers[] or actions[]
     if layeridx > 0:
       conmap.add_action_layer(presetkey, layer_name)
@@ -459,6 +743,11 @@ Shorthand
 """
     if conmap is None:  
       conmap = scconfig.Mapping()
+
+    for aliasdesc in self.iter_children(dom_node, 'aliases'):
+      for k in aliasdesc:
+        v = aliasdesc[k]
+        self.aliases[k] = v
 
     title = self.get_domtext(dom_node, 'title')
 
