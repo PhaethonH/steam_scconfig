@@ -101,6 +101,11 @@ element_name of None to iterate through all children as (element_name,element_co
     probe = dom_node.get(element_name, '')
     return probe
 
+  def get_domchild (self, dom_node, element_name):
+    r"""first such named child element."""
+    probe = dom_node.get(element_name, None)
+    return probe
+
 
 
   def export_frob (self, dom_node, settings_obj):
@@ -331,6 +336,14 @@ element_name of None to iterate through all children as (element_name,element_co
   RE_SYM = r"{}?({}+)({}*)({}*)".format(RE_ACTSIG, RE_EVENTS, RE_FROBS, RE_LABEL)
   def expand_synthesis (self, evspec):
     # TODO: rename variables to more reasonable ones.
+
+    if evspec is None:
+      return None
+
+    # resolve aliases.
+    while evspec[0] == '$':
+      evspec = self.aliases.get(evspec[1:], None)
+
     re_actsig = re.compile(self.RE_ACTSIG)
     re_events = re.compile(self.RE_EVENTS)
     re_frobs = re.compile(self.RE_FROBS)
@@ -727,6 +740,13 @@ shorthand
       self.export_layer(lyrspec, conmap, lyrid)
       lyrid += 1
 
+  def load_aliases (self, dom_node):
+    if dom_node:
+      for aliasname,aliasdesc in self.iter_children(dom_node, None):
+        v = aliasdesc
+        self.aliases[aliasname] = v
+    return True
+
   def export_conmap (self, dom_node, conmap):
     """Generate Mapping"""
     r"""
@@ -744,10 +764,7 @@ shorthand
     if conmap is None:  
       conmap = scconfig.Mapping()
 
-    for aliasdesc in self.iter_children(dom_node, 'aliases'):
-      for k in aliasdesc:
-        v = aliasdesc[k]
-        self.aliases[k] = v
+    self.load_aliases(self.get_domchild(dom_node, 'aliases'))
 
     title = self.get_domtext(dom_node, 'title')
 
