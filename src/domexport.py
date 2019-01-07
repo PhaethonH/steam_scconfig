@@ -71,6 +71,8 @@ Shorthand
 </action>
 """
   def __init__ (self, toplevel):
+    self.actionsets = []    # List of action sets in Steam config order.
+    self.actionlayers = []  # List of action layers in Steam config order.
     self.actions = []   # list of action sets/layers in Steam config order.
     self.aliases = {}
 
@@ -189,6 +191,7 @@ element_name of None to iterate through all children as (element_name,element_co
   "evcode": ...
 }
 """
+    print("translating event {}".format(dom_node))
     evtype = self.get_domattr(dom_node, 'evtype')
     evcode = self.get_domattr(dom_node, 'evcode')
     if evtype in ('keyboard',):
@@ -200,7 +203,9 @@ element_name of None to iterate through all children as (element_name,element_co
     elif evtype in ('host',):
       pass
     elif evtype in ('overlay',):
-      pass
+      # TODO: resolve overlay by name.
+      print("TODO: resolve overlay by name")
+      return scconfig.EvgenFactory.make_overlay("apply", "-1", '0', '0')
     return None
 
   def export_synthesis (self, dom_node, inputobj):
@@ -706,6 +711,115 @@ shorthand
       conmap.add_action_set(presetkey, layer_name)
     return True
 
+  def prepare_shifters (self, dom_node, conmap):
+    r"""
+Prepare an alternate list of action layers with shifters incorporated.
+Existing layers may have to be modified (e.g. unbinding conflicted keys).
+"""
+    maxshift = 0
+    overlays = {}   # map int => list of overlay names
+    shifters = {}   # map srcsym => bitmask:int
+    for shiftmap in self.iter_children(dom_node, 'shiftmap'):
+      for shifter in self.iter_children(shiftmap, 'shifter'):
+        srcsym = self.get_domattr(shifter, "srcsym")
+        bitmask = self.get_domattr(shifter, "bitmask")
+        bitmask = int(bitmask)
+        maxshift |= bitmask
+        shifters[srcsym] = bitmask
+        print("SRCSYM={}, bitmask={}".format(srcsym, bitmask))
+      for overlay in self.iter_children(shiftmap, 'overlay'):
+        level = self.get_domattr(overlay, "level")
+        level = int(level)
+        accum = []
+        for layername in self.iter_children(overlay, "layer"):
+          accum.append(layername)
+        overlays[level] = accum
+        print("OVERLAYS[{}] = {}".format(level, accum))
+      break
+    print("MAXSHIFT = {}".format(maxshift))
+
+    baselayer = None
+    for lyr in self.iter_children(dom_node, "layer"):
+      baselayer = lyr
+      break
+    # TODO: handle no-layers case.
+
+    def make_shifter_bind (from_level, bitmask):
+      pending = []
+      next_level = from_level ^ bitmask
+      # Apply next level.
+      if next_level != 0:   # can't apply 0 - achieved by removing all layers.
+        if next_level & bitmask:
+          # on key press.
+          pending.insert(0, "+")
+          pending.append("{{overlay,apply,Preshift_{}}}".format(next_level))
+#          pending.append("#+Preshift_{}".format(next_level))
+        else:
+          # on key release.
+          pending.insert(0, "-")
+          pending.append("{{overlay,apply,Shift_{}}}".format(next_level))
+#          pending.append("#+Shift_{}".format(next_level))
+      # Remove current level.
+      if from_level != 0:   # can't remove 0 (base).
+        pending.append("{{overlay,remove,Preshift_{}}}".format(from_level))
+#        pending.append("#-Preshift_{}".format(next_level))
+        pending.append("{{overlay,remove,Shift_{}}}".format(from_level))
+#        pending.append("#-Shift_{}".format(next_level))
+      pending.append("#goto#{}".format(next_level))
+      return "".join(pending)
+
+    # Set up shift level 0
+    for shiftsym,bitmask in shifters.items():
+      baselayer[shiftsym] = make_shifter_bind(0, bitmask)
+
+    # Preshift: find all clusters involved with shift.
+    for n in range(1, maxshift+1):
+      # for shift level n...
+      preclusters = set()
+      for overlayname in overlays.get(n, []):
+        for lyr in self.iter_children(dom_node, 'layer'):
+          if lyr.get('name', None) == overlayname:
+            for clusterdef in lyr.get("cluster", []):
+              preclusters.add(clusterdef["sym"])
+      print("preclusters {}".format(preclusters))
+      print("CREATE LAYER Preshift_{}".format(n))
+
+      # bind shiftkeys for preshift n; set preclusters to advance to shift n.
+      preshiftlayer = {
+        "name": "Preshift_{}".format(n),
+        "cluster": [],
+        }
+      for shiftsym,bitmask in shifters.items():
+        preshiftlayer[shiftsym] = make_shifter_bind(n, bitmask)
+      advbinddef = [ {
+        "actsig": 'start',
+        "event": [ { "evtype": "overlay", "evcode": ("apply", "Shift_{}".format(n)) } ],
+        "label": "advance Shift_{}".format(n),
+        } ]
+      for clsym in sorted(preclusters):
+        cldef = { 
+          "sym": clsym,
+          "mode": 'dpad',
+          'u': advbinddef,
+          'd': advbinddef,
+          'l': advbinddef,
+          'r': advbinddef,
+#          'c': advbinddef,
+          }
+        preshiftlayer['cluster'].append(cldef)
+      print("preshiftlayer = {}".format(preshiftlayer))
+      dom_node['layer'].append(preshiftlayer)
+      print("CREATE LAYER Shift_{}".format(n))
+
+      # bind shiftkeys for shift n.
+      shiftlayer = {
+        "name": "Shift_{}".format(n),
+        "cluster": [],
+        }
+      for shiftsym,bitmask in shifters.items():
+        nextlvl = n ^ bitmask
+    return
+
   def export_action (self, dom_node, conmap):
     r"""
 {
@@ -732,8 +846,10 @@ shorthand
 }
 """
     # TODO: update layers with shiftmap.
-    for shiftspec in self.iter_children(dom_node, "shiftmap"):
-      break
+#    for shiftspec in self.iter_children(dom_node, "shiftmap"):
+#      self.prepare_shifters(shiftspec, conmap)
+#      break
+    self.prepare_shifters(dom_node, conmap)
 
     lyrid = 0
     for lyrspec in self.iter_children(dom_node, "layer"):
@@ -788,6 +904,7 @@ shorthand
     timestamp = self.get_domattr(dom_node, 'Timestamp', -1)
     timestamp = self.get_domattr(dom_node, 'timestamp', timestamp)
 
+    self.actions = []   # Action Sets and Layers in VDF order.
     for actdesc in self.iter_children(dom_node, "action"):
       self.export_action(actdesc, conmap)
 
