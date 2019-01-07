@@ -3,6 +3,7 @@
 import domexport, scconfig, scvdf
 import unittest
 import pprint
+import yaml
 
 
 class TestDomExporter (unittest.TestCase):
@@ -243,9 +244,10 @@ class TestDomExporter (unittest.TestCase):
     self.assertTrue(conmap.presets[0].gsb['0'])
     self.assertTrue(conmap.presets[0].gsb['1'])
     self.assertTrue(conmap.presets[0].gsb['2'])
-#    self.assertEqual(conmap.presets[0].gsb['0'].groupsrc, 'joystick')
-#    self.assertEqual(conmap.presets[0].gsb['1'].groupsrc, 'dpad')
-#    self.assertEqual(conmap.presets[0].gsb['2'].groupsrc, 'button_diamond')
+    b = [ (gsb.groupsrc == 'joystick') for gsb in conmap.presets[0].gsb.values() ]
+    self.assertTrue(any([ (gsb.groupsrc == 'joystick') for gsb in conmap.presets[0].gsb.values() ]))
+    self.assertTrue(any([ (gsb.groupsrc == 'dpad') for gsb in conmap.presets[0].gsb.values() ]))
+    self.assertTrue(any([ (gsb.groupsrc == 'button_diamond') for gsb in conmap.presets[0].gsb.values() ]))
 
   s_aliasing1 = {
       'Up': '<Up>',
@@ -291,13 +293,56 @@ class TestDomExporter (unittest.TestCase):
       d_shiftaction1
     ],
   }
+  d_shiftaction2 = {
+    "name": "Default",
+    "layer": [
+      d_layer1,
+      d_layer2
+      ],
+    "shiftmap": {
+      "shifter": {
+        "LB": "hold 1",
+      },
+      "overlay": {
+        1: [ "Level2" ]
+      },
+    },
+  }
+  d_shifting2 = {
+    "title": "Sample config",
+    "author": "(Anonymous)",
+    "action": [
+      d_shiftaction2
+    ],
+  }
   def test_shiftmap (self):
     exporter = domexport.ScconfigExporter(None)
     d = self.d_shifting1
     conmap = scconfig.Mapping()
     exporter.export_conmap(d, conmap)
-    s = scconfig.toVDF(conmap)
+    s = scvdf.toDict(scconfig.toVDF(conmap))
     pprint.pprint(s, width=180)
+
+    exporter = domexport.ScconfigExporter(None)
+    d = self.d_shifting2
+    conmap = scconfig.Mapping()
+    exporter.export_conmap(d, conmap)
+    s = scvdf.toDict(scconfig.toVDF(conmap))
+    pprint.pprint(s, width=180)
+
+
+  def test_sample1 (self):
+    with open("../examples/x3tc_2.yaml") as f:
+      d_yaml = yaml.load(f)
+    exporter = domexport.ScconfigExporter(None)
+    conmap = scconfig.ControllerConfig()
+    exporter.export_config(d_yaml, conmap)
+    vdf = scconfig.toVDF(conmap)
+    s = scvdf.toDict(vdf)
+#    pprint.pprint(s, width=180)
+#    print(scvdf.dumps(vdf))
+
+
 
 
 if __name__ == "__main__":

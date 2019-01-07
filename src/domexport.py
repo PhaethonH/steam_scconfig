@@ -98,9 +98,9 @@ element_name of None to iterate through all children as (element_name,element_co
           return [ probe ]
     return []
 
-  def get_domtext (self, dom_node, element_name):
+  def get_domtext (self, dom_node, element_name, default_value=''):
     r"""CDATA of/in a child element."""
-    probe = dom_node.get(element_name, '')
+    probe = dom_node.get(element_name, default_value)
     return probe
 
   def get_domchild (self, dom_node, element_name):
@@ -191,7 +191,7 @@ element_name of None to iterate through all children as (element_name,element_co
   "evcode": ...
 }
 """
-    print("translating event {}".format(dom_node))
+#    print("translating event {}".format(dom_node))
     evtype = self.get_domattr(dom_node, 'evtype')
     evcode = self.get_domattr(dom_node, 'evcode')
     if evtype in ('keyboard',):
@@ -204,8 +204,16 @@ element_name of None to iterate through all children as (element_name,element_co
       pass
     elif evtype in ('overlay',):
       # TODO: resolve overlay by name.
-      print("TODO: resolve overlay by name")
-      return scconfig.EvgenFactory.make_overlay("apply", "-1", '0', '0')
+      names = [ a.get('name',None) for a in self.actions ]
+      (actcmd, actname) = evcode
+      try:
+        actid = names.index(actname)
+      except ValueError:
+        # Not found.  Incomplete maps.  Do not transit.
+        return scconfig.EvgenFactory.make_empty()
+      else:
+        return scconfig.EvgenFactory.make_overlay(actcmd, str(actid), "0", "0")
+      #return scconfig.EvgenFactory.make_overlay("apply", "-1", '0', '0')
     return None
 
   def export_synthesis (self, dom_node, inputobj):
@@ -335,7 +343,7 @@ element_name of None to iterate through all children as (element_name,element_co
   }
 
   RE_ACTSIG = r"([:=_&+-])"
-  RE_EVENTS = r"(<[A-Za-z0-9_]+>|\[[A-Za-z0-9_]+\]|\([A-Za-z0-9]+\)|{[^}]*})"
+  RE_EVENTS = r"(<[A-Za-z0-9_]*>|\[[A-Za-z0-9_]*\]|\([A-Za-z0-9]*\)|{[^}]*})"
   RE_FROBS = r"(\||\%|\^|~[0-9]?|:[0-9]+|/[0-9]+|@[0-9]+,[0-9]+)"
   RE_LABEL = r"(#[^#]*)"
   RE_SYM = r"{}?({}+)({}*)({}*)".format(RE_ACTSIG, RE_EVENTS, RE_FROBS, RE_LABEL)
@@ -395,6 +403,9 @@ element_name of None to iterate through all children as (element_name,element_co
           evtype = 'host'
       else:
         evcode = evspec[:]
+      if (evcode is None) or (evcode == ''):
+        evtype = 'empty'
+        evcode = ''
       d = {
         "evtype": evtype,
         "evcode": evcode,
@@ -608,7 +619,7 @@ shorthand
     'switch': 'switches',
     'trigger': 'trigger',
     }
-  def export_layer (self, dom_node, conmap, layeridx=0):
+  def export_layer (self, dom_node, conmap, layeridx=0, parent_name=None):
     r"""
 {
   "name": ...
@@ -704,39 +715,79 @@ shorthand
 
     # add to action_layers[] or actions[]
     if layeridx > 0:
-      conmap.add_action_layer(presetkey, layer_name)
+      conmap.add_action_layer(presetkey, layer_name, parent_set_name=parent_name)
     else:
       if layer_name is None or len(conmap.actions) == 0:
         layer_name = 'Default'
       conmap.add_action_set(presetkey, layer_name)
-    return True
+    return layer_name
 
   def prepare_shifters (self, dom_node, conmap):
     r"""
 Prepare an alternate list of action layers with shifters incorporated.
 Existing layers may have to be modified (e.g. unbinding conflicted keys).
 """
+    extlayers = []   # Extended layers.
+
+    # Copy extant layers.
+    for lyr in self.iter_children(dom_node, "layer"):
+      extlayers.append(lyr)
+
     maxshift = 0
     overlays = {}   # map int => list of overlay names
     shifters = {}   # map srcsym => bitmask:int
-    for shiftmap in self.iter_children(dom_node, 'shiftmap'):
-      for shifter in self.iter_children(shiftmap, 'shifter'):
+    for shiftmap in self.iter_children(dom_node, "shiftmap"):
+
+#      if self.get_domattr(self.get_domchild(shiftmap, "shifter"), "srcsym"):
+#        # long-form.
+#        shiftersiter = [ (self.get_domattr(shifter, "srcsym"), 'hold', self.get_domattr(shifter, "bitmask")) for shifter in self.iter_children(shiftmap, "shifter") ]
+#      else:
+#        # short-form.
+#        shiftersiter = [ sh for sh in self.iter_children(shifter, None) ]
+#      for srcsym, bitmaskstr in shiftersiter:
+#        shifters[srcsym] = bitmaskstr
+
+      for shifter in self.iter_children(shiftmap, "shifter"):
+        # Expect instances of <shifter srcsym="..." bitmask="..."/>
         srcsym = self.get_domattr(shifter, "srcsym")
-        bitmask = self.get_domattr(shifter, "bitmask")
-        bitmask = int(bitmask)
-        maxshift |= bitmask
-        shifters[srcsym] = bitmask
-        print("SRCSYM={}, bitmask={}".format(srcsym, bitmask))
-      for overlay in self.iter_children(shiftmap, 'overlay'):
+        if srcsym is not None:
+          shiftcmd = self.get_domattr(shifter, "cmd")
+          if shiftcmd is None:
+            shiftcmd = "hold"
+          bitmask = self.get_domattr(shifter, "bitmask")
+          bitmask = int(bitmask)
+          maxshift |= bitmask
+          shifters[srcsym] = bitmask
+#          print("SRCSYM={}, bitmask={}".format(srcsym, bitmask))
+        else:
+          for srcsym, shiftaction in self.iter_children(shifter, None):
+            parts = shiftaction.split()
+            shiftcmd = parts[0]
+            bitmaskstr = parts[1] if len(parts) > 1 else 0
+            bitmask = int(bitmaskstr)
+            maxshift |= bitmask
+#            print("SRCSYM={}, bitmask={}".format(srcsym, bitmask))
+            shifters[srcsym] = bitmask
+
+      for overlay in self.iter_children(shiftmap, "overlay"):
         level = self.get_domattr(overlay, "level")
-        level = int(level)
-        accum = []
-        for layername in self.iter_children(overlay, "layer"):
-          accum.append(layername)
-        overlays[level] = accum
-        print("OVERLAYS[{}] = {}".format(level, accum))
+        if level is not None:
+          level = int(level)
+          accum = []
+          for layername in self.iter_children(overlay, "layer"):
+            accum.append(layername)
+          overlays[level] = accum
+#          print("OVERLAYS[{}] = {}".format(level, accum))
+        else:
+          for levelstr, layernames in self.iter_children(overlay, None):
+            level = int(levelstr)
+            accum = []
+            for layername in layernames:
+              accum.append(layername)
+            overlays[level] = accum
+#            print("OVERLAYS[{}] = {}".format(level, accum))
       break
-    print("MAXSHIFT = {}".format(maxshift))
+#    print("MAXSHIFT = {}".format(maxshift))
 
     baselayer = None
     for lyr in self.iter_children(dom_node, "layer"):
@@ -748,22 +799,23 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       pending = []
       next_level = from_level ^ bitmask
       # Apply next level.
-      if next_level != 0:   # can't apply 0 - achieved by removing all layers.
-        if next_level & bitmask:
-          # on key press.
-          pending.insert(0, "+")
+      if next_level & bitmask:
+        # on key press.
+        pending.insert(0, "+")
+        if next_level != 0:   # can't apply 0 - achieved by removing all layers.
           pending.append("{{overlay,apply,Preshift_{}}}".format(next_level))
 #          pending.append("#+Preshift_{}".format(next_level))
-        else:
-          # on key release.
-          pending.insert(0, "-")
+      else:
+        # on key release.
+        pending.insert(0, "-")
+        if next_level != 0:   # can't apply 0 - achieved by removing all layers.
           pending.append("{{overlay,apply,Shift_{}}}".format(next_level))
 #          pending.append("#+Shift_{}".format(next_level))
       # Remove current level.
       if from_level != 0:   # can't remove 0 (base).
-        pending.append("{{overlay,remove,Preshift_{}}}".format(from_level))
+        pending.append("{{overlay,peel,Preshift_{}}}".format(from_level))
 #        pending.append("#-Preshift_{}".format(next_level))
-        pending.append("{{overlay,remove,Shift_{}}}".format(from_level))
+        pending.append("{{overlay,peel,Shift_{}}}".format(from_level))
 #        pending.append("#-Shift_{}".format(next_level))
       pending.append("#goto#{}".format(next_level))
       return "".join(pending)
@@ -777,12 +829,13 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       # for shift level n...
       preclusters = set()
       for overlayname in overlays.get(n, []):
-        for lyr in self.iter_children(dom_node, 'layer'):
-          if lyr.get('name', None) == overlayname:
+        for lyr in self.iter_children(dom_node, "layer"):
+          if lyr.get("name", None) == overlayname:
+            print("cluster {}".format(lyr.get("cluster", None)))
             for clusterdef in lyr.get("cluster", []):
               preclusters.add(clusterdef["sym"])
       print("preclusters {}".format(preclusters))
-      print("CREATE LAYER Preshift_{}".format(n))
+#      print("CREATE LAYER Preshift_{}".format(n))
 
       # bind shiftkeys for preshift n; set preclusters to advance to shift n.
       preshiftlayer = {
@@ -807,9 +860,9 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
 #          'c': advbinddef,
           }
         preshiftlayer['cluster'].append(cldef)
-      print("preshiftlayer = {}".format(preshiftlayer))
-      dom_node['layer'].append(preshiftlayer)
-      print("CREATE LAYER Shift_{}".format(n))
+#      print("preshiftlayer = {}".format(preshiftlayer))
+      #dom_node['layer'].append(preshiftlayer)
+#      print("CREATE LAYER Shift_{}".format(n))
 
       # bind shiftkeys for shift n.
       shiftlayer = {
@@ -817,8 +870,24 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         "cluster": [],
         }
       for shiftsym,bitmask in shifters.items():
-        nextlvl = n ^ bitmask
-    return
+        shiftlayer[shiftsym] = make_shifter_bind(n, bitmask)
+
+      extlayers.append(preshiftlayer)
+      extlayers.append(shiftlayer)
+#    print("extlayers = {}".format(extlayers))
+    return extlayers
+
+  def prepare_action (self, dom_node, conmap):
+    # Update layers (self.actionsets, self.actionlayers) with shiftmap.
+    paralayers = self.prepare_shifters(dom_node, conmap)
+    lyrid = 0
+    for lyrspec in paralayers:
+      if lyrid == 0:
+        self.actionsets.append(lyrspec)
+      else:
+        self.actionlayers.append(lyrspec)
+      lyrid += 1
+    return paralayers
 
   def export_action (self, dom_node, conmap):
     r"""
@@ -845,15 +914,12 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
   }
 }
 """
-    # TODO: update layers with shiftmap.
-#    for shiftspec in self.iter_children(dom_node, "shiftmap"):
-#      self.prepare_shifters(shiftspec, conmap)
-#      break
-    self.prepare_shifters(dom_node, conmap)
-
     lyrid = 0
+    basename = None
     for lyrspec in self.iter_children(dom_node, "layer"):
-      self.export_layer(lyrspec, conmap, lyrid)
+      lyrname = self.export_layer(lyrspec, conmap, lyrid, parent_name=basename)
+      if lyrid == 0:
+        basename = lyrname
       lyrid += 1
 
   def load_aliases (self, dom_node):
@@ -880,33 +946,52 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     if conmap is None:  
       conmap = scconfig.Mapping()
 
-    self.load_aliases(self.get_domchild(dom_node, 'aliases'))
+    self.load_aliases(self.get_domchild(dom_node, "aliases"))
 
-    title = self.get_domtext(dom_node, 'title')
+    title = "(Unnamed)"
+    title = self.get_domtext(dom_node, "name", title)
+    title = self.get_domtext(dom_node, "title", title)
 
-    revision = self.get_domattr(dom_node, 'rev', 1)
-    revision = self.get_domattr(dom_node, 'revision', revision)
+    # Key order from least-preferred to most-preferred.
+    revision = self.get_domattr(dom_node, "rev", 1)
+    revision = self.get_domattr(dom_node, "revision", revision)
 
-    description = None
-    if description is None:
-      description = self.get_domtext(dom_node, 'desc')
-    if description is None:
-      description = self.get_domtext(dom_node, 'descr')
-    if description is None:
-      description = self.get_domtext(dom_node, 'description')
+    description = "(no description)"
+    description = self.get_domtext(dom_node, "desc", description)
+    description = self.get_domtext(dom_node, "descr", description)
+    description = self.get_domtext(dom_node, "description", description)
 
-    author = None
-    if author is None:
-      author = self.get_domtext(dom_node, 'creator')
-    if author is None:
-      author = self.get_domtext(dom_node, 'author')
+    author = "(Unknown)"
+    author = self.get_domtext(dom_node, "creator", author)
+    author = self.get_domtext(dom_node, "author", author)
 
-    timestamp = self.get_domattr(dom_node, 'Timestamp', -1)
-    timestamp = self.get_domattr(dom_node, 'timestamp', timestamp)
+    devtype = None
+    devtype = self.get_domattr(dom_node, "devtype", devtype)
+    devtype = self.get_domattr(dom_node, "controller_type", devtype)
 
+    timestamp = -1
+    timestamp = self.get_domattr(dom_node, "Timestamp", timestamp)
+    timestamp = self.get_domattr(dom_node, "timestamp", timestamp)
+
+#    for actdesc in self.iter_children(dom_node, "action"):
+#      self.export_action(actdesc, conmap)
     self.actions = []   # Action Sets and Layers in VDF order.
+    paractions = []
     for actdesc in self.iter_children(dom_node, "action"):
+      extlayers = self.prepare_action(actdesc, conmap)
+      paractions.append(extlayers)
+    self.actions.extend(self.actionsets)
+    self.actions.extend(self.actionlayers)
+    extactions = [ {"layer":x} for x in paractions ]    # Convert to dom-like.
+    for actdesc in extactions:
       self.export_action(actdesc, conmap)
+
+    conmap.revision = revision
+    conmap.title = title
+    conmap.description = description
+    conmap.creator = author
+    conmap.controller_type = devtype
+    conmap.timestamp = timestamp
 
     return conmap
 

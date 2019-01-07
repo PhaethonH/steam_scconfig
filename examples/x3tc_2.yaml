@@ -158,10 +158,12 @@ aliases:
 
 name: "GeneratedSample_1"
 revision: 2
+author: "PhaethonH"
+description: "Example config to test conversion to VDF"
 devtype: controller_ps4
-actions:
+action:
 - name: Default
-  layers:
+  layer:
   - name: Default
     LJ: (LJ)
     RJ: (RJ)
@@ -206,4 +208,14 @@ actions:
     1: [ Commerce1 ]
     4: [ Combat1 ]
     5: [ Command1 ]
+
+
+  shiftmap:
+    shifter:
+      LB: hold 1
+      RB: hold 4
+    overlay:
+      1: [ Commerce1 ]
+      4: [ Combat1 ]
+      5: [ Command1 ]
 
