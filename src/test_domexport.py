@@ -128,11 +128,15 @@ class TestDomExporter (unittest.TestCase):
     exporter = domexport.ScconfigExporter(None)
     d = self.d_layer1
     conmap = scconfig.Mapping()
-    exporter.export_layer(d, conmap, 0)
+    temp = exporter.normalize_layer(d, conmap, 0)
+#    exporter.export_layer(d, conmap, 0)
+    exporter.export_layer(temp, conmap, 0)
     self.assertEqual(len(conmap.actions), 1)
 
     d = self.d_layer2
-    exporter.export_layer(d, conmap, 1)
+#    exporter.export_layer(d, conmap, 1)
+    temp = exporter.normalize_layer(d, conmap, 1)
+    exporter.export_layer(temp, conmap, 1)
     self.assertEqual(len(conmap.actions), 1)
     self.assertEqual(len(conmap.layers), 1)
 
@@ -232,14 +236,17 @@ class TestDomExporter (unittest.TestCase):
     "LJ.c": "[1]",
     "DP.u": "(DUP)",
     "DP.d": "(DDN)",
+    "DP.l": "(DLT)",
+    "DP.r": "(DRT)",
     "BQ.s": "(A)",
   }
   def test_shorthand_layer (self):
     exporter = domexport.ScconfigExporter(None)
     d = self.s_layer1
     conmap = scconfig.Mapping()
-    exporter.export_layer(d, conmap)
-#    print(conmap.presets)
+    temp = exporter.normalize_layer(d, conmap)
+    exporter.export_layer(temp, conmap)
+    print(conmap.presets)
     self.assertEqual(len(conmap.presets[0].gsb), 3)
     self.assertTrue(conmap.presets[0].gsb['0'])
     self.assertTrue(conmap.presets[0].gsb['1'])
@@ -297,7 +304,11 @@ class TestDomExporter (unittest.TestCase):
     "name": "Default",
     "layer": [
       d_layer1,
-      d_layer2
+      d_layer2,
+      {
+        "name": "Level3",
+        "BQ.s": "(A)",
+      }
       ],
     "shiftmap": {
       "shifter": {
@@ -323,6 +334,7 @@ class TestDomExporter (unittest.TestCase):
     s = scvdf.toDict(scconfig.toVDF(conmap))
     pprint.pprint(s, width=180)
 
+    print('--2--')
     exporter = domexport.ScconfigExporter(None)
     d = self.d_shifting2
     conmap = scconfig.Mapping()
@@ -339,7 +351,7 @@ class TestDomExporter (unittest.TestCase):
     exporter.export_config(d_yaml, conmap)
     vdf = scconfig.toVDF(conmap)
     s = scvdf.toDict(vdf)
-#    pprint.pprint(s, width=180)
+    pprint.pprint(s, width=180)
 #    print(scvdf.dumps(vdf))
 
 

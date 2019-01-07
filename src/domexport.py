@@ -4,6 +4,7 @@
 
 import scconfig, scvdf
 import re
+import pprint
 
 def _stringlike (x):
   try: return x.isalpha
@@ -500,6 +501,38 @@ element_name of None to iterate through all children as (element_name,element_co
       settingsobj.__dict__[k] = v
     return settingsobj
 
+
+  def normalize_cluster (self, dom_node):
+    print("normalizing cluster {}".format(dom_node))
+    extcluster = {'component':[]}
+
+    for k,v in self.iter_children(dom_node, None):
+      cluster_sym, component_sym = None, None
+      if k in self.UNIQUE_COMPONENT_SYMS:
+        cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
+      elif len(k) == 1:
+        component_sym = k
+      if component_sym:
+        syntheses = None
+
+        if _stringlike(v):
+          # parse
+          syntheses = self.expand_shorthand_syntheses(v)
+        elif v:
+          # presume list of Synthesis
+          syntheses = v
+
+        if syntheses is not None:
+          compspec = {
+              "sym": component_sym,
+              "synthesis": syntheses
+            }
+          extcluster['component'].append(compspec)
+      else:
+        extcluster[k] = v
+
+    return extcluster
+
   UNIQUE_COMPONENT_SYMS = {
     "BK": ("SW", "BK"),
     "ST": ("SW", "ST"),
@@ -619,6 +652,95 @@ shorthand
     'switch': 'switches',
     'trigger': 'trigger',
     }
+
+  def normalize_layer (self, dom_node, conmap, layeridx=0):
+    r"""resolve shorthands."""
+    print("normalizing layer: {}".format(dom_node))
+    paralayer = {'cluster': []}
+
+    # Scan shorthands.
+    paraclusters = {}   # Map cluster_sym to cluster contents.
+    for k,v in self.iter_children(dom_node, None):
+      print("scanning shorthand {!r}".format(k))
+      cluster_sym = component_sym = None
+      if '.' in k:
+        cluster_sym, component_sym = k.split('.')
+        print("DOTTED PAIR: {} . {}".format(cluster_sym, component_sym))
+      elif k in self.UNIQUE_COMPONENT_SYMS:
+        cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
+        print(" UNIQUEIFIED {} => {} . {}".format(k, cluster_sym, component_sym))
+      # TODO: expand on a parallel struct.
+      if cluster_sym and component_sym:
+        # Find cluster.
+        print("paraclusters = {} (@ {})".format(paraclusters.keys(), cluster_sym))
+        if cluster_sym in paraclusters: # reuse cluster.
+          cluster = paraclusters[cluster_sym]
+        else: # create cluster.
+          automode = self.auto_mode(component_sym)
+          cluster = {
+            "mode": automode,
+            "sym": cluster_sym,
+            "component": []
+            }
+          print("CREATE CLUSTER {}".format(cluster_sym))
+          paraclusters[cluster_sym] = cluster
+          # TODO update paralayer?
+          paralayer['cluster'].append(cluster)
+        # Find component.
+        component = None
+        for comp in cluster['component']: # reuse component
+          if cluster.get('sym', None) == component_sym:
+            component = comp
+            break
+        else: # create component.
+          component = {
+            'sym': component_sym,
+            'synthesis': []
+            }
+          # TODO: auto-mode here?
+          cluster['component'].append(component)
+        # Update cluster.
+        if _stringlike(v):
+          syntheses = self.expand_shorthand_syntheses(v)
+        else:
+          syntheses = v
+        component['synthesis'].extend(syntheses)
+        # TODO: auto-mode from all components.
+        if cluster.get('mode', None) is None:
+          complist = [ x.get("sym") for x in cluster['component'] ]
+          automode = self.auto_mode(complist)
+          cluster['mode'] = automode
+      else:
+        # copy verbatim.
+        print("COPY VERBATIM {} = {}".format(k, v))
+        if k == 'cluster':
+          vv = [ self.normalize_cluster(cl) for cl in v ]
+          paralayer[k].extend(vv)
+        else:
+          paralayer[k] = v
+      print("now paralayer <- {}".format([x['sym'] for x in paralayer['cluster']]))
+
+#    for clustersym, clusterspec in paraclusters.items():
+#      grpmode = self.get_domattr(clusterspec, "mode")  # TODO: auto-mode
+#      #export_group(clusterspec, grpmode, clustersym, active, modeshift)
+#      paralayer['cluster'].append(clusterspec)
+
+#    print("in dom node {}".format(dom_node))
+#    for clusterspec in self.iter_children(dom_node, "cluster"):
+#      print("normalize: examine {}".format(clusterspec))
+#      grpmode = self.get_domattr(clusterspec, "mode")
+#      clustersym = self.get_domattr(clusterspec, "sym")
+#      active = True
+#      modeshift = False
+#      paralayer['cluster'].append(clusterspec)
+
+    print("paralayer = {}".format([x['sym'] for x in paralayer['cluster']]))
+    #print("  = {}".format(paralayer))
+    print("  = ")
+    pprint.pprint(paralayer, width=180)
+    print()
+    return paralayer
+
   def export_layer (self, dom_node, conmap, layeridx=0, parent_name=None):
     r"""
 {
@@ -629,6 +751,7 @@ shorthand
   ]
 }
 """
+#    print("export_layer {}".format(dom_node))
     layer_name = self.get_domattr(dom_node, "name")
     presetid = len(conmap.presets)
     grpid = len(conmap.groups)
@@ -640,7 +763,9 @@ shorthand
     presetobj = conmap.add_preset(presetid, presetkey)
 
     def export_group (clusterspec, grpmode, clustersym, active, modeshift):
+#      print("export_group({!r},{!r},{!r},{!r},{!r})".format(clusterspec, grpmode, clustersym, active, modeshift))
       grpsrc = self.GRPSRC_MAP.get(clustersym, clustersym)
+#      print(" grpsrc = {}".format(grpsrc))
       grp = None
       # Find existing.
       for grpid,gsbval in presetobj.gsb.items():
@@ -658,45 +783,45 @@ shorthand
         presetobj.add_gsb(grpid, grpsrc, active, modeshift)
       self.export_cluster(clusterspec, grp)
 
-    # Scan shorthands.
-    paraclusters = {}   # Map cluster_sym to cluster contents.
-    for k,v in self.iter_children(dom_node, None):
-      cluster_sym = component_sym = None
-      if '.' in k:
-        cluster_sym, component_sym = k.split('.')
-      elif k in self.UNIQUE_COMPONENT_SYMS:
-        cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
-      # TODO: expand on a parallel struct.
-      if cluster_sym and component_sym:
-        # Find cluster.
-        if cluster_sym in paraclusters:
-          cluster = paraclusters[cluster_sym]
-        else:
-          automode = self.auto_mode(component_sym)
-          cluster = paraclusters[cluster_sym] = { "mode": automode, "component": [] }  # TODO: auto-mode
-        # Find component.
-        component = None
-        for comp in cluster['component']:
-          if cluster.get('sym', None) == component_sym:
-            component = comp
-        else: # create component.
-          component = {
-            'sym': component_sym,
-            'synthesis': []
-            }
-          # TODO: auto-mode here?
-          cluster['component'].append(component)
-        # Update cluster.
-        if _stringlike(v):
-          syntheses = self.expand_shorthand_syntheses(v)
-        else:
-          syntheses = v
-        component['synthesis'] = syntheses
-        # TODO: auto-mode from all components.
-        if cluster.get('mode', None) is None:
-          complist = [ x.get("sym") for x in cluster['component'] ]
-          automode = self.auto_mode(complist)
-          cluster['mode'] = automode
+#    # Scan shorthands.
+#    paraclusters = {}   # Map cluster_sym to cluster contents.
+#    for k,v in self.iter_children(dom_node, None):
+#      cluster_sym = component_sym = None
+#      if '.' in k:
+#        cluster_sym, component_sym = k.split('.')
+#      elif k in self.UNIQUE_COMPONENT_SYMS:
+#        cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
+#      # TODO: expand on a parallel struct.
+#      if cluster_sym and component_sym:
+#        # Find cluster.
+#        if cluster_sym in paraclusters:
+#          cluster = paraclusters[cluster_sym]
+#        else:
+#          automode = self.auto_mode(component_sym)
+#          cluster = paraclusters[cluster_sym] = { "mode": automode, "component": [] }  # TODO: auto-mode
+#        # Find component.
+#        component = None
+#        for comp in cluster['component']:
+#          if cluster.get('sym', None) == component_sym:
+#            component = comp
+#        else: # create component.
+#          component = {
+#            'sym': component_sym,
+#            'synthesis': []
+#            }
+#          # TODO: auto-mode here?
+#          cluster['component'].append(component)
+#        # Update cluster.
+#        if _stringlike(v):
+#          syntheses = self.expand_shorthand_syntheses(v)
+#        else:
+#          syntheses = v
+#        component['synthesis'] = syntheses
+#        # TODO: auto-mode from all components.
+#        if cluster.get('mode', None) is None:
+#          complist = [ x.get("sym") for x in cluster['component'] ]
+#          automode = self.auto_mode(complist)
+#          cluster['mode'] = automode
 
     for clusterspec in self.iter_children(dom_node, "cluster"):
       grpmode = self.get_domattr(clusterspec, "mode")
@@ -706,12 +831,12 @@ shorthand
 
       export_group(clusterspec, grpmode, clustersym, active, modeshift)
 
-    for clustersym, clusterspec in paraclusters.items():
-      grpmode = self.get_domattr(clusterspec, "mode")  # TODO: auto-mode
-      active = True
-      modeshift = False
-
-      export_group(clusterspec, grpmode, clustersym, active, modeshift)
+#    for clustersym, clusterspec in paraclusters.items():
+#      grpmode = self.get_domattr(clusterspec, "mode")  # TODO: auto-mode
+#      active = True
+#      modeshift = False
+#
+#      export_group(clusterspec, grpmode, clustersym, active, modeshift)
 
     # add to action_layers[] or actions[]
     if layeridx > 0:
@@ -730,7 +855,11 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     extlayers = []   # Extended layers.
 
     # Copy extant layers.
+    lyrid = 0
     for lyr in self.iter_children(dom_node, "layer"):
+#      postlyr = self.normalize_layer(lyr, conmap, lyrid)
+#      extlayers.append(postlyr)
+#      lyrid += 1
       extlayers.append(lyr)
 
     maxshift = 0
@@ -831,10 +960,10 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       for overlayname in overlays.get(n, []):
         for lyr in self.iter_children(dom_node, "layer"):
           if lyr.get("name", None) == overlayname:
-            print("cluster {}".format(lyr.get("cluster", None)))
+#            print("cluster {}".format(lyr.get("cluster", None)))
             for clusterdef in lyr.get("cluster", []):
               preclusters.add(clusterdef["sym"])
-      print("preclusters {}".format(preclusters))
+#      print("preclusters {}".format(preclusters))
 #      print("CREATE LAYER Preshift_{}".format(n))
 
       # bind shiftkeys for preshift n; set preclusters to advance to shift n.
@@ -872,8 +1001,10 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       for shiftsym,bitmask in shifters.items():
         shiftlayer[shiftsym] = make_shifter_bind(n, bitmask)
 
-      extlayers.append(preshiftlayer)
-      extlayers.append(shiftlayer)
+      normalized_preshiftlayer = self.normalize_layer(preshiftlayer, conmap)
+      normalized_shiftlayer = self.normalize_layer(shiftlayer, conmap)
+      extlayers.append(normalized_preshiftlayer)
+      extlayers.append(normalized_shiftlayer)
 #    print("extlayers = {}".format(extlayers))
     return extlayers
 
