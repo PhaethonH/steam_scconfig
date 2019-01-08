@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# vim: ts=2 sw=2 expandtab
 
 # Convert from a DOM-like structure to Scconfig.
 
@@ -503,6 +504,10 @@ element_name of None to iterate through all children as (element_name,element_co
 
 
   def normalize_cluster (self, dom_node):
+    """Resolve shorthand notations.
+
+Returns a cluster DOM which is a copy of the original but with shorthand notation resolved.
+"""
     print("normalizing cluster {}".format(dom_node))
     extcluster = {'component':[]}
 
@@ -529,7 +534,10 @@ element_name of None to iterate through all children as (element_name,element_co
             }
           extcluster['component'].append(compspec)
       else:
-        extcluster[k] = v
+        if k == 'component':
+          extcluster[k].extend(v)
+        else:
+          extcluster[k] = v
 
     return extcluster
 
@@ -654,7 +662,9 @@ shorthand
     }
 
   def normalize_layer (self, dom_node, conmap, layeridx=0):
-    r"""resolve shorthands."""
+    r"""resolve shorthands.
+Returns a substitute layer which is copy of the original (dom_node), but with shorthand notations for/in clusters resolved.
+"""
     print("normalizing layer: {}".format(dom_node))
     paralayer = {'cluster': []}
 
@@ -663,10 +673,10 @@ shorthand
     for k,v in self.iter_children(dom_node, None):
       print("scanning shorthand {!r}".format(k))
       cluster_sym = component_sym = None
-      if '.' in k:
+      if '.' in k:    # "CLUSTER.POLE"
         cluster_sym, component_sym = k.split('.')
         print("DOTTED PAIR: {} . {}".format(cluster_sym, component_sym))
-      elif k in self.UNIQUE_COMPONENT_SYMS:
+      elif k in self.UNIQUE_COMPONENT_SYMS:   # "POLE(UNIQUE)"
         cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
         print(" UNIQUEIFIED {} => {} . {}".format(k, cluster_sym, component_sym))
       # TODO: expand on a parallel struct.
@@ -702,15 +712,14 @@ shorthand
         # Update cluster.
         if _stringlike(v):
           syntheses = self.expand_shorthand_syntheses(v)
-        else:
-          syntheses = v
+        else: syntheses = v
         component['synthesis'].extend(syntheses)
         # TODO: auto-mode from all components.
         if cluster.get('mode', None) is None:
           complist = [ x.get("sym") for x in cluster['component'] ]
           automode = self.auto_mode(complist)
           cluster['mode'] = automode
-      else:
+      else:   # Not recognized as shorthand; assume longhand.
         # copy verbatim.
         print("COPY VERBATIM {} = {}".format(k, v))
         if k == 'cluster':

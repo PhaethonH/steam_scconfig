@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# vim: sw=2 ts=2 expandtab
 
 import domexport, scconfig, scvdf
 import unittest
@@ -216,7 +217,8 @@ class TestDomExporter (unittest.TestCase):
     grpid = 0
     grp = scconfig.GroupFactory.make(grpid, 'dpad')
     self.assertIsNot(grp, None)
-    exporter.export_cluster(d, grp)
+    d2 = exporter.normalize_cluster(d)
+    exporter.export_cluster(d2, grp)
     self.assertEqual(grp.mode, 'dpad')
     self.assertTrue(grp.inputs['dpad_north'])
     self.assertEqual(grp.inputs['dpad_north'].activators[0].signal, 'Full_Press')
@@ -226,7 +228,8 @@ class TestDomExporter (unittest.TestCase):
     grpid = 0
     grp = scconfig.GroupFactory.make(grpid, 'dpad')
     self.assertIsNot(grp, None)
-    exporter.export_cluster(d, grp)
+    d2 = exporter.normalize_cluster(d)
+    exporter.export_cluster(d2, grp)
     self.assertEqual(grp.mode, 'dpad')
     self.assertTrue(grp.inputs['dpad_north'])
     self.assertEqual(grp.inputs['dpad_north'].activators[0].signal, 'Full_Press')
@@ -307,7 +310,7 @@ class TestDomExporter (unittest.TestCase):
       d_layer2,
       {
         "name": "Level3",
-        "BQ.s": "(A)",
+        "DP.u": "(A)",
       }
       ],
     "shiftmap": {
