@@ -509,7 +509,7 @@ element_name of None to iterate through all children as (element_name,element_co
 
 Returns a cluster DOM which is a copy of the original but with shorthand notation resolved.
 """
-    print("normalizing cluster {}".format(dom_node))
+#    print("normalizing cluster {}".format(dom_node))
     extcluster = {'component':[]}
 
     if dom_node in ("LJ", "(LJ)"):
@@ -678,29 +678,29 @@ shorthand
     r"""resolve shorthands.
 Returns a substitute layer which is copy of the original (dom_node), but with shorthand notations for/in clusters resolved.
 """
-    print("normalizing layer: {}".format(dom_node))
+#    print("normalizing layer: {}".format(dom_node))
     paralayer = {'cluster': []}
 
     # Scan shorthands.
     paraclusters = {}   # Map cluster_sym to cluster contents.
     for k,v in self.iter_children(dom_node, None):
-      print("scanning shorthand {!r}".format(k))
+#      print("scanning shorthand {!r}".format(k))
       cluster_sym = component_sym = None
       if '.' in k:    # "CLUSTER.POLE"
         cluster_sym, component_sym = k.split('.')
-        print("DOTTED PAIR: {} . {}".format(cluster_sym, component_sym))
+#        print("DOTTED PAIR: {} . {}".format(cluster_sym, component_sym))
       elif k in self.UNIQUE_COMPONENT_SYMS:   # "POLE(UNIQUE)"
         cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
-        print(" UNIQUEIFIED {} => {} . {}".format(k, cluster_sym, component_sym))
+#        print(" UNIQUEIFIED {} => {} . {}".format(k, cluster_sym, component_sym))
       elif k in self.GRPSRC_MAP:
-        print(" SHORTHAND CLUSTERSYM {} => {}".format(k, cluster_sym))
+#        print(" SHORTHAND CLUSTERSYM {} => {}".format(k, cluster_sym))
         component_sym = None
-        print("using v = {!r}".format(v))
+#        print("using v = {!r}".format(v))
 #        v['sym'] = k
 #        v['mode'] = 'dpad'  # TODO: automode
         vv = self.normalize_cluster(v)
         vv['sym'] = k
-        print("  normalized as {}".format(vv))
+#        print("  normalized as {}".format(vv))
 
         if cluster_sym in paraclusters: # reuse cluster.
           cluster = paraclusters[cluster_sym]
@@ -709,7 +709,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
           cluster = vv
           paraclusters[cluster_sym] = vv
           # TODO update paralayer?
-          print("* CREATE CLUSTER {}".format(cluster_sym))
+#          print("* CREATE CLUSTER {}".format(cluster_sym))
           paralayer['cluster'].append(cluster)
 
 #        paralayer['cluster'].append(vv)
@@ -719,7 +719,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
       # TODO: expand on a parallel struct.
       if cluster_sym and component_sym:
         # Find cluster.
-        print("paraclusters = {} (@ {})".format(paraclusters.keys(), cluster_sym))
+#        print("paraclusters = {} (@ {})".format(paraclusters.keys(), cluster_sym))
         if cluster_sym in paraclusters: # reuse cluster.
           cluster = paraclusters[cluster_sym]
         else: # create cluster.
@@ -729,7 +729,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
             "sym": cluster_sym,
             "component": []
             }
-          print("CREATE CLUSTER {}".format(cluster_sym))
+#          print("CREATE CLUSTER {}".format(cluster_sym))
           paraclusters[cluster_sym] = cluster
           # TODO update paralayer?
           paralayer['cluster'].append(cluster)
@@ -758,15 +758,15 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
           cluster['mode'] = automode
       else:   # Not recognized as shorthand; assume longhand.
         # copy verbatim.
-        print("COPY VERBATIM {} = {}".format(k, v))
+#        print("COPY VERBATIM {} = {}".format(k, v))
         if k == 'cluster':
           vv = [ self.normalize_cluster(cl) for cl in v ]
           paralayer[k].extend(vv)
         else:
           paralayer[k] = v
 #      print("cluster list = {}".format(paralayer['cluster']))
-      pprint.pprint(paralayer['cluster'])
-      print("now paralayer <- {}".format([x['sym'] for x in paralayer['cluster']]))
+#      pprint.pprint(paralayer['cluster'])
+#      print("now paralayer <- {}".format([x['sym'] for x in paralayer['cluster']]))
 
 #    for clustersym, clusterspec in paraclusters.items():
 #      grpmode = self.get_domattr(clusterspec, "mode")  # TODO: auto-mode
@@ -784,9 +784,9 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
 
 #    print("paralayer = {}".format([x['sym'] for x in paralayer['cluster']]))
     #print("  = {}".format(paralayer))
-    print("  = ")
-    pprint.pprint(paralayer, width=180)
-    print()
+#    print("  = ")
+#    pprint.pprint(paralayer, width=180)
+#    print()
     return paralayer
 
   def export_layer (self, dom_node, conmap, layeridx=0, parent_name=None):
@@ -905,12 +905,12 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     # Copy extant layers.
     lyrid = 0
     for lyr in self.iter_children(dom_node, "layer"):
-      print("feeding normalizer {}".format(lyr))
+#      print("feeding normalizer {}".format(lyr))
       postlyr = self.normalize_layer(lyr, conmap, lyrid)
 #      extlayers.append(postlyr)
 #      lyrid += 1
       extlayers.append(postlyr)
-    print("raw layers = ", extlayers)
+#    print("raw layers = ", extlayers)
 
     maxshift = 0
     overlays = {}   # map int => list of overlay names
@@ -1051,23 +1051,23 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       for shiftsym,bitmask in shifters.items():
         shiftlayer[shiftsym] = make_shifter_bind(n, bitmask)
 
-      print("* preshiftlayer = ",end='')
-      pprint.pprint(preshiftlayer)
+#      print("* preshiftlayer = ",end='')
+#      pprint.pprint(preshiftlayer)
       normalized_preshiftlayer = self.normalize_layer(preshiftlayer, conmap)
-      print("*  normalized = ",end='')
-      pprint.pprint(normalized_preshiftlayer)
+#      print("*  normalized = ",end='')
+#      pprint.pprint(normalized_preshiftlayer)
       normalized_shiftlayer = self.normalize_layer(shiftlayer, conmap)
       extlayers.append(normalized_preshiftlayer)
       extlayers.append(normalized_shiftlayer)
-    print("extlayers = {}".format(extlayers))
+#    print("extlayers = {}".format(extlayers))
     return extlayers
 
   def prepare_action (self, dom_node, conmap):
     # Update layers (self.actionsets, self.actionlayers) with shiftmap.
     normlayer = self.normalize_layer(dom_node, conmap)
-    print("*normalizing {}".format(dom_node))
-    print("* using normalized layer {}", end='')
-    pprint.pprint(normlayer)
+#    print("*normalizing {}".format(dom_node))
+#    print("* using normalized layer {}", end='')
+#    pprint.pprint(normlayer)
     paralayers = self.prepare_shifters(normlayer, conmap)
     lyrid = 0
     for lyrspec in paralayers:
@@ -1103,7 +1103,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
   }
 }
 """
-    print("exporting action {}".format(dom_node))
+#    print("exporting action {}".format(dom_node))
     lyrid = 0
     basename = None
     for lyrspec in self.iter_children(dom_node, "layer"):
@@ -1170,8 +1170,8 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     for actdesc in self.iter_children(dom_node, "action"):
       extlayers = self.prepare_action(actdesc, conmap)
 #      print("processed exlayers = {}".format(extlayers))
-      print("processed exlayers = ", end='')
-      pprint.pprint(extlayers)
+#      print("processed exlayers = ", end='')
+#      pprint.pprint(extlayers)
       paractions.append(extlayers)
     self.actions.extend(self.actionsets)
     self.actions.extend(self.actionlayers)

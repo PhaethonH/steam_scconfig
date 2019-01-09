@@ -232,7 +232,7 @@ class TestDomExporter (unittest.TestCase):
     grp = scconfig.GroupFactory.make(grpid, 'dpad')
     self.assertIsNot(grp, None)
     d2 = exporter.normalize_cluster(d)
-    pprint.pprint(d2)
+#    pprint.pprint(d2)
     exporter.export_cluster(d2, grp)
     self.assertEqual(grp.mode, 'dpad')
     self.assertTrue(grp.inputs['dpad_north'])
@@ -342,15 +342,15 @@ class TestDomExporter (unittest.TestCase):
     conmap = scconfig.Mapping()
     exporter.export_conmap(d, conmap)
     s = scvdf.toDict(scconfig.toVDF(conmap))
-    pprint.pprint(s, width=180)
+#    pprint.pprint(s, width=180)
 
-    print('--2--')
+#    print('--2--')
     exporter = domexport.ScconfigExporter(None)
     d = self.d_shifting2
     conmap = scconfig.Mapping()
     exporter.export_conmap(d, conmap)
     s = scvdf.toDict(scconfig.toVDF(conmap))
-    pprint.pprint(s, width=180)
+#    pprint.pprint(s, width=180)
 
 
   def test_sample1 (self):
