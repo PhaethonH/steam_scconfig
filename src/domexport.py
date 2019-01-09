@@ -210,7 +210,8 @@ element_name of None to iterate through all children as (element_name,element_co
       names = [ a.get('name',None) for a in self.actions ]
       (actcmd, actname) = evcode
       try:
-        actid = names.index(actname)
+        # 1-based indexing.
+        actid = names.index(actname) + 1
       except ValueError:
         # Not found.  Incomplete maps.  Do not transit.
         return scconfig.EvgenFactory.make_empty()
