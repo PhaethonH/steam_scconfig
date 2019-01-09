@@ -1829,17 +1829,6 @@ class GroupSingleButton (GroupBase):
 class GroupSwitches (GroupBase):
   MODE = "switches"
 
-  BUTTON_ESCAPE = "button_escape"
-  BUTTON_MENU = "button_menu"
-  LEFT_BUMPER = "left_bumper"
-  RIGHT_BUMPER = "right_bumper"
-  BUTTON_BACK_LEFT = "button_back_left"
-  BUTTON_BACK_RIGHT = "button_back_right"
-  LEFT_GRIP = BUTTON_BACK_LEFT
-  RIGHT_GRIP = BUTTON_BACK_RIGHT
-  LEFT_CLICK = "left_click"   # LT full pull
-  RIGHT_CLICK = "right_click" # RT full pull
-
   # TODO: find out what may go in here.
   class Inputs (GroupBase.Inputs):
     _ALLOW = True
@@ -1851,12 +1840,14 @@ class GroupSwitches (GroupBase):
     BUTTON_BACK_RIGHT = "button_back_right"
     LEFT_GRIP = BUTTON_BACK_LEFT
     RIGHT_GRIP = BUTTON_BACK_RIGHT
+    ALWAYS_ON = "always_on_action"
     bk = GroupBase.Inputs._alias(BUTTON_ESCAPE)
     st = GroupBase.Inputs._alias(BUTTON_MENU)
     lb = GroupBase.Inputs._alias(LEFT_BUMPER)
     rb = GroupBase.Inputs._alias(RIGHT_BUMPER)
     lg = GroupBase.Inputs._alias(BUTTON_BACK_LEFT)
     rg = GroupBase.Inputs._alias(BUTTON_BACK_RIGHT)
+    inf = GroupBase.Inputs._alias(ALWAYS_ON)
 
 
 

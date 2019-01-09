@@ -318,6 +318,7 @@ class TestDomExporter (unittest.TestCase):
       {
         "name": "Level3",
         "DP.u": "(A)",
+        "INF": "<Left_Alt>",
       }
       ],
     "shiftmap": {
@@ -350,6 +351,7 @@ class TestDomExporter (unittest.TestCase):
     conmap = scconfig.Mapping()
     exporter.export_conmap(d, conmap)
     s = scvdf.toDict(scconfig.toVDF(conmap))
+    self.assertTrue(any([ 'always_on_action' in x['inputs'] for x in s['group'] ]))
 #    pprint.pprint(s, width=180)
 
 

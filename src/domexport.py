@@ -329,6 +329,7 @@ element_name of None to iterate through all children as (element_name,element_co
       'RB': scconfig.GroupSwitches.Inputs.RIGHT_BUMPER,
       'LG': scconfig.GroupSwitches.Inputs.BUTTON_BACK_LEFT,
       'RG': scconfig.GroupSwitches.Inputs.BUTTON_BACK_RIGHT,
+      'INF': scconfig.GroupSwitches.Inputs.ALWAYS_ON,
 
       '1': scconfig.GroupSwitches.Inputs.BUTTON_ESCAPE,
       '2': scconfig.GroupSwitches.Inputs.LEFT_BUMPER,
@@ -562,6 +563,7 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
     "RB": ("SW", "RB"),
     "LG": ("SW", "LG"),
     "RG": ("SW", "RG"),
+    "INF": ("SW", "INF"),
     "LS": ("LJ", "c"),
     "RS": ("RJ", "c"),
     }
@@ -625,7 +627,7 @@ shorthand
       return 'four_buttons'
     if any(['c' in x, 'o' in x]):
       return 'joystick_move'
-    if x in ('BK', 'ST', 'LB', 'RB', 'LG', 'RG'):
+    if x in ('BK', 'ST', 'LB', 'RB', 'LG', 'RG', 'INF'):
       return 'switches'
 
     def intOrNegOne(z):
