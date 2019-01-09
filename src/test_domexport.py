@@ -165,6 +165,24 @@ class TestDomExporter (unittest.TestCase):
       d_action1
     ],
   }
+  d_config2 = {
+    "title": "Sample config",
+    "author": "(Anonymous)",
+    "action": [
+      d_action1,
+      {
+        "name": "Flight",
+        "layer": [
+          { "name": "Flight",
+            "BQ.s": "(A)",
+            },
+          { "name": "MoreFlight",
+            "BQ.s": "(DDN)",
+            },
+          ],
+      }
+    ],
+  }
   def test_export_conmap (self):
     exporter = domexport.ScconfigExporter(None)
     d = self.d_config1
@@ -175,6 +193,21 @@ class TestDomExporter (unittest.TestCase):
     self.assertEqual(conmap.actions[0].title, "Default")
     self.assertEqual(conmap.layers[0].title, "Level2")
     self.assertNotEqual(conmap.creator, '')
+
+    exporter = domexport.ScconfigExporter(None)
+    d = self.d_config2
+    conmap = scconfig.Mapping()
+    cfg = exporter.export_conmap(d, conmap)
+    s = scconfig.toVDF(cfg)
+    pprint.pprint(s)
+    self.assertEqual(len(conmap.actions), 2)
+    self.assertEqual(conmap.actions[0].title, "Default")
+    self.assertEqual(conmap.actions[1].title, "Flight")
+    self.assertEqual(len(s['actions']), 2)
+    print("keys {}".format(s['actions'].keys()))
+    self.assertEqual(s['actions']["Default"]["title"], "Default")
+    self.assertEqual(s['actions']["Preset_1000001"]["title"], "Flight")
+    pprint.pprint(s)
 
   def test_export_config (self):
     exporter = domexport.ScconfigExporter(None)

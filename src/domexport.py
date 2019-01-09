@@ -810,7 +810,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
     if presetid == 0:
       presetkey = 'Default'
     else:
-      presetkey = "Preset_{:07d}".format(presetid)
+      presetkey = "Preset_{:07d}".format(presetid + 1000000)
     presetobj = conmap.add_preset(presetid, presetkey)
 
     def export_group (clusterspec, grpmode, clustersym, active, modeshift):
@@ -893,7 +893,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
     if layeridx > 0:
       conmap.add_action_layer(presetkey, layer_name, parent_set_name=parent_name)
     else:
-      if layer_name is None or len(conmap.actions) == 0:
+      if (layer_name is None) or (len(conmap.actions) == 0):
         layer_name = 'Default'
       conmap.add_action_set(presetkey, layer_name)
     return layer_name
@@ -1081,7 +1081,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       lyrid += 1
     return paralayers
 
-  def export_action (self, dom_node, conmap):
+  def export_action (self, dom_node, conmap, phase=0):
     r"""
 {
   "name":
@@ -1110,7 +1110,21 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     lyrid = 0
     basename = None
     for lyrspec in self.iter_children(dom_node, "layer"):
-      lyrname = self.export_layer(lyrspec, conmap, lyrid, parent_name=basename)
+      if phase == 0:
+        if lyrid == 0:
+          # Export only base layer.
+          lyrname = self.export_layer(lyrspec, conmap, lyrid, parent_name=basename)
+      elif phase == 1:
+        if lyrid == 0:
+          lyrname = None
+          for exported_action in conmap.actions:
+            if exported_action.title == lyrspec["name"]:
+              lyrname = exported_action.index
+        elif lyrid != 0:
+          # Export non-base layers.
+          lyrname = self.export_layer(lyrspec, conmap, lyrid, parent_name=basename)
+      if phase == 0:  # Phase 1: only base layer.
+        break
       if lyrid == 0:
         basename = lyrname
       lyrid += 1
@@ -1180,7 +1194,9 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     self.actions.extend(self.actionlayers)
     extactions = [ {"layer":x} for x in paractions ]    # Convert to dom-like.
     for actdesc in extactions:
-      self.export_action(actdesc, conmap)
+      self.export_action(actdesc, conmap, phase=0)
+    for actdesc in extactions:
+      self.export_action(actdesc, conmap, phase=1)
 
     conmap.revision = revision
     conmap.title = title
