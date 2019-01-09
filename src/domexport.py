@@ -6,6 +6,7 @@
 import scconfig, scvdf
 import re
 import pprint
+import sys, yaml
 
 def _stringlike (x):
   try: return x.isalpha
@@ -504,13 +505,21 @@ element_name of None to iterate through all children as (element_name,element_co
 
 
   def normalize_cluster (self, dom_node):
-    """Resolve shorthand notations.
+    """Resolve shorthand notations for components.
 
 Returns a cluster DOM which is a copy of the original but with shorthand notation resolved.
 """
     print("normalizing cluster {}".format(dom_node))
     extcluster = {'component':[]}
 
+    if dom_node in ("LJ", "(LJ)"):
+      extcluster["mode"] = "jsmove"
+      return extcluster
+    if dom_node in ("RJ", "(RJ)"):
+      extcluster["mode"] = "jscam"
+      return extcluster
+
+    scanned_syms = []
     for k,v in self.iter_children(dom_node, None):
       cluster_sym, component_sym = None, None
       if k in self.UNIQUE_COMPONENT_SYMS:
@@ -532,12 +541,16 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
               "sym": component_sym,
               "synthesis": syntheses
             }
+          scanned_syms.append(component_sym)
           extcluster['component'].append(compspec)
       else:
         if k == 'component':
           extcluster[k].extend(v)
         else:
           extcluster[k] = v
+    if not 'mode' in extcluster:
+      mode = self.auto_mode(scanned_syms)
+      extcluster['mode'] = mode
 
     return extcluster
 
@@ -679,6 +692,30 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
       elif k in self.UNIQUE_COMPONENT_SYMS:   # "POLE(UNIQUE)"
         cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
         print(" UNIQUEIFIED {} => {} . {}".format(k, cluster_sym, component_sym))
+      elif k in self.GRPSRC_MAP:
+        print(" SHORTHAND CLUSTERSYM {} => {}".format(k, cluster_sym))
+        component_sym = None
+        print("using v = {!r}".format(v))
+#        v['sym'] = k
+#        v['mode'] = 'dpad'  # TODO: automode
+        vv = self.normalize_cluster(v)
+        vv['sym'] = k
+        print("  normalized as {}".format(vv))
+
+        if cluster_sym in paraclusters: # reuse cluster.
+          cluster = paraclusters[cluster_sym]
+          cluster['component'].extend(vv['component'])
+        else: # create cluster.
+          cluster = vv
+          paraclusters[cluster_sym] = vv
+          # TODO update paralayer?
+          print("* CREATE CLUSTER {}".format(cluster_sym))
+          paralayer['cluster'].append(cluster)
+
+#        paralayer['cluster'].append(vv)
+
+        continue
+
       # TODO: expand on a parallel struct.
       if cluster_sym and component_sym:
         # Find cluster.
@@ -727,6 +764,8 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
           paralayer[k].extend(vv)
         else:
           paralayer[k] = v
+#      print("cluster list = {}".format(paralayer['cluster']))
+      pprint.pprint(paralayer['cluster'])
       print("now paralayer <- {}".format([x['sym'] for x in paralayer['cluster']]))
 
 #    for clustersym, clusterspec in paraclusters.items():
@@ -743,7 +782,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
 #      modeshift = False
 #      paralayer['cluster'].append(clusterspec)
 
-    print("paralayer = {}".format([x['sym'] for x in paralayer['cluster']]))
+#    print("paralayer = {}".format([x['sym'] for x in paralayer['cluster']]))
     #print("  = {}".format(paralayer))
     print("  = ")
     pprint.pprint(paralayer, width=180)
@@ -866,10 +905,12 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     # Copy extant layers.
     lyrid = 0
     for lyr in self.iter_children(dom_node, "layer"):
-#      postlyr = self.normalize_layer(lyr, conmap, lyrid)
+      print("feeding normalizer {}".format(lyr))
+      postlyr = self.normalize_layer(lyr, conmap, lyrid)
 #      extlayers.append(postlyr)
 #      lyrid += 1
-      extlayers.append(lyr)
+      extlayers.append(postlyr)
+    print("raw layers = ", extlayers)
 
     maxshift = 0
     overlays = {}   # map int => list of overlay names
@@ -1010,7 +1051,11 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       for shiftsym,bitmask in shifters.items():
         shiftlayer[shiftsym] = make_shifter_bind(n, bitmask)
 
+      print("* preshiftlayer = ",end='')
+      pprint.pprint(preshiftlayer)
       normalized_preshiftlayer = self.normalize_layer(preshiftlayer, conmap)
+      print("*  normalized = ",end='')
+      pprint.pprint(normalized_preshiftlayer)
       normalized_shiftlayer = self.normalize_layer(shiftlayer, conmap)
       extlayers.append(normalized_preshiftlayer)
       extlayers.append(normalized_shiftlayer)
@@ -1020,6 +1065,9 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
   def prepare_action (self, dom_node, conmap):
     # Update layers (self.actionsets, self.actionlayers) with shiftmap.
     normlayer = self.normalize_layer(dom_node, conmap)
+    print("*normalizing {}".format(dom_node))
+    print("* using normalized layer {}", end='')
+    pprint.pprint(normlayer)
     paralayers = self.prepare_shifters(normlayer, conmap)
     lyrid = 0
     for lyrspec in paralayers:
@@ -1121,7 +1169,9 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     paractions = []
     for actdesc in self.iter_children(dom_node, "action"):
       extlayers = self.prepare_action(actdesc, conmap)
-      print("processed exlayers = {}".format(extlayers))
+#      print("processed exlayers = {}".format(extlayers))
+      print("processed exlayers = ", end='')
+      pprint.pprint(extlayers)
       paractions.append(extlayers)
     self.actions.extend(self.actionsets)
     self.actions.extend(self.actionlayers)
@@ -1147,4 +1197,14 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
 
     return cfg
 
+
+
+if __name__ == "__main__":
+  with sys.stdin as f:
+    d_yaml = yaml.load(f)
+  exporter = ScconfigExporter(None)
+  cfg = exporter.export_config(d_yaml)
+  vdf = scconfig.toVDF(cfg)
+  with sys.stdout as f:
+    scvdf.dump(vdf, f)
 

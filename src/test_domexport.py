@@ -104,7 +104,7 @@ class TestDomExporter (unittest.TestCase):
 
   d_layer1 = {
     "name": "Default Layer",
-    "cluster": d_cluster1,
+    "cluster": [ d_cluster1 ],
   }
   d_layer2 = {
     "name": "Level2",
@@ -209,7 +209,10 @@ class TestDomExporter (unittest.TestCase):
     ],
   }
   s_cluster2 = {
-    "u": "(BK)"
+    "u": "(DUP)",
+    "d": "(DDN)",
+    "l": "(DLT)",
+    "r": "(DRT)",
   }
   def test_shorthand_cluster (self):
     exporter = domexport.ScconfigExporter(None)
@@ -229,6 +232,7 @@ class TestDomExporter (unittest.TestCase):
     grp = scconfig.GroupFactory.make(grpid, 'dpad')
     self.assertIsNot(grp, None)
     d2 = exporter.normalize_cluster(d)
+    pprint.pprint(d2)
     exporter.export_cluster(d2, grp)
     self.assertEqual(grp.mode, 'dpad')
     self.assertTrue(grp.inputs['dpad_north'])
@@ -241,7 +245,11 @@ class TestDomExporter (unittest.TestCase):
     "DP.d": "(DDN)",
     "DP.l": "(DLT)",
     "DP.r": "(DRT)",
-    "BQ.s": "(A)",
+    "SW.LB": "(LB)",
+    "BQ": {
+      "s": "(A)",
+      "w": "(X)",
+    }
   }
   def test_shorthand_layer (self):
     exporter = domexport.ScconfigExporter(None)
@@ -249,8 +257,7 @@ class TestDomExporter (unittest.TestCase):
     conmap = scconfig.Mapping()
     temp = exporter.normalize_layer(d, conmap)
     exporter.export_layer(temp, conmap)
-    print(conmap.presets)
-    self.assertEqual(len(conmap.presets[0].gsb), 3)
+    self.assertEqual(len(conmap.presets[0].gsb), 4)
     self.assertTrue(conmap.presets[0].gsb['0'])
     self.assertTrue(conmap.presets[0].gsb['1'])
     self.assertTrue(conmap.presets[0].gsb['2'])
