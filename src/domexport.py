@@ -1014,12 +1014,13 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       normalized_shiftlayer = self.normalize_layer(shiftlayer, conmap)
       extlayers.append(normalized_preshiftlayer)
       extlayers.append(normalized_shiftlayer)
-#    print("extlayers = {}".format(extlayers))
+    print("extlayers = {}".format(extlayers))
     return extlayers
 
   def prepare_action (self, dom_node, conmap):
     # Update layers (self.actionsets, self.actionlayers) with shiftmap.
-    paralayers = self.prepare_shifters(dom_node, conmap)
+    normlayer = self.normalize_layer(dom_node, conmap)
+    paralayers = self.prepare_shifters(normlayer, conmap)
     lyrid = 0
     for lyrspec in paralayers:
       if lyrid == 0:
@@ -1054,6 +1055,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
   }
 }
 """
+    print("exporting action {}".format(dom_node))
     lyrid = 0
     basename = None
     for lyrspec in self.iter_children(dom_node, "layer"):
@@ -1119,6 +1121,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     paractions = []
     for actdesc in self.iter_children(dom_node, "action"):
       extlayers = self.prepare_action(actdesc, conmap)
+      print("processed exlayers = {}".format(extlayers))
       paractions.append(extlayers)
     self.actions.extend(self.actionsets)
     self.actions.extend(self.actionlayers)
