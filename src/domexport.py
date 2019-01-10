@@ -888,8 +888,8 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
           # "hermit": { "Y": "..." }
           # shorthand form.
           print("hermit go")
-          for srcsym, evlistspec in self.iter_children(srcsym, None):
-            evlist = expand_shorthand_syntheses(evlistspec)
+          for srcsym, evlistspec in self.iter_children(hermit, None):
+            evlist = self.expand_shorthand_syntheses(evlistspec)
             if '.' in srcsym:
               cluster_sym, pole_sym = srcsym.split('.', 1)
             elif srcsym in self.UNIQUE_COMPONENT_SYMS:

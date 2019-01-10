@@ -362,6 +362,9 @@ class TestDomExporter (unittest.TestCase):
         1: [ "Level2" ]
       },
     },
+    "hermit": {
+      "LB": "-<Return>",
+    },
   }
   d_shifting2 = {
     "title": "Sample config",
