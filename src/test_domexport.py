@@ -385,7 +385,7 @@ class TestDomExporter (unittest.TestCase):
     exporter.export_conmap(d, conmap)
     s = scvdf.toDict(scconfig.toVDF(conmap))
     self.assertTrue(any([ 'always_on_action' in x['inputs'] for x in s['group'] ]))
-#    pprint.pprint(s, width=180)
+    pprint.pprint(s, width=180)
 
 
   def test_sample1 (self):
