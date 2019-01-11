@@ -4,10 +4,10 @@ aliases:
   # Flight
   ToggleCursorFlightMode: <Space>
   ToggleClassicFlightMode: <Left_Shift><N>
-  PitchUp: <Down>
-  PitchDown: <Up>
-  YawLeft: <Left>
-  YawRight: <Right>
+  PitchUp: <Down_Arrow>
+  PitchDown: <Up_Arrow>
+  YawLeft: <Left_Arrow>
+  YawRight: <Right_Arrow>
   RollLeft: <Q>
   RollRight: <E>
   Accelerate: <X>
@@ -119,10 +119,10 @@ aliases:
   # Menus
   CancelEscape: <Escape>
   SelectOption: <Return>
-  MenuCursorUp: <Up>
-  MenuCursorDown: <Down>
-  MenuCursorLeft: <Left>
-  MenuCursorRight: <Right>
+  MenuCursorUp: <Up_Arrow>
+  MenuCursorDown: <Down_Arrow>
+  MenuCursorLeft: <Left_Arrow>
+  MenuCursorRight: <Right_Arrow>
   ScrollUp: "[u]"
   ScrollDown: "[d]"
   ScrollPageUp: <Page_Up>
