@@ -327,18 +327,18 @@ element_name of None to iterate through all children as (element_name,element_co
       't': scconfig.GroupSingleButton.Inputs.TOUCH,
     },
     scconfig.GroupSwitches.MODE: {
-      'BK': scconfig.GroupSwitches.Inputs.BUTTON_ESCAPE,
-      'ST': scconfig.GroupSwitches.Inputs.BUTTON_MENU,
+      'BK': scconfig.GroupSwitches.Inputs.BUTTON_MENU,
+      'ST': scconfig.GroupSwitches.Inputs.BUTTON_ESCAPE,
       'LB': scconfig.GroupSwitches.Inputs.LEFT_BUMPER,
       'RB': scconfig.GroupSwitches.Inputs.RIGHT_BUMPER,
       'LG': scconfig.GroupSwitches.Inputs.BUTTON_BACK_LEFT,
       'RG': scconfig.GroupSwitches.Inputs.BUTTON_BACK_RIGHT,
       'INF': scconfig.GroupSwitches.Inputs.ALWAYS_ON,
 
-      '1': scconfig.GroupSwitches.Inputs.BUTTON_ESCAPE,
+      '1': scconfig.GroupSwitches.Inputs.BUTTON_MENU,
       '2': scconfig.GroupSwitches.Inputs.LEFT_BUMPER,
       '3': scconfig.GroupSwitches.Inputs.BUTTON_BACK_LEFT,
-      '4': scconfig.GroupSwitches.Inputs.BUTTON_MENU,
+      '4': scconfig.GroupSwitches.Inputs.BUTTON_ESCAPE,
       '5': scconfig.GroupSwitches.Inputs.RIGHT_BUMPER,
       '6': scconfig.GroupSwitches.Inputs.BUTTON_BACK_RIGHT,
     },
@@ -883,6 +883,8 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     overlays = {}   # map int => list of overlay names
     shifters = {}   # map srcsym => bitmask:int
     hermits = {}    # map srcsym => evlist
+    sanity = None   # Sanity bind.
+    sanitizeable = [] # List of layer names involved with sanitization.
 
     # Collect shifters info.
     for shiftmap in self.iter_children(dom_node, "shiftmap"):
@@ -915,6 +917,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
           accum = []
           for layername in self.iter_children(overlay, "layer"):
             accum.append(layername)
+            sanitizeable.append(layername)
           overlays[level] = accum
         else:
           # "overlay": { "N": [ ... ] }
@@ -923,6 +926,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
             accum = []
             for layername in layernames:
               accum.append(layername)
+              sanitizeable.append(layername)
             overlays[level] = accum
 
       for hermit in self.iter_children(shiftmap, "hermit"):
@@ -936,6 +940,10 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
           # shorthand form.
           for lvl, evlistspec in self.iter_children(hermit, None):
             hermits[lvl] = evlistspec
+
+      sanity = self.get_domattr(shiftmap, "sanity")
+#      print("PEND SANITY {}".format(sanity))
+
       break
 
     def make_shifter_bind (from_level, bitmask, overlays, hermits):
@@ -1062,9 +1070,21 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         # Conditionally generate Preshift layer.
         normalized_preshiftlayer = self.normalize_layer(preshiftlayer, conmap)
         extlayers.append(normalized_preshiftlayer)
+        sanitizeable.append(preshiftlayer['name'])
       # Generate Shift layer.
       normalized_shiftlayer = self.normalize_layer(shiftlayer, conmap)
       extlayers.append(normalized_shiftlayer)
+      sanitizeable.append(shiftlayer['name'])
+
+    # Establish sanity bind.
+    if sanity:
+      sanitizeable = [ "{{overlay,peel,{}}}".format(x) for x in sanitizeable ]
+      sanitizeable.append("#sanity")
+      if sanitizeable:
+        cl,po = self.normalize_srcsym(sanity)
+        sanitizer = self.expand_shorthand_syntheses("".join(sanitizeable))
+        automode = self.auto_mode(po)
+        self.extend_layer_cluster_pole(extlayers[0], cl, po, sanitizer, automode)
     return extlayers
 
   def prepare_action (self, dom_node, conmap):
