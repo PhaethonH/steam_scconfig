@@ -218,6 +218,8 @@ element_name of None to iterate through all children as (element_name,element_co
       else:
         return scconfig.EvgenFactory.make_overlay(actcmd, str(actid), "0", "0")
       #return scconfig.EvgenFactory.make_overlay("apply", "-1", '0', '0')
+    elif evtype in ('empty',):
+      return scconfig.EvgenFactory.make_empty()
     return None
 
   def export_synthesis (self, dom_node, inputobj):
