@@ -819,6 +819,51 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
       cluster_sym, pole_sym = None, srcsymspec
     return (cluster_sym, pole_sym)
 
+  def get_layer_cluster (self, lyr, clustersym):
+    if not 'cluster' in lyr:
+      return None
+    for probe in lyr['cluster']:
+      if probe['sym'] == clustersym:
+        return probe
+    return None
+  def pave_layer_cluster (self, lyr, clustersym, clustermode=None):
+    if not 'cluster' in lyr:
+      lyr['cluster'] = []
+    if not any([ x.get('sym',None) == clustersym  for x in lyr['cluster'] ]):
+      clusterspec = {
+        'mode': clustermode,
+        'sym': clustersym,
+        'component': []
+        }
+      lyr['cluster'].append(clusterspec)
+    return lyr
+  def get_layer_cluster_pole (self, lyr, clustersym, polesym):
+    cluster = self.get_layer_cluster(lyr, clustersym)
+    if cluster:
+      if not 'component' in cluster:
+        return None
+      for probe in cluster['component']:
+        if probe.get('sym',None) == polesym:
+          return (cluster, probe)
+      else:
+        return (cluster, None)
+    return (None, None)
+  def pave_layer_cluster_pole (self, lyr, clustersym, polesym, clustermode=None):
+    self.pave_layer_cluster(lyr, clustersym, clustermode)
+    (cluster, pole) = self.get_layer_cluster_pole(lyr, clustersym, polesym)
+    if not pole:
+      polespec = {
+        "sym": polesym,
+        "synthesis": [],
+        }
+      cluster['component'].append(polespec)
+    return lyr
+  def extend_layer_cluster_pole (self, lyr, clustersym, polesym, syntheses, clustermode=None):
+    self.pave_layer_cluster_pole(lyr, clustersym, polesym, clustermode)
+    (cluster, pole) = self.get_layer_cluster_pole(lyr, clustersym, polesym)
+    pole['synthesis'].extend(syntheses)
+    return lyr
+
   def prepare_shifters (self, dom_node, conmap):
     r"""
 Prepare an alternate list of action layers with shifters incorporated.
@@ -887,46 +932,54 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         else:
           # "hermit": { "Y": "..." }
           # shorthand form.
-          print("hermit go")
-          for srcsym, evlistspec in self.iter_children(hermit, None):
-            evlist = self.expand_shorthand_syntheses(evlistspec)
-            if '.' in srcsym:
-              cluster_sym, pole_sym = srcsym.split('.', 1)
-            elif srcsym in self.UNIQUE_COMPONENT_SYMS:
-              cluster_sym, pole_sym = self.UNIQUE_COMPONENT_SYMS[srcsym]
-            # TODO: else fail?
-            #hermits[(cluster_sym, pole_sym)] = evlist
-            hermits[(cluster_sym, pole_sym)] = evlistspec
+#          for srcsym, evlistspec in self.iter_children(hermit, None):
+#            evlist = self.expand_shorthand_syntheses(evlistspec)
+#            if '.' in srcsym:
+#              cluster_sym, pole_sym = srcsym.split('.', 1)
+#            elif srcsym in self.UNIQUE_COMPONENT_SYMS:
+#              cluster_sym, pole_sym = self.UNIQUE_COMPONENT_SYMS[srcsym]
+#            # TODO: else fail?
+#            #hermits[(cluster_sym, pole_sym)] = evlist
+#            hermits[(cluster_sym, pole_sym)] = evlistspec
+          for lvl, evlistspec in self.iter_children(hermit, None):
+            hermits[lvl] = evlistspec
 
       break
 
-    baselayer = None
-    for lyr in self.iter_children(dom_node, "layer"):
-      baselayer = lyr
-      break
-    # TODO: handle no-layers case.
-
-    def make_shifter_bind (from_level, bitmask, hermitspec=None):
+    def make_shifter_bind (from_level, bitmask, overlays, hermits):
       pending = []
-      if hermitspec is not None:
-        print("* prep hermitspec {!r}".format(hermitspec))
-        pending.append(hermitspec)
       next_level = from_level ^ bitmask
       # Apply next level.
       if next_level & bitmask:
         # on key press.
         pending.insert(0, "+")
+
+#        if next_level in overlays:
+#          overlaying = [ "{{overlay,apply,{}}}".format(ov) for ov in overlays[next_level] ]
+#          overlaying = "".join(overlaying)
+#          pending.append(overlaying)
+
         if next_level != 0:   # can't apply 0 - achieved by removing all layers.
           pending.append("{{overlay,apply,Preshift_{}}}".format(next_level))
 #          pending.append("#+Preshift_{}".format(next_level))
       else:
         # on key release.
         pending.insert(0, "-")
+
+        if next_level in overlays:
+          overlaying = [ "{{overlay,apply,{}}}".format(ov) for ov in overlays[next_level] ]
+          overlaying = "".join(overlaying)
+          pending.append(overlaying)
+
         if next_level != 0:   # can't apply 0 - achieved by removing all layers.
           pending.append("{{overlay,apply,Shift_{}}}".format(next_level))
 #          pending.append("#+Shift_{}".format(next_level))
       # Remove current level.
       if from_level != 0:   # can't remove 0 (base).
+        if from_level in overlays:
+          overlaying = [ "{{overlay,peel,{}}}".format(ov) for ov in overlays[from_level] ]
+          overlaying = "".join(overlaying)
+          pending.append(overlaying)
         pending.append("{{overlay,peel,Preshift_{}}}".format(from_level))
 #        pending.append("#-Preshift_{}".format(next_level))
         pending.append("{{overlay,peel,Shift_{}}}".format(from_level))
@@ -934,16 +987,39 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       pending.append("#goto#{}".format(next_level))
       return "".join(pending)
 
+    baselayer = None
+#    for lyr in self.iter_children(dom_node, "layer"):
+#      baselayer = lyr
+#      break
+    baselayer = extlayers[0]
+    # TODO: handle no-layers case.
     # Set up shift level 0
+
     for shiftsym,bitmask in shifters.items():
-      baselayer[shiftsym] = make_shifter_bind(0, bitmask)
+#      print("shiftsym,bitmask = {},{}".format(shiftsym,bitmask))
+      #baselayer[shiftsym] = make_shifter_bind(0, bitmask)
+      shiftspec = make_shifter_bind(0, bitmask, overlays, hermits)
+      cl,po = self.normalize_srcsym(shiftsym)
+      automode = self.auto_mode(po)
+      self.pave_layer_cluster_pole(baselayer, cl, po, automode)
+#      print(" ({},{}) = spec = {}".format(cl, po, shiftspec))
+      syntheses = self.expand_shorthand_syntheses(shiftspec)
+#      print("extending base {},{}={}".format(cl,po,syntheses))
+      self.extend_layer_cluster_pole(baselayer, cl, po, syntheses, automode)
+#    for shiftsym,evspec in shifters.items():
+#      syntheses = evspec
+#      cl,po = self.normalize_srcsym(shiftsym)
+#      print("evlistspec({}) = {},{}:{}".format(shiftsym,cl,po,evspec))
+##      self.extend_layer_cluster_pole(extlayers[0],cl,po,syntheses)
+#    print("with baselayer = {}".format(baselayer))
 
     # Preshift: find all clusters involved with shift.
     for n in range(1, maxshift+1):
       # for shift level n...
       preclusters = set()   # Set of clusters involved with this preshifter.
       for overlayname in overlays.get(n, []):
-        for lyr in self.iter_children(dom_node, "layer"):
+#        for lyr in self.iter_children(dom_node, "layer"):
+        for lyr in extlayers:
           if lyr.get("name", None) == overlayname:
             for clusterdef in lyr.get("cluster", []):
               preclusters.add(clusterdef["sym"])
@@ -953,17 +1029,37 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         "name": "Preshift_{}".format(n),
         "cluster": [],
         }
+#      if n in hermits:
+#        hermit_evlistspec = hermits[n]
+##        print("hermit evlistspec = {}".format(hermit_evlistspec))
+#        #preshiftlayer[shiftsym] = make_shifter_bind(n, bitmask, hermit_evlistspec)
+#        syntheses = self.expand_shorthand_syntheses(hermit_evlistspec)
+#        self.extend_layer_cluster_pole(preshiftlayer, cl, po, syntheses, automode)
+      engagespec = None
+      if n in overlays:
+        engagespec = [ "{{overlay,apply,{}}}".format(ov) for ov in overlays[n] ]
+        engagespec = "".join(engagespec)
+
       for shiftsym,bitmask in shifters.items():
         cl,po = self.normalize_srcsym(shiftsym,None)
-        print("preshift seek ({},{}) within {}".format(cl,po,hermits))
-        if (cl,po) in hermits:
-          hermit_evlistspec = hermits[(cl,po)]
-        else:
-          hermit_evlistspec = None
-        preshiftlayer[shiftsym] = make_shifter_bind(n, bitmask, hermit_evlistspec)
+        automode = self.auto_mode(po)
+        shifterspec = make_shifter_bind(n, bitmask, overlays, hermits)
+        syntheses = self.expand_shorthand_syntheses(shifterspec)
+        if (n in hermits) and (n & bitmask) == bitmask:
+          syntheses.extend(self.expand_shorthand_syntheses(hermits[n]))
+        self.extend_layer_cluster_pole(preshiftlayer, cl, po,syntheses, automode)
+#      for shiftsym,bitmask in shifters.items():
+#        cl,po = self.normalize_srcsym(shiftsym,None)
+#        print("preshift seek ({},{}) within {}".format(cl,po,hermits))
+#        if (cl,po) in hermits:
+#          hermit_evlistspec = hermits[(cl,po)]
+#        else:
+#          hermit_evlistspec = None
+#        preshiftlayer[shiftsym] = make_shifter_bind(n, bitmask, hermit_evlistspec)
+
       advbinddef = [ {
         "actsig": 'start',
-        "event": [ { "evtype": "overlay", "evcode": ("apply", "Shift_{}".format(n)) } ],
+        "event": [ { "evtype": "overlay", "evcode": ("apply", "Shift_{}".format(n)) } ]  +  [ {"evtype":"overlay", "evcode":{"apply",ov}} for ov in overlays.get(n,[]) ],
         "label": "advance Shift_{}".format(n),
         } ]
       for clsym in sorted(preclusters):
@@ -984,7 +1080,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         "cluster": [],
         }
       for shiftsym,bitmask in shifters.items():
-        shiftlayer[shiftsym] = make_shifter_bind(n, bitmask)
+        shiftlayer[shiftsym] = make_shifter_bind(n, bitmask, hermits, overlays)
 
       normalized_preshiftlayer = self.normalize_layer(preshiftlayer, conmap)
       normalized_shiftlayer = self.normalize_layer(shiftlayer, conmap)

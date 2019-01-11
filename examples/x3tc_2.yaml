@@ -218,4 +218,6 @@ action:
       1: [ Commerce1 ]
       4: [ Combat1 ]
       5: [ Command1 ]
+  hermit:
+    1: -<RETURN>
 

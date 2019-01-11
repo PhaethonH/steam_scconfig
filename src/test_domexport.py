@@ -363,7 +363,7 @@ class TestDomExporter (unittest.TestCase):
       },
     },
     "hermit": {
-      "LB": "-<Return>",
+      1: "-<Return>",
     },
   }
   d_shifting2 = {
