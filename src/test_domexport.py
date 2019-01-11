@@ -152,7 +152,8 @@ class TestDomExporter (unittest.TestCase):
     exporter = domexport.ScconfigExporter(None)
     d = self.d_action1
     conmap = scconfig.Mapping()
-    exporter.export_action(d, conmap)
+    exporter.export_action(d, conmap, phase=0)
+    exporter.export_action(d, conmap, phase=1)
     self.assertEqual(len(conmap.actions), 1)
     self.assertEqual(len(conmap.layers), 1)
     self.assertEqual(conmap.actions[0].title, "Default")
@@ -199,15 +200,15 @@ class TestDomExporter (unittest.TestCase):
     conmap = scconfig.Mapping()
     cfg = exporter.export_conmap(d, conmap)
     s = scconfig.toVDF(cfg)
-    pprint.pprint(s)
+#    pprint.pprint(s)
     self.assertEqual(len(conmap.actions), 2)
     self.assertEqual(conmap.actions[0].title, "Default")
     self.assertEqual(conmap.actions[1].title, "Flight")
     self.assertEqual(len(s['actions']), 2)
-    print("keys {}".format(s['actions'].keys()))
+#    print("keys {}".format(s['actions'].keys()))
     self.assertEqual(s['actions']["Default"]["title"], "Default")
     self.assertEqual(s['actions']["Preset_1000001"]["title"], "Flight")
-    pprint.pprint(s)
+#    pprint.pprint(s)
 
   def test_export_config (self):
     exporter = domexport.ScconfigExporter(None)
@@ -388,7 +389,7 @@ class TestDomExporter (unittest.TestCase):
     exporter.export_conmap(d, conmap)
     s = scvdf.toDict(scconfig.toVDF(conmap))
     self.assertTrue(any([ 'always_on_action' in x['inputs'] for x in s['group'] ]))
-    pprint.pprint(s, width=180)
+#    pprint.pprint(s, width=180)
 
 
   def test_sample1 (self):
@@ -399,7 +400,7 @@ class TestDomExporter (unittest.TestCase):
     exporter.export_config(d_yaml, conmap)
     vdf = scconfig.toVDF(conmap)
     s = scvdf.toDict(vdf)
-    pprint.pprint(s, width=180)
+#    pprint.pprint(s, width=180)
 #    print(scvdf.dumps(vdf))
 
 
