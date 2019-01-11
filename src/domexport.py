@@ -951,6 +951,12 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
             pending.append("{{overlay,apply,Preshift_{}}}".format(next_level))
           else:
 #            print("forego to shift for {}".format(next_level))
+            overlaying = "".join([ "{{overlay,apply,{}}}".format(ov)  for ov in overlays.get(next_level,[]) ])
+            if overlaying:
+              pending.append(overlaying)
+              pending.append("#+overlays({})".format(next_level))
+              pending.append(" +")
+
             pending.append("{{overlay,apply,Shift_{}}}".format(next_level))
 #          pending.append("#+Preshift_{}".format(next_level))
       else:
@@ -960,7 +966,10 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         if next_level in overlays:
           overlaying = [ "{{overlay,apply,{}}}".format(ov) for ov in overlays[next_level] ]
           overlaying = "".join(overlaying)
-          pending.append(overlaying)
+          if overlaying:
+            pending.append(overlaying)
+            pending.append("#-overlays({})".format(next_level))
+            pending.append(" +")
 
         if next_level != 0:   # can't apply 0 - achieved by removing all layers.
           pending.append("{{overlay,apply,Shift_{}}}".format(next_level))
@@ -977,11 +986,11 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         pending.append("{{overlay,peel,Shift_{}}}".format(from_level))
 #        pending.append("#-Shift_{}".format(next_level))
       pending.append("#goto#{}".format(next_level))
-      return "".join(pending)
+      retval = "".join(pending)
+      return retval
 
     baselayer = extlayers[0]
     # TODO: handle no-layers case.
-
     # Set up shift level 0
     for shiftsym,bitmask in shifters.items():
       shiftspec = make_shifter_bind(0, bitmask, overlays, hermits)
@@ -1007,24 +1016,26 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         "name": "Preshift_{}".format(n),
         "cluster": [],
         }
-      engagespec = None
-      if n in overlays:
-        engagespec = [ "{{overlay,apply,{}}}".format(ov) for ov in overlays[n] ]
-        engagespec = "".join(engagespec)
-
       for shiftsym,bitmask in shifters.items():
         cl,po = self.normalize_srcsym(shiftsym,None)
         automode = self.auto_mode(po)
         shifterspec = make_shifter_bind(n, bitmask, overlays, hermits)
         syntheses = self.expand_shorthand_syntheses(shifterspec)
         if (n in hermits) and (n & bitmask) == bitmask:
-          syntheses.extend(self.expand_shorthand_syntheses(hermits[n]))
+          hermitspec = "{}#hermit({})".format(hermits[n], n)
+          syntheses.extend(self.expand_shorthand_syntheses(hermitspec))
         self.extend_layer_cluster_pole(preshiftlayer, cl, po,syntheses, automode)
 
+      # Generate Preshift's advancer binds for involve clusters.
       advbinddef = [ {
         "actsig": 'start',
-        "event": [ { "evtype": "overlay", "evcode": ("apply", "Shift_{}".format(n)) } ]  +  [ {"evtype":"overlay", "evcode":{"apply",ov}} for ov in overlays.get(n,[]) ],
+        "event": [ { "evtype": "overlay", "evcode": ("apply", "Shift_{}".format(n)) } ],
         "label": "advance Shift_{}".format(n),
+        },
+        {
+        "actsig": 'start',
+        "event": [ {"evtype":"overlay", "evcode":{"apply",ov}} for ov in overlays.get(n,[]) ],
+        "label": "+overlays({})".format(n),
         } ]
       for clsym in sorted(preclusters):
         cldef = { 
@@ -1047,8 +1058,10 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         shiftlayer[shiftsym] = make_shifter_bind(n, bitmask, overlays, hermits)
 
       if n in hermits:
+        # Conditionally generate Preshift layer.
         normalized_preshiftlayer = self.normalize_layer(preshiftlayer, conmap)
         extlayers.append(normalized_preshiftlayer)
+      # Generate Shift layer.
       normalized_shiftlayer = self.normalize_layer(shiftlayer, conmap)
       extlayers.append(normalized_shiftlayer)
     return extlayers

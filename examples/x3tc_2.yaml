@@ -200,6 +200,8 @@ action:
     BQ.e: $MatchSpeedToTarget
     BQ.s: <>
 
+  - name: Command1
+
   shifters:
     LB: hold 1
     RB: hold 4
