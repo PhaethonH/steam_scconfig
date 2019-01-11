@@ -932,15 +932,6 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         else:
           # "hermit": { "Y": "..." }
           # shorthand form.
-#          for srcsym, evlistspec in self.iter_children(hermit, None):
-#            evlist = self.expand_shorthand_syntheses(evlistspec)
-#            if '.' in srcsym:
-#              cluster_sym, pole_sym = srcsym.split('.', 1)
-#            elif srcsym in self.UNIQUE_COMPONENT_SYMS:
-#              cluster_sym, pole_sym = self.UNIQUE_COMPONENT_SYMS[srcsym]
-#            # TODO: else fail?
-#            #hermits[(cluster_sym, pole_sym)] = evlist
-#            hermits[(cluster_sym, pole_sym)] = evlistspec
           for lvl, evlistspec in self.iter_children(hermit, None):
             hermits[lvl] = evlistspec
 
@@ -954,13 +945,13 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         # on key press.
         pending.insert(0, "+")
 
-#        if next_level in overlays:
-#          overlaying = [ "{{overlay,apply,{}}}".format(ov) for ov in overlays[next_level] ]
-#          overlaying = "".join(overlaying)
-#          pending.append(overlaying)
-
         if next_level != 0:   # can't apply 0 - achieved by removing all layers.
-          pending.append("{{overlay,apply,Preshift_{}}}".format(next_level))
+          if next_level in hermits:
+#            print("preshift for {}".format(next_level))
+            pending.append("{{overlay,apply,Preshift_{}}}".format(next_level))
+          else:
+#            print("forego to shift for {}".format(next_level))
+            pending.append("{{overlay,apply,Shift_{}}}".format(next_level))
 #          pending.append("#+Preshift_{}".format(next_level))
       else:
         # on key release.
@@ -980,38 +971,25 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
           overlaying = [ "{{overlay,peel,{}}}".format(ov) for ov in overlays[from_level] ]
           overlaying = "".join(overlaying)
           pending.append(overlaying)
-        pending.append("{{overlay,peel,Preshift_{}}}".format(from_level))
+        if from_level in hermits:
+          pending.append("{{overlay,peel,Preshift_{}}}".format(from_level))
 #        pending.append("#-Preshift_{}".format(next_level))
         pending.append("{{overlay,peel,Shift_{}}}".format(from_level))
 #        pending.append("#-Shift_{}".format(next_level))
       pending.append("#goto#{}".format(next_level))
       return "".join(pending)
 
-    baselayer = None
-#    for lyr in self.iter_children(dom_node, "layer"):
-#      baselayer = lyr
-#      break
     baselayer = extlayers[0]
     # TODO: handle no-layers case.
-    # Set up shift level 0
 
+    # Set up shift level 0
     for shiftsym,bitmask in shifters.items():
-#      print("shiftsym,bitmask = {},{}".format(shiftsym,bitmask))
-      #baselayer[shiftsym] = make_shifter_bind(0, bitmask)
       shiftspec = make_shifter_bind(0, bitmask, overlays, hermits)
       cl,po = self.normalize_srcsym(shiftsym)
       automode = self.auto_mode(po)
       self.pave_layer_cluster_pole(baselayer, cl, po, automode)
-#      print(" ({},{}) = spec = {}".format(cl, po, shiftspec))
       syntheses = self.expand_shorthand_syntheses(shiftspec)
-#      print("extending base {},{}={}".format(cl,po,syntheses))
       self.extend_layer_cluster_pole(baselayer, cl, po, syntheses, automode)
-#    for shiftsym,evspec in shifters.items():
-#      syntheses = evspec
-#      cl,po = self.normalize_srcsym(shiftsym)
-#      print("evlistspec({}) = {},{}:{}".format(shiftsym,cl,po,evspec))
-##      self.extend_layer_cluster_pole(extlayers[0],cl,po,syntheses)
-#    print("with baselayer = {}".format(baselayer))
 
     # Preshift: find all clusters involved with shift.
     for n in range(1, maxshift+1):
@@ -1029,12 +1007,6 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         "name": "Preshift_{}".format(n),
         "cluster": [],
         }
-#      if n in hermits:
-#        hermit_evlistspec = hermits[n]
-##        print("hermit evlistspec = {}".format(hermit_evlistspec))
-#        #preshiftlayer[shiftsym] = make_shifter_bind(n, bitmask, hermit_evlistspec)
-#        syntheses = self.expand_shorthand_syntheses(hermit_evlistspec)
-#        self.extend_layer_cluster_pole(preshiftlayer, cl, po, syntheses, automode)
       engagespec = None
       if n in overlays:
         engagespec = [ "{{overlay,apply,{}}}".format(ov) for ov in overlays[n] ]
@@ -1048,14 +1020,6 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         if (n in hermits) and (n & bitmask) == bitmask:
           syntheses.extend(self.expand_shorthand_syntheses(hermits[n]))
         self.extend_layer_cluster_pole(preshiftlayer, cl, po,syntheses, automode)
-#      for shiftsym,bitmask in shifters.items():
-#        cl,po = self.normalize_srcsym(shiftsym,None)
-#        print("preshift seek ({},{}) within {}".format(cl,po,hermits))
-#        if (cl,po) in hermits:
-#          hermit_evlistspec = hermits[(cl,po)]
-#        else:
-#          hermit_evlistspec = None
-#        preshiftlayer[shiftsym] = make_shifter_bind(n, bitmask, hermit_evlistspec)
 
       advbinddef = [ {
         "actsig": 'start',
@@ -1080,11 +1044,12 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         "cluster": [],
         }
       for shiftsym,bitmask in shifters.items():
-        shiftlayer[shiftsym] = make_shifter_bind(n, bitmask, hermits, overlays)
+        shiftlayer[shiftsym] = make_shifter_bind(n, bitmask, overlays, hermits)
 
-      normalized_preshiftlayer = self.normalize_layer(preshiftlayer, conmap)
+      if n in hermits:
+        normalized_preshiftlayer = self.normalize_layer(preshiftlayer, conmap)
+        extlayers.append(normalized_preshiftlayer)
       normalized_shiftlayer = self.normalize_layer(shiftlayer, conmap)
-      extlayers.append(normalized_preshiftlayer)
       extlayers.append(normalized_shiftlayer)
     return extlayers
 
