@@ -361,9 +361,9 @@ class TestDomExporter (unittest.TestCase):
       "overlay": {
         1: [ "Level2" ]
       },
-    },
-    "hermit": {
-      1: "-<Return>",
+      "hermit": {
+        1: "-<Return>",
+      },
     },
   }
   d_shifting2 = {

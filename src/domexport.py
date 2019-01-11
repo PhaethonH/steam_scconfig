@@ -925,7 +925,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
               accum.append(layername)
             overlays[level] = accum
 
-      for hermit in self.iter_children(dom_node, "hermit"):
+      for hermit in self.iter_children(shiftmap, "hermit"):
         srcsym = self.get_domattr(hermit, "srcsym")
         if srcsym is not None:
           # "hermit": [ { "srcsym": "Y", "synthesis": [ ...  } ]
@@ -936,7 +936,6 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
           # shorthand form.
           for lvl, evlistspec in self.iter_children(hermit, None):
             hermits[lvl] = evlistspec
-
       break
 
     def make_shifter_bind (from_level, bitmask, overlays, hermits):
