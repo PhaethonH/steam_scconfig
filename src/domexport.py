@@ -281,6 +281,8 @@ element_name of None to iterate through all children as (element_name,element_co
       'l': scconfig.GroupDpad.Inputs.DPAD_WEST,
       'r': scconfig.GroupDpad.Inputs.DPAD_EAST,
       'd': scconfig.GroupDpad.Inputs.DPAD_SOUTH,
+      'c': scconfig.GroupDpad.Inputs.CLICK,
+      'o': scconfig.GroupDpad.Inputs.EDGE,
     },
     scconfig.GroupFourButtons.MODE: {
       'n': scconfig.GroupFourButtons.Inputs.BUTTON_Y,
@@ -1176,7 +1178,11 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
   def load_aliases (self, dom_node):
     if dom_node:
       for aliasname,aliasdesc in self.iter_children(dom_node, None):
-        v = aliasdesc
+#        v = aliasdesc
+        if not '#' in aliasdesc:
+          v = "{}#{}".format(aliasdesc, aliasname)
+        else:
+          v = aliasdesc
         self.aliases[aliasname] = v
     return True
 

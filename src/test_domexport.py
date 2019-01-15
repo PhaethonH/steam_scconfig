@@ -15,7 +15,8 @@ class TestDomExporter (unittest.TestCase):
     }
     ss = scconfig.ActivatorFullPress.Settings()
     exporter.export_frob(d, ss)
-    expect = "Settings([('toggle', True)])"
+#    expect = "Settings([('toggle', True)])"
+    expect = "Settings(toggle=True)"
     self.assertEqual(repr(ss), expect)
 
     d = {
@@ -25,7 +26,8 @@ class TestDomExporter (unittest.TestCase):
     }
     ss = scconfig.ActivatorFullPress.Settings()
     exporter.export_frob(d, ss)
-    expect = "Settings([('toggle', True), ('interruptable', True), ('hold_repeats', True), ('repeat_rate', 150)])"
+#    expect = "Settings([('toggle', True), ('interruptable', True), ('hold_repeats', True), ('repeat_rate', 150)])"
+    expect = "Settings(hold_repeats=True, interruptable=True, repeat_rate=150, toggle=True)"
     self.assertEqual(repr(ss), expect)
 
   def test_gen_ev (self):
