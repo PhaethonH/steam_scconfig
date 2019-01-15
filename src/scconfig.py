@@ -89,7 +89,7 @@ class RestrictedDictMixin (object):
         except Exception:
           pass
       if (not self._ALLOW) or (not lookup_key in self._ALLOW):
-        raise KeyError("Key not allowed: {!r}".format(k))
+        raise KeyError("Key not allowed for {}: {!r}".format(self.__class__, k))
     super(RestrictedDictMixin,self).__setitem__(lookup_key, v)
   def keys (self):
     if isinstance(self._ALLOW, list):

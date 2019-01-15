@@ -113,6 +113,26 @@ element_name of None to iterate through all children as (element_name,element_co
 
 
 
+  # Map Chord symbolic to integer enum value.
+  CHORD_MAP = {
+    "LB": 1,
+    "RB": 2,
+    "LG": 3,
+    "RG": 4,
+    "LT": 5,
+    "RT": 6,
+    # TODO: LT soft, RT soft
+    "LS": 9,
+    "A": 10,
+    "B": 11,
+    "X": 12,
+    "Y": 13,
+    "BK": 14,
+    # TODO: LP touch, RP touch
+    "LP": 18,
+    "RP": 19,
+    }
+
   def export_frob (self, dom_node, settings_obj):
     r"""
 {
@@ -138,6 +158,7 @@ element_name of None to iterate through all children as (element_name,element_co
         retval.double_tap_time = int(specific)
       elif isinstance(settings_obj, scconfig.ActivatorChord.Settings):
         # TODO: resolve symbolic
+        specific = CHORD_MAP.get(specific, specific)
         retval.chord_button = int(specific)
 
     toggle = None
@@ -745,6 +766,8 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
           cluster = paraclusters[cluster_sym]
         else: # create cluster.
           automode = self.auto_mode(component_sym)
+          if cluster_sym in ("LT", "RT"):
+            automode = "trigger"
           cluster = {
             "mode": automode,
             "sym": cluster_sym,
@@ -1179,10 +1202,13 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     if dom_node:
       for aliasname,aliasdesc in self.iter_children(dom_node, None):
 #        v = aliasdesc
-        if not '#' in aliasdesc:
+        if not '#' in aliasdesc:  # auto-label.
           v = "{}#{}".format(aliasdesc, aliasname)
         else:
-          v = aliasdesc
+          if aliasdesc[-1] == '#':  # empty label.
+            v = aliasdesc[:-1]
+          else:  # as-is.
+            v = aliasdesc
         self.aliases[aliasname] = v
     return True
 
