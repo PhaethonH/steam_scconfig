@@ -71,12 +71,12 @@ def get_all (container, key, default_value):
 class RestrictedDictMixin (object):
   """dict mix-in: restrict allowable keys."""
   # Set of keys permitted in dict.  Set to True to allow any key.
-  _ALLOW = set()
+  _ALLOW = []
   def __init__ (self, copyfrom=None):
     if self._ALLOW != True:
       if copyfrom:
         for k in copyfrom:
-          self._ALLOW.add(k)
+          self._ALLOW.append(k)
     super(RestrictedDictMixin,self).__init__(copyfrom)
   def __setitem__ (self, k, v):
     lookup_key = k
@@ -89,13 +89,33 @@ class RestrictedDictMixin (object):
       if (not self._ALLOW) or (not lookup_key in self._ALLOW):
         raise KeyError("Key not allowed: {!r}".format(k))
     super(RestrictedDictMixin,self).__setitem__(lookup_key, v)
+  def keys (self):
+    if isinstance(self._ALLOW, list):
+      return self._ALLOW
+    else:
+      return super(RestrictedDictMixin,self).keys()
+  def items (self):
+    if isinstance(self._ALLOW, list):
+      for k in self._ALLOW:
+        if k in self:
+          v = self[k]
+          yield (k,v)
+    else:
+      return super(RestrictedDictMixin,self).items()
+  def values (self):
+    if isinstance(self._ALLOW, list):
+      for k in self._ALLOW:
+        if k in self:
+          yield self[k]
+    else:
+      return super(RestrictedDictMixin,self).values()
   @classmethod
   def _allow (cls, real_key):
     if cls._ALLOW != True:
       try:
-        cls._ALLOW = set(cls._ALLOW)   # Convert iterables to set.
+        cls._ALLOW = list(cls._ALLOW)   # Convert iterables to set.
       except TypeError:
-        cls._ALLOW = set()      # Presumably was False, start allowing.
+        cls._ALLOW = []         # Presumably was False, start allowing.
       cls._ALLOW.add(real_key)
   @classmethod
   def _ALLOW_ALL (cls):
@@ -706,11 +726,16 @@ Nested attributes:
       MEDIUM = 2,
       HIGH = 3,
       )
+    def __repr__ (self):
+      return "{}({})".format(self.__class__.__name__, ", ".join(["{}={!r}".format(*x) for  x in sorted(self.items())]))
 
   def __init__ (self, py_bindings=None, py_settings=None, **kwargs):
     # self.signal  is class-scope per derived class.
     self.bindings = []    # List of Binding.
-    self.settings = self.Settings(py_settings)
+    if py_settings is None:
+      self.settings = self.Settings()
+    else:
+      self.settings = py_settings
 
     if py_bindings:
       # expect list of pyobject.
@@ -1379,9 +1404,9 @@ class GroupAbsoluteMouse (GroupBase):
     CLICK = "click"
     DOUBLETAP = "doubletap"
     TOUCH = "touch"
-    _ALLOW = {
+    _ALLOW = [
       CLICK, DOUBLETAP, TOUCH,
-      }
+      ]
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.DOUBLETAP)
   Inputs._create_alias(Inputs.TOUCH)
@@ -1434,14 +1459,14 @@ class GroupDpad (GroupBase):
     DPAD_SOUTH = 'dpad_south'
     CLICK = 'click'
     EDGE = 'edge'
-    _ALLOW = {
+    _ALLOW = [
       DPAD_NORTH, DPAD_SOUTH, DPAD_EAST, DPAD_WEST,
       CLICK, EDGE,
-      }
+      ]
   Inputs._create_alias(Inputs.DPAD_NORTH, 'dpad_up')
   Inputs._create_alias(Inputs.DPAD_SOUTH, 'dpad_down')
-  Inputs._create_alias(Inputs.DPAD_WEST, 'dpad_left')
   Inputs._create_alias(Inputs.DPAD_EAST, 'dpad_right')
+  Inputs._create_alias(Inputs.DPAD_WEST, 'dpad_left')
   Inputs._create_alias(Inputs.CLICK, 'click')
   Inputs._create_alias(Inputs.EDGE, 'edge')
 
@@ -1466,9 +1491,9 @@ class GroupFourButtons (GroupBase):
     BUTTON_B = "button_b"
     BUTTON_X = "button_x"
     BUTTON_Y = "button_y"
-    _ALLOW = {
+    _ALLOW = [
       BUTTON_A, BUTTON_B, BUTTON_X, BUTTON_Y,
-      }
+      ]
   Inputs._create_alias(Inputs.BUTTON_A)
   Inputs._create_alias(Inputs.BUTTON_B)
   Inputs._create_alias(Inputs.BUTTON_X)
@@ -1520,9 +1545,9 @@ class GroupJoystickCamera (GroupBase):
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
-    _ALLOW = {
+    _ALLOW = [
       CLICK,
-      }
+      ]
   Inputs._create_alias(Inputs.CLICK)
 
 
@@ -1555,9 +1580,9 @@ class GroupJoystickMouse (GroupBase):
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
     EDGE = "edge"
-    _ALLOW = {
+    _ALLOW = [
       CLICK, EDGE,
-      }
+      ]
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.EDGE)
 
@@ -1624,9 +1649,9 @@ class GroupJoystickMove (GroupBase):
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
     EDGE = "edge"
-    _ALLOW = {
+    _ALLOW = [
       CLICK, EDGE,
-      }
+      ]
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.EDGE)
 
@@ -1688,9 +1713,9 @@ class GroupMouseJoystick (GroupBase):
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
     DOUBLETAP = "doubletap"
-    _ALLOW = {
+    _ALLOW = [
       CLICK, DOUBLETAP,
-      }
+      ]
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.DOUBLETAP)
 
@@ -1737,9 +1762,9 @@ class GroupMouseRegion (GroupBase):
     CLICK = "click"
     EDGE = "edge"
     TOUCH = "touch"
-    _ALLOW = {
+    _ALLOW = [
       CLICK, EDGE, TOUCH,
-      }
+      ]
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.EDGE)
   Inputs._create_alias(Inputs.TOUCH)
@@ -1768,8 +1793,8 @@ class GroupRadialMenu (GroupBase):
   class Inputs (GroupBase.Inputs):
     N_BUTTONS = 20
     CLICK = "click"
-    _ALLOW = set( [CLICK] + [
-      "touch_menu_button_%d" % d for d in range(0,N_BUTTONS+1) ] )
+    _ALLOW = [CLICK] + [
+      "touch_menu_button_%d" % d for d in range(0,N_BUTTONS+1) ]
   Inputs._create_alias(Inputs.CLICK)
   for d in range(0, Inputs.N_BUTTONS):
     symbol = "touch_menu_button_%d" % d
@@ -1806,9 +1831,9 @@ class GroupScrollwheel (GroupBase):
     CLICK = "click"
     SCROLL_CLOCKWISE = "scroll_clockwise"
     SCROLL_COUNTERCLOCKWISE = "scroll_counterclockwise"
-    _ALLOW = {
+    _ALLOW = [
       CLICK, SCROLL_CLOCKWISE, SCROLL_COUNTERCLOCKWISE
-      }
+      ]
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.SCROLL_CLOCKWISE)
   Inputs._create_alias(Inputs.SCROLL_COUNTERCLOCKWISE)
@@ -1819,9 +1844,9 @@ class GroupSingleButton (GroupBase):
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
     TOUCH = "touch"
-    _ALLOW = {
+    _ALLOW = [
       CLICK, TOUCH,
-      }
+      ]
     click = GroupBase.Inputs._alias(CLICK)
     touch = GroupBase.Inputs._alias(TOUCH)
 
@@ -1876,7 +1901,7 @@ class GroupTouchMenu (GroupBase):
 
   class Inputs (GroupBase.Inputs):
     N_BUTTONS = 16
-    _ALLOW = set([ "touch_menu_button_%d" % d for d in range(0, N_BUTTONS+1)])
+    _ALLOW = [ "touch_menu_button_%d" % d for d in range(0, N_BUTTONS+1)]
   for d in range(0, Inputs.N_BUTTONS+1):
     symbol = "touch_menu_button_%d"
     Inputs._create_alias(symbol)
@@ -1916,9 +1941,9 @@ class GroupTrigger (GroupBase):
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
     EDGE = "edge"
-    _ALLOW = {
+    _ALLOW = [
       CLICK, EDGE,
-      }
+      ]
   Inputs._create_alias(Inputs.CLICK)
   Inputs._create_alias(Inputs.EDGE)
 

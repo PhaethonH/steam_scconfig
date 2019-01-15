@@ -132,11 +132,11 @@ element_name of None to iterate through all children as (element_name,element_co
 
     specific = dom_node.get('specific', None)
     if specific is not None:
-      if isinstance(settings, scconfig.ActivatorLongPress.Settings):
+      if isinstance(settings_obj, scconfig.ActivatorLongPress.Settings):
         retval.long_press_time = int(specific)
-      elif isinstance(settings, scconfig.ActivatorDoublePress.Settings):
+      elif isinstance(settings_obj, scconfig.ActivatorDoublePress.Settings):
         retval.double_tap_time = int(specific)
-      elif isinstance(settings, scconfig.ActivatorChord.Settings):
+      elif isinstance(settings_obj, scconfig.ActivatorChord.Settings):
         # TODO: resolve symbolic
         retval.chord_button = int(specific)
 
@@ -259,11 +259,15 @@ element_name of None to iterate through all children as (element_name,element_co
       evgen = self.translate_event(evdesc)
       b = scconfig.Binding(evgen, label, iconinfo)
       bindings.append(b)
-    for frobdesc in self.iter_children(dom_node, "frob"):
-      self.export_frob(dom_node, settings)
+    for frobdesc in self.iter_children(dom_node, "settings"):
+      self.export_frob(frobdesc, settings)
       break
+    else:
+      for frobdesc in self.iter_children(dom_node, "frob"):
+        self.export_frob(frobdesc, settings)
+        break
 #    act = scconfig.ActivatorFactory.make(signame, bindings, settings)
-    inputobj.add_activator(signame, py_bindings=bindings, py_settings=settings)
+    act = inputobj.add_activator(signame, py_bindings=bindings, py_settings=settings)
     return True
 
   FILTER_SYMS = {
@@ -280,8 +284,8 @@ element_name of None to iterate through all children as (element_name,element_co
     },
     scconfig.GroupFourButtons.MODE: {
       'n': scconfig.GroupFourButtons.Inputs.BUTTON_Y,
-      'e': scconfig.GroupFourButtons.Inputs.BUTTON_X,
-      'w': scconfig.GroupFourButtons.Inputs.BUTTON_B,
+      'e': scconfig.GroupFourButtons.Inputs.BUTTON_B,
+      'w': scconfig.GroupFourButtons.Inputs.BUTTON_X,
       's': scconfig.GroupFourButtons.Inputs.BUTTON_A,
       'y': scconfig.GroupFourButtons.Inputs.BUTTON_Y,
       'x': scconfig.GroupFourButtons.Inputs.BUTTON_X,
@@ -315,7 +319,7 @@ element_name of None to iterate through all children as (element_name,element_co
       ('c', scconfig.GroupRadialMenu.Inputs.CLICK),
       ] +
       # touch_menu_button_%02d
-      [ ("{:02d}".format(x), "touch_menu_button_{:02d}".format(x))  for x in range(0, 21) ]
+      [ ("{:02d}".format(x), "touch_menu_button_{:d}".format(x))  for x in range(0, 21) ]
     ),
     scconfig.GroupScrollwheel.MODE: {
       'c': scconfig.GroupScrollwheel.Inputs.CLICK,
@@ -344,7 +348,7 @@ element_name of None to iterate through all children as (element_name,element_co
     },
     scconfig.GroupTouchMenu.MODE: dict(
       # touch_menu_button_%02d
-      [ ("{:02d}".format(x), "touch_menu_button_{:02d}".format(x))  for x in range(1, 17) ]
+      [ ("{:02d}".format(x), "touch_menu_button_{:d}".format(x))  for x in range(1, 17) ]
     ),
     scconfig.GroupTrigger.MODE: {
       'c': scconfig.GroupTrigger.Inputs.CLICK,
@@ -357,6 +361,7 @@ element_name of None to iterate through all children as (element_name,element_co
   RE_FROBS = r"(\||\%|\^|~[0-9]?|:[0-9]+|/[0-9]+|@[0-9]+,[0-9]+)"
   RE_LABEL = r"(#[^#]*)"
   RE_SYM = r"{}?({}+)({}*)({}*)".format(RE_ACTSIG, RE_EVENTS, RE_FROBS, RE_LABEL)
+  RE_ALIAS = r"\$(\{[^}]*\}|[A-Za-z_][A-Za-z0-9_]*)"
   def expand_synthesis (self, evspec):
     # TODO: rename variables to more reasonable ones.
 
@@ -364,8 +369,17 @@ element_name of None to iterate through all children as (element_name,element_co
       return None
 
     # resolve aliases.
-    while evspec[0] == '$':
-      evspec = self.aliases.get(evspec[1:], None)
+#    while evspec[0] == '$':
+#      evspec = self.aliases.get(evspec[1:], None)
+    re_alias = re.compile(self.RE_ALIAS)
+    while '$' in evspec:
+      subst = re_alias.search(evspec).group(1)
+      if subst[0] == '{':
+        k = subst[1:-1]
+      else:
+        k = subst
+      v = self.aliases.get(k, '')
+      evspec = re_alias.sub(v, evspec)
 
     re_actsig = re.compile(self.RE_ACTSIG)
     re_events = re.compile(self.RE_EVENTS)
@@ -506,8 +520,9 @@ element_name of None to iterate through all children as (element_name,element_co
   def export_settings (self, dom_node, settingsobj):
     """Generalized Settings export."""
     for k in sorted(settingsobj._CONSTRAINTS.keys()):
-      v = settingsobj[k]
-      settingsobj.__dict__[k] = v
+      v = self.get_domattr(dom_node, k)
+      if v is not None:
+        setattr(settingsobj, k, v)
     return settingsobj
 
 
@@ -519,6 +534,7 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
 #    print("normalizing cluster {}".format(dom_node))
     extcluster = {'component':[]}
 
+    # Shorthand entire joystick.
     if dom_node in ("LJ", "(LJ)"):
       extcluster["mode"] = "jsmove"
       return extcluster
@@ -527,12 +543,21 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
       return extcluster
 
     scanned_syms = []
+    mode = None
+    # First pass, definite mode.
     for k,v in self.iter_children(dom_node, None):
-      cluster_sym, component_sym = None, None
+      if k == 'mode':
+        mode = self.GRPMODE_MAP.get(v, v)
+        extcluster['mode'] = mode
+    # Second pass, collect.
+    for k,v in self.iter_children(dom_node, None):
+      component_sym = None
       if k in self.UNIQUE_COMPONENT_SYMS:
         cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
       elif len(k) == 1:
         component_sym = k
+      elif k in self.FILTER_SYMS.get(mode, []):
+        component_sym = self.FILTER_SYMS[mode][k]
       if component_sym:
         syntheses = None
 
@@ -555,6 +580,7 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
           extcluster[k].extend(v)
         else:
           extcluster[k] = v
+    # Determine mode.
     if not 'mode' in extcluster:
       mode = self.auto_mode(scanned_syms)
       extcluster['mode'] = mode
