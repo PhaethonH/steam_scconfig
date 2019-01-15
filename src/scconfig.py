@@ -73,10 +73,12 @@ class RestrictedDictMixin (object):
   # Set of keys permitted in dict.  Set to True to allow any key.
   _ALLOW = []
   def __init__ (self, copyfrom=None):
-    if self._ALLOW != True:
-      if copyfrom:
-        for k in copyfrom:
-          self._ALLOW.append(k)
+#    if self._ALLOW != True:
+#      if copyfrom:
+#        for k in copyfrom:
+#          if not k in self._ALLOW:
+#            print("preemptive allow {}".format(k))
+#            self._ALLOW.append(k)
     super(RestrictedDictMixin,self).__init__(copyfrom)
   def __setitem__ (self, k, v):
     lookup_key = k
@@ -101,14 +103,16 @@ class RestrictedDictMixin (object):
           v = self[k]
           yield (k,v)
     else:
-      return super(RestrictedDictMixin,self).items()
+      for k,v in super(RestrictedDictMixin,self).items():
+        yield (k,v)
   def values (self):
     if isinstance(self._ALLOW, list):
       for k in self._ALLOW:
         if k in self:
           yield self[k]
     else:
-      return super(RestrictedDictMixin,self).values()
+      for v in super(RestrictedDictMixin,self).values():
+        yield v
   @classmethod
   def _allow (cls, real_key):
     if cls._ALLOW != True:
@@ -116,7 +120,8 @@ class RestrictedDictMixin (object):
         cls._ALLOW = list(cls._ALLOW)   # Convert iterables to set.
       except TypeError:
         cls._ALLOW = []         # Presumably was False, start allowing.
-      cls._ALLOW.add(real_key)
+      if not real_key in cls._ALLOW:
+        cls._ALLOW.append(real_key)
   @classmethod
   def _ALLOW_ALL (cls):
     cls._ALLOW = True
@@ -1903,7 +1908,7 @@ class GroupTouchMenu (GroupBase):
     N_BUTTONS = 16
     _ALLOW = [ "touch_menu_button_%d" % d for d in range(0, N_BUTTONS+1)]
   for d in range(0, Inputs.N_BUTTONS+1):
-    symbol = "touch_menu_button_%d"
+    symbol = "touch_menu_button_%d" % d
     Inputs._create_alias(symbol)
 
 
