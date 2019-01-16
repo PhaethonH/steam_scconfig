@@ -1064,7 +1064,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
 #        pending.append("#-Shift_{}".format(next_level))
       pending.append("#goto#{}".format(next_level))
       retval = "".join(pending)
-      print("made shifter bind #{} {!r}".format(from_level, retval))
+#      print("made shifter bind #{} {!r}".format(from_level, retval))
       return retval
 
     baselayer = extlayers[0]
@@ -1126,6 +1126,9 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
             # Skip if already serving as shifter key.
             shorthand = "{}.{}".format(clsym, advbindkey)
             if (advbindkey in shifters) or (shorthand in shifters):
+              continue
+            # Skip if already serving as sanity key.
+            if (advbindkey == sanity) or (shorthand == sanity):  # TODO: compare normalized syms.
               continue
             cldef[advbindkey] = advbinddef
         else:
