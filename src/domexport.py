@@ -608,6 +608,7 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
       mode = self.auto_mode(scanned_syms)
       extcluster['mode'] = mode
 
+#    print("normalized cluster ="); pprint.pprint(extcluster)
     return extcluster
 
   UNIQUE_COMPONENT_SYMS = {
@@ -681,7 +682,8 @@ shorthand
       return 'four_buttons'
     if any(['s' in x, 'e' in x, 'w' in x, 'n' in x]):
       return 'four_buttons'
-    if any(['c' in x, 'o' in x]) and not strictness:
+    if strictness and any (['c' in x, 'o' in x]):
+      # ambiguous, multiple modes.
       return 'joystick_move'
     if x in ('BK', 'ST', 'LB', 'RB', 'LG', 'RG', 'INF'):
       return 'switches'
@@ -698,7 +700,8 @@ shorthand
     if 0 in nums:
       return 'radial'  # '00' - radial center/unselect
     elif any([2 in nums, 4 in nums, 7 in nums, 9 in nums, 12 in nums, 13 in nums, 16 in nums]):
-      return 'touch_menu'
+      if not strictness: # ambiguously touch or radial.
+        return 'touch_menu'
     elif m > 0:
       return 'radial_menu'
 
@@ -752,18 +755,22 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
       elif k in self.GRPSRC_MAP:
         # short-hand for cluster.
         component_sym = None
-        vv = self.normalize_cluster(v)
-        vv['sym'] = k
+        clusterobj = self.normalize_cluster(v)
+#        print("normalized cluster = "); pprint.pprint(clusterobj)
+        clusterobj['sym'] = k
         cluster_sym = k
-        self.pave_layer_cluster(paralayer, cluster_sym, vv.get("mode",None))
+        self.pave_layer_cluster(paralayer, cluster_sym, clusterobj.get("mode",None))
         scansyms = []
-        for poleobj in vv.get("cluster", []):
+        for poleobj in clusterobj.get("component", []):
           polesym = poleobj['sym']
           scansyms.append(polesym)
           polegens = poleobj['synthesis']
           self.extend_layer_cluster_pole(paralayer, cluster_sym, polesym, polegens, None)
+        if not clusterobj.get("mode", None):
+          automode = self.auto_mode(scansyms, 1)
+          clusterobj["mode"] = automode
+        continue  # bypass cluster.pole case.
 
-      # expand on a parallel struct.
       if cluster_sym and component_sym:
         # Update cluster.
         if _stringlike(v):
@@ -788,6 +795,8 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         automode = self.auto_mode(complist)
         cluster['mode'] = automode
 #        print(" fallback automode {} => {}".format(complist, automode))
+#    print("normalized layer "); pprint.pprint(dom_node); print(" =>"); pprint.pprint(paralayer)
+#    print("normalized layer ="); pprint.pprint(paralayer)
     return paralayer
 
   def export_layer (self, dom_node, conmap, layeridx=0, parent_name=None):
@@ -800,6 +809,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
   ]
 }
 """
+#    print("* EXPORT LAYER"); pprint.pprint(dom_node)
     layer_name = self.get_domattr(dom_node, "name")
     presetid = len(conmap.presets)
     grpid = len(conmap.groups)
@@ -877,9 +887,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
   def get_layer_cluster_pole (self, lyr, clustersym, polesym):
     cluster = self.get_layer_cluster(lyr, clustersym)
     if cluster:
-      if not 'component' in cluster:
-        return None
-      for probe in cluster['component']:
+      for probe in cluster.get('component', []):
         if probe.get('sym',None) == polesym:
           return (cluster, probe)
       else:
@@ -1181,8 +1189,8 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
 
   def prepare_action (self, dom_node, conmap):
     # Update layers (self.actionsets, self.actionlayers) with shiftmap.
-    normlayer = self.normalize_layer(dom_node, conmap)
-    paralayers = self.prepare_shifters(normlayer, conmap)
+    paralayers = self.prepare_shifters(dom_node, conmap)
+#    print("paralayers = "); pprint.pprint(paralayers)
     lyrid = 0
     for lyrspec in paralayers:
       if lyrid == 0:
