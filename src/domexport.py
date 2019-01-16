@@ -643,6 +643,7 @@ shorthand
 """
     clustermode = self.get_domattr(dom_node, "mode")
     for compspec in self.iter_children(dom_node, "component"):
+#      print("export component {}/{} to groupobj {}".format(clustermode, compspec, groupobj))
       self.export_component(compspec, groupobj)
     for ss in self.iter_children(dom_node, "settings"):
       self.export_settings(ss, groupobj.settings)
@@ -672,14 +673,15 @@ shorthand
     return True
 
   @staticmethod
-  def auto_mode (x):
+  def auto_mode (x, strictness=0):
+#    print("* AUTOMODE {},{}".format(x,strictness))
     if any(['u' in x, 'd' in x, 'l' in x, 'r' in x]):
       return 'dpad'
     if any(['a' in x, 'b' in x, 'x' in x, 'y' in x]):
       return 'four_buttons'
     if any(['s' in x, 'e' in x, 'w' in x, 'n' in x]):
       return 'four_buttons'
-    if any(['c' in x, 'o' in x]):
+    if any(['c' in x, 'o' in x]) and not strictness:
       return 'joystick_move'
     if x in ('BK', 'ST', 'LB', 'RB', 'LG', 'RG', 'INF'):
       return 'switches'
@@ -700,7 +702,10 @@ shorthand
     elif m > 0:
       return 'radial_menu'
 
-    return 'dpad'
+    if not strictness:
+      return 'dpad'
+    else:
+      return None
 
   # map cluster name to groupsrc name.
   GRPSRC_MAP = {
@@ -746,9 +751,11 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
       elif k in self.UNIQUE_COMPONENT_SYMS:   # "POLE(UNIQUE)"
         cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
       elif k in self.GRPSRC_MAP:
+        # short-hand for cluster.
         component_sym = None
         vv = self.normalize_cluster(v)
         vv['sym'] = k
+        cluster_sym = k
 
         if cluster_sym in paraclusters: # reuse cluster.
           cluster = paraclusters[cluster_sym]
@@ -765,9 +772,10 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         if cluster_sym in paraclusters: # reuse cluster.
           cluster = paraclusters[cluster_sym]
         else: # create cluster.
-          automode = self.auto_mode(component_sym)
+          automode = self.auto_mode(component_sym, strictness=1)
           if cluster_sym in ("LT", "RT"):
             automode = "trigger"
+#          print("automode {}.{} => {}".format(cluster_sym, component_sym, automode))
           cluster = {
             "mode": automode,
             "sym": cluster_sym,
@@ -793,11 +801,6 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
           syntheses = self.expand_shorthand_syntheses(v)
         else: syntheses = v
         component['synthesis'].extend(syntheses)
-        # auto-mode from all components.
-        if cluster.get('mode', None) is None:
-          complist = [ x.get("sym") for x in cluster['component'] ]
-          automode = self.auto_mode(complist)
-          cluster['mode'] = automode
       else:   # Not recognized as shorthand; assume longhand.
         # copy verbatim.
         if k == 'cluster':
@@ -805,6 +808,13 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
           paralayer[k].extend(vv)
         else:
           paralayer[k] = v
+    # auto-mode from all components.
+    for cluster_sym, cluster in paraclusters.items():
+      if cluster.get('mode', None) is None:
+        complist = [ x.get("sym") for x in cluster['component'] ]
+        automode = self.auto_mode(complist)
+        cluster['mode'] = automode
+#        print(" fallback automode {} => {}".format(complist, automode))
     return paralayer
 
   def export_layer (self, dom_node, conmap, layeridx=0, parent_name=None):
@@ -817,6 +827,8 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
   ]
 }
 """
+#    print("* EXPORT LAYER")
+#    pprint.pprint(dom_node, width=180)
     layer_name = self.get_domattr(dom_node, "name")
     presetid = len(conmap.presets)
     grpid = len(conmap.groups)
@@ -844,6 +856,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         grpmode = self.GRPMODE_MAP.get(grpmode, grpmode)
         grp = conmap.add_group(grpid, grpmode) 
         presetobj.add_gsb(grpid, grpsrc, active, modeshift)
+#      print("EXPORT GROUP {}".format(clustersym))
       self.export_cluster(clusterspec, grp)
 
     for clusterspec in self.iter_children(dom_node, "cluster"):
@@ -1098,16 +1111,31 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         "label": "+overlays({})".format(n),
         } ]
       for clsym in sorted(preclusters):
-        cldef = { 
-          "sym": clsym,
-          "mode": 'dpad',
-          'u': advbinddef,
-          'd': advbinddef,
-          'l': advbinddef,
-          'r': advbinddef,
-#          'c': advbinddef,
-          }
-        preshiftlayer['cluster'].append(cldef)
+        cldef = {}
+        if clsym in self.ADVANCING_TEMPLATE:
+          templ = self.ADVANCING_TEMPLATE[clsym]
+#          print("advancing_templ({}) = {}".format(clsym, templ))
+          cldef['sym'] = clsym
+          for fixed_kv in templ[0]:
+            k,v = fixed_kv
+            cldef[k] = v
+          for advbindkey in templ[1]:
+            cldef[advbindkey] = advbinddef
+#        elif clsym in ('SW',):
+#          # TODO: specific SW poles.
+#          pass
+#        elif clsym in ('LT', 'RT'):
+#          cldef = {
+#            "sym": clsym,
+#            "mode": 'trigger',
+#            'c': advbinddef,
+#            'o': advbinddef,
+#            }
+        else:
+          cldef = None
+          #raise ValueError("no advancing bind possible for {!r}".format(clsym))
+        if cldef:
+          preshiftlayer['cluster'].append(cldef)
 
       # bind shiftkeys for shift n.
       shiftlayer = {
@@ -1137,6 +1165,18 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         automode = self.auto_mode(po)
         self.extend_layer_cluster_pole(extlayers[0], cl, po, sanitizer, automode)
     return extlayers
+
+  # tuple( list-of-fixed-kv, list-of-advbinddef-keys )
+  ADVANCING_TEMPLATE = {
+    "RT": ( [("mode","trigger")], "co" ),
+    "LT": ( [("mode","trigger")], "co" ),
+    "DP": ( [("mode","dpad")], "udlr" ),
+    "BQ": ( [("mode","four_buttons")], "abxy" ),
+    "LJ": ( [("mode","dpad")], "udlrc" ),
+    "RJ": ( [("mode","dpad")], "udlrc" ),
+    "LP": ( [("mode","single_button")], "tc" ),
+    "RP": ( [("mode","single_button")], "tc" ),
+    }
 
   def prepare_action (self, dom_node, conmap):
     # Update layers (self.actionsets, self.actionlayers) with shiftmap.
