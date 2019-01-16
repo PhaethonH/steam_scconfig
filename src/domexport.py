@@ -743,7 +743,6 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
     paralayer = {'cluster': []}
 
     # Scan shorthands.
-    paraclusters = {}   # Map cluster_sym to cluster contents.
     for k,v in self.iter_children(dom_node, None):
       cluster_sym = component_sym = None
       if '.' in k:    # "CLUSTER.POLE"
@@ -756,60 +755,34 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         vv = self.normalize_cluster(v)
         vv['sym'] = k
         cluster_sym = k
-
-        if cluster_sym in paraclusters: # reuse cluster.
-          cluster = paraclusters[cluster_sym]
-          cluster['component'].extend(vv['component'])
-        else: # create cluster.
-          cluster = vv
-          paraclusters[cluster_sym] = vv
-          paralayer['cluster'].append(cluster)
-        continue
+        self.pave_layer_cluster(paralayer, cluster_sym, vv.get("mode",None))
+        scansyms = []
+        for poleobj in vv.get("cluster", []):
+          polesym = poleobj['sym']
+          scansyms.append(polesym)
+          polegens = poleobj['synthesis']
+          self.extend_layer_cluster_pole(paralayer, cluster_sym, polesym, polegens, None)
 
       # expand on a parallel struct.
       if cluster_sym and component_sym:
-        # Find cluster.
-        if cluster_sym in paraclusters: # reuse cluster.
-          cluster = paraclusters[cluster_sym]
-        else: # create cluster.
-          automode = self.auto_mode(component_sym, strictness=1)
-          if cluster_sym in ("LT", "RT"):
-            automode = "trigger"
-#          print("automode {}.{} => {}".format(cluster_sym, component_sym, automode))
-          cluster = {
-            "mode": automode,
-            "sym": cluster_sym,
-            "component": []
-            }
-          paraclusters[cluster_sym] = cluster
-          paralayer['cluster'].append(cluster)
-        # Find component.
-        component = None
-        for comp in cluster['component']: # reuse component
-          if cluster.get('sym', None) == component_sym:
-            component = comp
-            break
-        else: # create component.
-          component = {
-            'sym': component_sym,
-            'synthesis': []
-            }
-          # TODO: auto-mode here?
-          cluster['component'].append(component)
         # Update cluster.
         if _stringlike(v):
           syntheses = self.expand_shorthand_syntheses(v)
         else: syntheses = v
-        component['synthesis'].extend(syntheses)
+        self.pave_layer_cluster_pole(paralayer, cluster_sym, component_sym, None)
+        self.extend_layer_cluster_pole(paralayer, cluster_sym, component_sym, syntheses, None)
       else:   # Not recognized as shorthand; assume longhand.
         # copy verbatim.
         if k == 'cluster':
           vv = [ self.normalize_cluster(cl) for cl in v ]
-          paralayer[k].extend(vv)
+          #paralayer[k].extend(vv)
+          for cluster in vv:
+            for pole in cluster['component']:
+              self.extend_layer_cluster_pole(paralayer, cluster['sym'], pole['sym'], pole['synthesis'], None)
         else:
           paralayer[k] = v
     # auto-mode from all components.
-    for cluster_sym, cluster in paraclusters.items():
+    for cluster in paralayer['cluster']:
       if cluster.get('mode', None) is None:
         complist = [ x.get("sym") for x in cluster['component'] ]
         automode = self.auto_mode(complist)
@@ -827,8 +800,6 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
   ]
 }
 """
-#    print("* EXPORT LAYER")
-#    pprint.pprint(dom_node, width=180)
     layer_name = self.get_domattr(dom_node, "name")
     presetid = len(conmap.presets)
     grpid = len(conmap.groups)
@@ -915,6 +886,13 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         return (cluster, None)
     return (None, None)
   def pave_layer_cluster_pole (self, lyr, clustersym, polesym, clustermode=None):
+    if clustermode is None:
+      if clustersym in ('LT', 'RT'):
+        clustermode = 'trigger'
+      elif clustersym in ('SW',):
+        clustermode = 'switches'
+      else:
+        clustermode = self.auto_mode(polesym, 0)
     self.pave_layer_cluster(lyr, clustersym, clustermode)
     (cluster, pole) = self.get_layer_cluster_pole(lyr, clustersym, polesym)
     if not pole:
@@ -928,6 +906,11 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
     self.pave_layer_cluster_pole(lyr, clustersym, polesym, clustermode)
     (cluster, pole) = self.get_layer_cluster_pole(lyr, clustersym, polesym)
     pole['synthesis'].extend(syntheses)
+    return lyr
+  def overwrite_layer_cluster_pole (self, lyr, clustersym, polesym, syntheses, clustermode=None):
+    self.pave_layer_cluster_pole(lyr, clustersym, polesym, clustermode)
+    (cluster, pole) = self.get_layer_cluster_pole(lyr, clustersym, polesym)
+    pole['synthesis'] = syntheses
     return lyr
 
   def prepare_shifters (self, dom_node, conmap):
@@ -1034,7 +1017,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         pending.append(" ")
 
       # Apply next level.
-      if next_level & bitmask:
+      if (next_level & bitmask) == bitmask:
         # on key press.
         pending.append("+")
 
@@ -1063,7 +1046,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
           if overlaying:
             pending.append(overlaying)
             pending.append("#-overlays({})".format(next_level))
-            pending.append(" +")
+            pending.append(" -")
 
         if next_level != 0:   # can't apply 0 - achieved by removing all layers.
           pending.append("{{overlay,apply,Shift_{}}}".format(next_level))
@@ -1081,7 +1064,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
 #        pending.append("#-Shift_{}".format(next_level))
       pending.append("#goto#{}".format(next_level))
       retval = "".join(pending)
-#      print("made shifter bind {!r}".format(retval))
+      print("made shifter bind #{} {!r}".format(from_level, retval))
       return retval
 
     baselayer = extlayers[0]
@@ -1100,7 +1083,6 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       # for shift level n...
       preclusters = set()   # Set of clusters involved with this preshifter.
       for overlayname in overlays.get(n, []):
-#        for lyr in self.iter_children(dom_node, "layer"):
         for lyr in extlayers:
           if lyr.get("name", None) == overlayname:
             for clusterdef in lyr.get("cluster", []):
@@ -1136,23 +1118,16 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         cldef = {}
         if clsym in self.ADVANCING_TEMPLATE:
           templ = self.ADVANCING_TEMPLATE[clsym]
-#          print("advancing_templ({}) = {}".format(clsym, templ))
           cldef['sym'] = clsym
           for fixed_kv in templ[0]:
             k,v = fixed_kv
             cldef[k] = v
           for advbindkey in templ[1]:
+            # Skip if already serving as shifter key.
+            shorthand = "{}.{}".format(clsym, advbindkey)
+            if (advbindkey in shifters) or (shorthand in shifters):
+              continue
             cldef[advbindkey] = advbinddef
-#        elif clsym in ('SW',):
-#          # TODO: specific SW poles.
-#          pass
-#        elif clsym in ('LT', 'RT'):
-#          cldef = {
-#            "sym": clsym,
-#            "mode": 'trigger',
-#            'c': advbinddef,
-#            'o': advbinddef,
-#            }
         else:
           cldef = None
           #raise ValueError("no advancing bind possible for {!r}".format(clsym))
@@ -1198,6 +1173,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     "RJ": ( [("mode","dpad")], "udlrc" ),
     "LP": ( [("mode","single_button")], "tc" ),
     "RP": ( [("mode","single_button")], "tc" ),
+    "SW": ( [("mode","switches")], ["BK","ST","LB","RB","LG","RG"] ),
     }
 
   def prepare_action (self, dom_node, conmap):
