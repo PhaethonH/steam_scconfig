@@ -445,6 +445,8 @@ class Evgen_Host (EvgenBase):
 #    'empty': "empty_binding",
     'keyboard': "show_keyboard",
     'screenshot': "screenshot",
+    'mouse': "mouse_position",
+    'mouse_position': "mouse_position",
     'magnifier': "toggle_magnifier",
     'magnify': "toggle_magnifier",
     'music': "steammusic_playpause",
@@ -469,10 +471,13 @@ class Evgen_Host (EvgenBase):
     'host_poweroff': "host_poweroff",
   }
   def __init__ (self, details):
-    vdfliteral = filter_enum(self.TRANSLATION, details)
+    detail0, detailn = details.split(' ',1) if ' ' in details else (details, None)
+    vdfliteral = filter_enum(self.TRANSLATION, detail0)
     if vdfliteral is None:
       mangled = mangle_vdfliteral(details)
       raise ValueError("Unknown host action '{}'".format(mangled))
+    if detailn:
+      vdfliteral += " " + detailn
     EvgenBase.__init__(self, VSC_CONTROLLERACTION, vdfliteral)
 
 

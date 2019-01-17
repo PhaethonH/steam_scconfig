@@ -225,7 +225,8 @@ element_name of None to iterate through all children as (element_name,element_co
     elif evtype in ('mouse',):
       return scconfig.EvgenFactory.make_mouseswitch(evcode)
     elif evtype in ('host',):
-      pass
+      host_evcode = " ".join(evcode)
+      return scconfig.EvgenFactory.make_hostcall(host_evcode)
     elif evtype in ('overlay',):
       # TODO: resolve overlay by name.
       names = [ a.get('name',None) for a in self.actions ]
