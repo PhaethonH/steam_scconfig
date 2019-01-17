@@ -1,0 +1,239 @@
+# Third draft, X3:TC configuration
+
+aliases:
+  # Flight
+  ToggleCursorFlightMode: <Space>
+  ToggleClassicFlightMode: <Left_Shift><N>
+  PitchUp: <Down_Arrow>
+  PitchDown: <Up_Arrow>
+  YawLeft: <Left_Arrow>
+  YawRight: <Right_Arrow>
+  RollLeft: <Q>
+  RollRight: <E>
+  Accelerate: <X>
+  Decelerate: <Z>
+  BoostExtension: <Tab>
+  BrakeToStop: <Backspace>
+  BrakeAndReverse: (LB)
+  MatchSpeedToTarget: <Left_Shift><F>
+  LockThrottle: (LS)
+  ToggleAutopilot: <Left_Shift><A>
+  DockWithTarget: <Left_Shift><D>
+  SwitchGravidarModes: <>
+  EjectFromShip: <Left_Shift><E>
+  StrafeLeft: <A>
+  StrafeRight: <D>
+  StrafeUp: <W>
+  StrafeDown: <S>
+  # Weapons
+  BoresightFire: <Right_Control>
+  CursorFire: "[3]"
+  LaserTargetingMode: <K>
+  SelectMissile: <M>
+  LaunchMissile: <L>
+  SelectWeaponGroup1: <1>
+  SelectWeaponGroup2: <2>
+  SelectWeaponGroup3: <3>
+  SelectWeaponGroup4: <4>
+  WeaponsMenu: <G>
+  # Targeting
+  TrackTarget: <T>
+  TargetNearestEnemy: <Left_Shift><T>
+  TargetNextObject: <Page_Up>
+  TargetPrevObject: <Page_Down>
+  TargetNextOwnedObject: <Insert>
+  TargetPreviousOwnedObject: <Delete>
+  TargetNextEnemy: <Home>
+  TargetPreviousEnemy: <End>
+  # Information
+  ActionsForSelectedObject: <I>
+  ViewInfoAboutSelectedObject: <U>
+  CurrentShip: <Y>
+  PersonalInformation: <P>
+  Navigation: <>
+  SectorMap: <Period>
+  GalaxyMap: <Comma>
+  ShowSelectionOnGalaxyMap: <G>
+  OwnedProperty: <R>
+  MessageLog: <Left_Shift><M>
+  MyMissions: <>
+  GlobalCommands: <>
+  Encyclopedia: <>
+  MyAchievements: <>
+  # Commands and Management
+  CommandConsoleForCurrentShip: <Left_Shift><C>
+  RenameObject: <M>
+  WingmenAttackTarget: <Left_Shift><6>
+  WingmenProtectTarget: <Left_Shift><7>
+  DronesAttackTarget: <Left_Shift><8>
+  DronesProtectTarget: <Left_Shift><9>
+  # Ships and Stations
+  Comms: <C>
+  TradeWithStation: <D>
+  BarterGoods: <>
+  LandedShips: <L>
+  OwnedShips: <O>
+  ChangeShip: <X>
+  # Freight
+  FreightBay: <F>
+  FreightExchange: <>
+  # Upgrades
+  SETATimeAccelerator: <J>
+  Jumpdrive: <Left_Shift><J>
+  UnfocussedJump: <>
+  VideoEnhancementGoggles: <Left_Alt>
+  BestSellingPriceLocator: <5>
+  BestBuysLocator: <6>
+  # Interface/General
+  OpenSidebar: <Return>
+  OptionsMenu: <Left_Shift><O>
+  Graphics: <>
+  Audio: <>
+  Gameplay: <>
+  Controls: <>
+  LoadSavedGame: <Left_Shift><L>
+  SaveCurrentGame: <Left_Shift><S>
+  PauseGame: <Pause>
+  QuitGame: <Left_Shift><Q>
+  # Views
+  SelectViewMode: <F1>
+  ExternalView: <F2>
+  TargetViewZoomMonitor: <F3>
+  ToggleHudDisplay: <Left_Shift><H>
+  SelectMonitor: <F4>
+  CloseMonitors: <F5>
+  ViewOnLeftMonitor: <Left_Shift><1>
+  ViewOnRightMonitor: <Left_Shift><2>
+  ZoomIn: <KEYPAD_PLUS>
+  ZoomOut: <KEYPAD_MINUS>
+  SelectCameraMode: <KEYPAD_0>
+  DefaultView: <KEYPAD_5>
+  ViewFromNorth: <KEYPAD_8>
+  ViewFromNortheast: <KEYPAD_9>
+  ViewFromEast: <KEYPAD_6>
+  ViewFromSoutheast: <KEYPAD_3>
+  ViewFromSouth: <KEYPAD_2>
+  ViewFromSouthwest: <KEYPAD_1>
+  ViewFromWest: <KEYPAD_4>
+  ViewFromNorthwest: <KEYPAD_7>
+  # Menus
+  CancelEscape: <Escape>
+  SelectOption: <Return>
+  MenuCursorUp: <Up_Arrow>
+  MenuCursorDown: <Down_Arrow>
+  MenuCursorLeft: <Left_Arrow>
+  MenuCursorRight: <Right_Arrow>
+  ScrollUp: "[u]"
+  ScrollDown: "[d]"
+  ScrollPageUp: <Page_Up>
+  ScrollPageDown: <Page_Down>
+  EmptySelection: <Home>
+  FillSelection: <End>
+  CloseAllMenus: <Delete>
+  # Editing
+  DeleteCharacter: <Delete>
+  Backspace: <Backspace>
+  Home: <Home>
+  End: <End>
+  # Archival
+  TakeScreenshot: <F9>
+  # Sector Map
+  MoveMapCursorLeft: <KEYPAD_4>
+  MoveMapCursorRight: <KEYPAD_6>
+  MoveMapCursorUp: <KEYPAD_8>
+  MoveMapCursorDown: <KEYPAD_2>
+  MoveMapCursorUpAndLeft: <KEYPAD_7>
+  MoveMapCursorUpAndRight: <KEYPAD_9>
+  MoveMapCursorDownAndLeft: <KEYPAD_1>
+  MoveMapCursorDownAndRight: <KEYPAD_3>
+  MoveMapCursorToNearestObject: <KEYPAD_5>
+  ChangeMapAxis: <Insert>
+  EnableDisableSectorCamera: <K>
+  ZoomMapIn: <Home>
+  ZoomMapOut: <End>
+  BuildStationRotateAAxisPos: <KEYPAD_3>
+  BuildStationRotateAAxisNeg: <KEYPAD_1>
+  BuildStationRotateBAxisPos: <KEYPAD_9>
+  BuildStationRotateBAxisNeg: <KEYPAD_7>
+
+  Accel_UiUp: <Up_Arrow>
+  Decel_UiDn: <Down_Arrow>
+  Boost_UiPrio: <Page_Up>
+  Brake_UiNext: <Page_Down>
+  TgtPrevObj_UiLt: <Left_Arrow>
+  TgtNextObj_UiRt: <Right_Arrow>
+  TgtPrevOwn_TradeDec: <Backspace>
+  TgtNextOwn_TradeInc: <1>
+
+name: "GeneratedSample_1"
+revision: 2
+author: "PhaethonH"
+description: "Example config to test conversion to VDF"
+devtype: controller_ps3
+action:
+- name: Default
+  layer:
+  - name: Default
+    LJ: (LJ)
+    RJ: (RJ)
+    ST: <Pause>
+    RT.c: $BoresightFire
+    DP.u: "{overlay,hold,Uppish}"
+    DP.l: $TgtPrevObj_UiLt
+    DP.r: $TgtNextObj_UiRt
+    DP.d: "{overlay,hold,Downish}"
+    BQ.n: $TrackTarget
+    BQ.w: $SelectMissile _<L>:200
+    BQ.e: $BoostExtension
+    BQ.s: $BrakeToStop
+    LS: "{overlay,apply,6th_axis}"
+
+  - name: dummy
+
+  - name: 6th_axis
+    LS: "{overlay,peel,6th_axis}"
+    RJ.u: $StrafeUp
+    RJ.d: $StrafeDown
+    RJ.l: $RollLeft
+    RJ.r: $RollRight
+
+  - name: Commerce1
+    DP.u: <PageUp>
+    DP.d: <PageDown>
+    DP.l: $TgtPrevOwn_TradeDec
+    DP.r: $TgtNextOwn_TradeInc
+
+  - name: Combat1
+    BQ.n: $TargetNearestEnemy
+    BQ.w: <>
+    BQ.e: $MatchSpeedToTarget
+    BQ.s: <>
+
+  - name: Command1
+
+  - name: Uppish
+    INF: $Accel_UiUp
+    DP.l: <>
+    DP.r: <>
+    DP.d: <>
+    LB: $Boost_UiPrio
+
+  - name: Downish
+    INF: $Decel_UiDn
+    DP.u: <>
+    DP.l: <>
+    DP.r: <>
+    LB: $Brake_UiNext
+
+  shiftmap:
+    shifter:
+      LB: hold 1
+      RB: hold 4
+    overlay:
+      1: [ Commerce1 ]
+      4: [ Combat1 ]
+      5: [ Command1 ]
+    sanity: BK
+    hermit:
+      1: -<RETURN>
+

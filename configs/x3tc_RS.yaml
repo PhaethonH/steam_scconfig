@@ -1,0 +1,350 @@
+# X3:TC configuration
+
+name: "RightStick FpsLook"
+revision: 2
+author: "PhaethonH"
+description: "Centered on Right Stick for Pitch+Yaw"
+devtype: controller_ps3
+
+aliases:
+  # Flight
+  ToggleCursorFlightMode: <Space>
+  ToggleClassicFlightMode: <Left_Shift><N>
+  PitchUp: <Down_Arrow>
+  PitchDown: <Up_Arrow>
+  YawLeft: <Left_Arrow>
+  YawRight: <Right_Arrow>
+  RollLeft: <Q>
+  RollRight: <E>
+  Accelerate: <X>#
+  Decelerate: <Z>#
+  BoostExtension: <Tab>
+  BrakeToStop: <Backspace>
+  BrakeAndReverse: (LB)
+  MatchSpeedToTarget: <Left_Shift><F>
+  LockThrottle: (LS)
+  ToggleAutopilot: <Left_Shift><A>
+  DockWithTarget: <Left_Shift><D>
+  SwitchGravidarModes: <>
+  EjectFromShip: <Left_Shift><E>
+  StrafeLeft: <A>
+  StrafeRight: <D>
+  StrafeUp: <W>
+  StrafeDown: <S>
+  # Weapons
+  BoresightFire: <Right_Control>
+  CursorFire: "[3]"
+  LaserTargetingMode: <K>
+  SelectMissile: <M>
+  LaunchMissile: <L>
+  SelectWeaponGroup1: <1>
+  SelectWeaponGroup2: <2>
+  SelectWeaponGroup3: <3>
+  SelectWeaponGroup4: <4>
+  WeaponsMenu: <G>
+  # Targeting
+  TrackTarget: <T>
+  TargetNearestEnemy: <Left_Shift><T>
+  TargetNextObject: <Page_Up>
+  TargetPrevObject: <Page_Down>
+  TargetNextOwnedObject: <Insert>
+  TargetPreviousOwnedObject: <Delete>
+  TargetNextEnemy: <Home>
+  TargetPreviousEnemy: <End>
+  # Information
+  ActionsForSelectedObject: <I>
+  ViewInfoAboutSelectedObject: <U>
+  CurrentShip: <Y>
+  PersonalInformation: <P>
+  Navigation: <>
+  SectorMap: <Period>
+  GalaxyMap: <Comma>
+  ShowSelectionOnGalaxyMap: <G>
+  OwnedProperty: <R>
+  MessageLog: <Left_Shift><M>
+  MyMissions: <>
+  GlobalCommands: <>
+  Encyclopedia: <>
+  MyAchievements: <>
+  # Commands and Management
+  CommandConsoleForCurrentShip: <Left_Shift><C>
+  RenameObject: <M>
+  WingmenAttackTarget: <Left_Shift><6>
+  WingmenProtectMe: <Left_Shift><7>
+  DronesAttackTarget: <Left_Shift><8>
+  DronesProtectMe: <Left_Shift><9>
+  # Ships and Stations
+  Comms: <C>
+  TradeWithStation: <D>
+  BarterGoods: <>
+  LandedShips: <L>
+  OwnedShips: <O>
+  ChangeShip: <X>
+  # Freight
+  FreightBay: <F>#
+  FreightExchange: <>
+  # Upgrades
+  SETATimeAccelerator: <J>
+  Jumpdrive: <Left_Shift><J>
+  UnfocussedJump: <>
+  VideoEnhancementGoggles: <Left_Alt>
+  BestSellingPriceLocator: <5>
+  BestBuysLocator: <6>
+  # Interface/General
+  OpenSidebar: <Return>
+  OptionsMenu: <Left_Shift><O>
+  Graphics: <>
+  Audio: <>
+  Gameplay: <>
+  Controls: <>
+  LoadSavedGame: <Left_Shift><L>
+  SaveCurrentGame: <Left_Shift><S>
+  PauseGame: <Pause>
+  QuitGame: <Left_Shift><Q>
+  # Views
+  SelectViewMode: <F1>
+  ExternalView: <F2>
+  TargetViewZoomMonitor: <F3>
+  ToggleHudDisplay: <Left_Shift><H>
+  SelectMonitor: <F4>
+  CloseMonitors: <F5>
+  ViewOnLeftMonitor: <Left_Shift><1>#
+  ViewOnRightMonitor: <Left_Shift><2>#
+  ZoomIn: <KEYPAD_PLUS>
+  ZoomOut: <KEYPAD_MINUS>
+  SelectCameraMode: <KEYPAD_0>
+  DefaultView: <KEYPAD_5>
+  ViewFromNorth: <KEYPAD_8>
+  ViewFromNortheast: <KEYPAD_9>
+  ViewFromEast: <KEYPAD_6>
+  ViewFromSoutheast: <KEYPAD_3>
+  ViewFromSouth: <KEYPAD_2>
+  ViewFromSouthwest: <KEYPAD_1>
+  ViewFromWest: <KEYPAD_4>
+  ViewFromNorthwest: <KEYPAD_7>
+  # Menus
+  CancelEscape: <Escape>
+  SelectOption: <Return>
+  MenuCursorUp: <Up_Arrow>
+  MenuCursorDown: <Down_Arrow>
+  MenuCursorLeft: <Left_Arrow>
+  MenuCursorRight: <Right_Arrow>
+  ScrollUp: "[u]"
+  ScrollDown: "[d]"
+  ScrollPageUp: <Page_Up>
+  ScrollPageDown: <Page_Down>
+  EmptySelection: <Home>
+  FillSelection: <End>
+  CloseAllMenus: <Delete>
+  # Editing
+  DeleteCharacter: <Delete>
+  Backspace: <Backspace>
+  Home: <Home>
+  End: <End>
+  # Archival
+  TakeScreenshot: <F9>
+  # Sector Map
+  MoveMapCursorLeft: <KEYPAD_4>
+  MoveMapCursorRight: <KEYPAD_6>
+  MoveMapCursorUp: <KEYPAD_8>
+  MoveMapCursorDown: <KEYPAD_2>
+  MoveMapCursorUpAndLeft: <KEYPAD_7>
+  MoveMapCursorUpAndRight: <KEYPAD_9>
+  MoveMapCursorDownAndLeft: <KEYPAD_1>
+  MoveMapCursorDownAndRight: <KEYPAD_3>
+  MoveMapCursorToNearestObject: <KEYPAD_5>
+  ChangeMapAxis: <Insert>
+  EnableDisableSectorCamera: <K>
+  ZoomMapIn: <Home>
+  ZoomMapOut: <End>
+  BuildStationRotateAAxisPos: <KEYPAD_3>
+  BuildStationRotateAAxisNeg: <KEYPAD_1>
+  BuildStationRotateBAxisPos: <KEYPAD_9>
+  BuildStationRotateBAxisNeg: <KEYPAD_7>
+
+  Accel_UiUp: <Up_Arrow>
+  Decel_UiDn: <Down_Arrow>
+  Boost_UiPrio: <Page_Up>
+  Brake_UiNext: <Page_Down>
+  TgtPrevObj_UiLt: <Left_Arrow>
+  TgtNextObj_UiRt: <Right_Arrow>
+  TgtPrevOwn_TradeDec: <Backspace>
+  TgtNextOwn_TradeInc: <1>
+
+  UiUp_TgtNearBandit: <Up_Arrow>#Ui↑#@Bandit
+  UiDn_TgtNextEnemy: <Down_Arrow>#Ui↓#@Enemy+
+  UiLt_TgtNextOwn: <Left_Arrow>#Ui←#@Own+
+  UiRt_TgtNextAny: <Right_Arrow>#Ui→#@Any+
+
+action:
+- name: Default
+  layer:
+  - name: Default
+    LJ: (LJ)
+    RJ:
+      mode: jsmove
+      c: $LaunchMissile
+    BK: <2><1>|#Cycle#Weapons#Group _<4><3>|
+    # LT for speed settings:
+    # Lv0: tap = PresetHi/Lo, hold = Boost/Brake
+    # Lv1 LB+: MatchSpeed
+    # Lv2 RB+: ThrottleScale
+    # Lv3 LB+RB+: Reverse
+    LT:
+      mode: trigger
+      o: $BrakeToStop +${Accelerate}@50,250#SpeedPresetLo
+      c: $BoostExtension +${Decelerate}@50,250#SpeedPresetHi
+      settings:
+        deadzone_inner_radius: 0
+        deadzone_outer_radius: 32767
+        adaptive_threshold: 5
+    RT.c: $BoresightFire
+    BQ.n: $OpenSidebar
+    BQ.w: "+{overlay,apply,Trade1} -{overlay,peel,Trade1}{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
+    BQ.e: $CancelEscape
+    BQ.s: $SelectOption
+    DP.u: $UiUp_TgtNearBandit
+    DP.d: $UiDn_TgtNextEnemy
+    DP.l: $UiLt_TgtNextOwn
+    DP.r: $UiRt_TgtNextAny
+    LS: "{overlay,apply,6th_axis}"
+    ST: <Delete>
+
+  - name: dummy
+
+  - name: 6th_axis
+    LS: "{overlay,peel,6th_axis}"
+    LJ.u: $StrafeUp
+    LJ.d: $StrafeDown
+    LJ.l: $RollLeft
+    LJ.r: $RollRight
+
+  - name: Panels1
+    # D-pad reflects A-10C throttle's Coolie Hat.
+    DP.u: "{mouse_position,16384,16384,0} [1]@120,0 _$ToggleHudDisplay"
+    DP.d: $SelectMonitor _$FreightBay:750
+    DP.l: "_$ViewOnLeftMonitor:250 {mouse_position,4000,2000,1}@0,120 [1]@90,0"
+    DP.r: "_$ViewOnRightMonitor:250 {mouse_position,30000,2000,1}@0,120 [1]@90,0"
+    # ButtonQuad bindings should be sensible to use while not piloting.
+    BQ.n: $DefaultView :$SelectViewMode
+    BQ.e: $SectorMap :$GalaxyMap 
+    BQ.w: $Comms
+    BQ.s: $DockWithTarget
+    BK: $LaserTargetingMode
+    #
+    LT.o: $MatchSpeedToTarget _$Decelerate
+    LT.c: $MatchSpeedToTarget _$Decelerate
+    LJ:
+      mode: jsmouse
+      c: "[1]"
+      settings:
+        sensitivity: 50
+
+  - name: Combat1
+    BK: $SelectMissile
+    DP:
+      u: <KEYPAD_PLUS>#ZoomIn
+      d: <KEYPAD_DASH>#ZoomOut
+#      l:
+#      r:
+    LJ:
+      mode: radial
+      "c": <KEYPAD_5>
+      "01": <KEYPAD_8>
+      "02": <KEYPAD_9>
+      "03": <KEYPAD_6>
+      "04": <KEYPAD_3>
+      "05": <KEYPAD_2>
+      "06": <KEYPAD_1>
+      "07": <KEYPAD_4>
+      "08": <KEYPAD_7>
+      settings:
+        touchmenu_button_fire_type: 2
+#    LJ:
+#      mode: dpad
+#      "u": <KEYPAD_8>
+#      "d": <KEYPAD_2>
+#      "l": <KEYPAD_4>
+#      "r": <KEYPAD_6>
+#      "c": <KEYPAD_5>
+#      settings:
+#        analog_emulation_period: 50
+#        analog_emulation_duty_cycle_pct: 15
+    LT:
+      "mode": trigger
+      o: "+{overlay,apply,SpeedScale}"
+      settings:
+        output_trigger: 0
+        edge_binding_radius: 0
+        deadzone_outer_radius: 32767
+
+  - name: Command1
+    BK: $PauseGame
+    DP.u: $WingmenAttackTarget
+    DP.d: $WingmenProtectMe
+    DP.l: $DronesProtectMe
+    DP.r: $DronesAttackTarget
+    LT.c: <>
+    LT.o: $Decelerate
+
+  - name: SpeedScale
+    LT:
+      "mode": trigger
+      c: <>
+      o: "-{overlay,peel,SpeedScale}"
+      settings:
+        adaptive_threshold: 0
+        output_trigger: 1
+        deadzone_inner_radius: 0
+        deadzone_outer_radius: 32767
+        edge_binding_radius: 0
+
+  - name: Trade1
+    # Hold Square to modify trade quanitites.
+    DP.l: "<Backspace>{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
+    DP.u: "+<Backspace> +<1>@50,0 -{overlay,apply,T1_1}"
+    DP.r: "<0>{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
+    DP.d: "+<Backspace> +<9>@50,0 -{overlay,apply,T1_9}"
+
+  - name: T1_1
+    DP.u: "+<Backspace> +<2>@50,0 -{overlay,peel,T1_1}{overlay,apply,T1_2}"
+    DP.d: "+<Backspace> +<0>@50,0 -{overlay,peel,T1_1}{overlay,apply,Trade1}"
+  - name: T1_2
+    DP.u: "+<Backspace> +<3>@50,0 -{overlay,peel,T1_2}{overlay,apply,T1_3}"
+    DP.d: "+<Backspace> +<1>@50,0 -{overlay,peel,T1_2}{overlay,apply,T1_1}"
+  - name: T1_3
+    DP.u: "+<Backspace> +<4>@50,0 -{overlay,peel,T1_3}{overlay,apply,T1_4}"
+    DP.d: "+<Backspace> +<2>@50,0 -{overlay,peel,T1_3}{overlay,apply,T1_2}"
+  - name: T1_4
+    DP.u: "+<Backspace> +<5>@50,0 -{overlay,peel,T1_4}{overlay,apply,T1_5}"
+    DP.d: "+<Backspace> +<3>@50,0 -{overlay,peel,T1_4}{overlay,apply,T1_3}"
+  - name: T1_5
+    DP.u: "+<Backspace> +<6>@50,0 -{overlay,peel,T1_5}{overlay,apply,T1_6}"
+    DP.d: "+<Backspace> +<4>@50,0 -{overlay,peel,T1_5}{overlay,apply,T1_4}"
+  - name: T1_6
+    DP.u: "+<Backspace> +<7>@50,0 -{overlay,peel,T1_6}{overlay,apply,T1_7}"
+    DP.d: "+<Backspace> +<5>@50,0 -{overlay,peel,T1_6}{overlay,apply,T1_5}"
+  - name: T1_7
+    DP.u: "+<Backspace> +<8>@50,0 -{overlay,peel,T1_7}{overlay,apply,T1_8}"
+    DP.d: "+<Backspace> +<6>@50,0 -{overlay,peel,T1_7}{overlay,apply,T1_6}"
+  - name: T1_8
+    DP.u: "+<Backspace> +<9>@50,0 -{overlay,peel,T1_8}{overlay,apply,T1_9}"
+    DP.d: "+<Backspace> +<7>@50,0 -{overlay,peel,T1_8}{overlay,apply,T1_7}"
+  - name: T1_9
+    DP.u: "+<Backspace> +<0>@50,0 -{overlay,peel,T1_9}{overlay,apply,Trade1}"
+    DP.d: "+<Backspace> +<8>@50,0 -{overlay,peel,T1_9}{overlay,apply,T1_8}"
+
+  shiftmap:
+    shifter:
+      LB: hold 1
+      RB: hold 2
+    overlay:
+      1: [ Panels1 ]
+      2: [ Combat1 ]
+      3: [ Command1 ]
+    sanity: ST
+    hermit:
+      1: -<T>
+    extend:
+      2: -(LS)
+
