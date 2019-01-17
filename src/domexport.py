@@ -764,11 +764,15 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         for poleobj in clusterobj.get("component", []):
           polesym = poleobj['sym']
           scansyms.append(polesym)
-          polegens = poleobj['synthesis']
-          self.extend_layer_cluster_pole(paralayer, cluster_sym, polesym, polegens, None)
+          self.extend_layer_cluster_pole(paralayer, cluster_sym, polesym, poleobj, None)
         if not clusterobj.get("mode", None):
           automode = self.auto_mode(scansyms, 1)
           clusterobj["mode"] = automode
+        cluster = self.get_layer_cluster(paralayer, cluster_sym)
+        for k,v in clusterobj.items():
+          # TODO: merge instead of overwrite.
+          if not k in cluster:
+            cluster[k] = v
         continue  # bypass cluster.pole case.
 
       if cluster_sym and component_sym:
@@ -777,15 +781,20 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
           syntheses = self.expand_shorthand_syntheses(v)
         else: syntheses = v
         self.pave_layer_cluster_pole(paralayer, cluster_sym, component_sym, None)
-        self.extend_layer_cluster_pole(paralayer, cluster_sym, component_sym, syntheses, None)
+        poleobj = {
+          'sym': component_sym,
+          'synthesis': syntheses,
+          }
+        self.extend_layer_cluster_pole(paralayer, cluster_sym, component_sym, poleobj, None)
       else:   # Not recognized as shorthand; assume longhand.
         # copy verbatim.
         if k == 'cluster':
           vv = [ self.normalize_cluster(cl) for cl in v ]
           #paralayer[k].extend(vv)
           for cluster in vv:
-            for pole in cluster['component']:
-              self.extend_layer_cluster_pole(paralayer, cluster['sym'], pole['sym'], pole['synthesis'], None)
+            for poleobj in cluster['component']:
+              polesym = poleobj['sym']
+              self.extend_layer_cluster_pole(paralayer, cluster['sym'], polesym, poleobj, None)
         else:
           paralayer[k] = v
     # auto-mode from all components.
@@ -910,15 +919,27 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         }
       cluster['component'].append(polespec)
     return lyr
-  def extend_layer_cluster_pole (self, lyr, clustersym, polesym, syntheses, clustermode=None):
+  def extend_layer_cluster_pole (self, lyr, clustersym, polesym, poleobj, clustermode=None):
+    if polesym is None:
+      polesym = poleobj['sym']
+    syntheses = poleobj['synthesis']
     self.pave_layer_cluster_pole(lyr, clustersym, polesym, clustermode)
     (cluster, pole) = self.get_layer_cluster_pole(lyr, clustersym, polesym)
     pole['synthesis'].extend(syntheses)
+    for k,v in poleobj.items():
+      if not k in cluster:
+        cluster[k] = v
     return lyr
-  def overwrite_layer_cluster_pole (self, lyr, clustersym, polesym, syntheses, clustermode=None):
+  def overwrite_layer_cluster_pole (self, lyr, clustersym, polesym, poleobj, clustermode=None):
+    if polesym is None:
+      polesym = poleobj['sym']
+    syntheses = polesym['synthesis']
     self.pave_layer_cluster_pole(lyr, clustersym, polesym, clustermode)
     (cluster, pole) = self.get_layer_cluster_pole(lyr, clustersym, polesym)
     pole['synthesis'] = syntheses
+    for k,v in poleobj.items():
+      if not k in cluster:
+        cluster[k] = v
     return lyr
 
   def prepare_shifters (self, dom_node, conmap):
@@ -1084,7 +1105,11 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       automode = self.auto_mode(po)
       self.pave_layer_cluster_pole(baselayer, cl, po, automode)
       syntheses = self.expand_shorthand_syntheses(shiftspec)
-      self.extend_layer_cluster_pole(baselayer, cl, po, syntheses, automode)
+      poleobj = {
+        'sym': po,
+        'synthesis': syntheses,
+        }
+      self.extend_layer_cluster_pole(baselayer, cl, po, poleobj, automode)
 
     # Preshift: find all clusters involved with shift.
     for n in range(1, maxshift+1):
@@ -1109,7 +1134,11 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         if (n in hermits) and (n & bitmask) == bitmask:
           hermitspec = "{}#hermit({})".format(hermits[n], n)
           syntheses.extend(self.expand_shorthand_syntheses(hermitspec))
-        self.extend_layer_cluster_pole(preshiftlayer, cl, po,syntheses, automode)
+        poleobj = {
+          'sym': po,
+          'synthesis': syntheses,
+          }
+        self.extend_layer_cluster_pole(preshiftlayer, cl, po, poleobj, automode)
 
       # Generate Preshift's advancer binds for involve clusters.
       advbinddef = [ {
@@ -1171,7 +1200,11 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         cl,po = self.normalize_srcsym(sanity)
         sanitizer = self.expand_shorthand_syntheses("".join(sanitizeable))
         automode = self.auto_mode(po)
-        self.extend_layer_cluster_pole(extlayers[0], cl, po, sanitizer, automode)
+        poleobj = {
+          'sym': po,
+          'synthesis': sanitizer,
+          }
+        self.extend_layer_cluster_pole(extlayers[0], cl, po, poleobj, automode)
     return extlayers
 
   # tuple( list-of-fixed-kv, list-of-advbinddef-keys )
