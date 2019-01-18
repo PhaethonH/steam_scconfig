@@ -393,17 +393,20 @@ element_name of None to iterate through all children as (element_name,element_co
       return None
 
     # resolve aliases.
-#    while evspec[0] == '$':
-#      evspec = self.aliases.get(evspec[1:], None)
     re_alias = re.compile(self.RE_ALIAS)
+    autolabel = False
     while '$' in evspec:
       subst = re_alias.search(evspec).group(1)
       if subst[0] == '{':
         k = subst[1:-1]
+        autolabel = False
       else:
         k = subst
+        autolabel = k
       v = self.aliases.get(k, '')
       evspec = re_alias.sub(v, evspec)
+    if autolabel:  # Outermost evaluation is final label (may be False).
+      evspec = "{}#{}".format(evspec, autolabel)
 
     re_actsig = re.compile(self.RE_ACTSIG)
     re_events = re.compile(self.RE_EVENTS)
@@ -1284,14 +1287,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
   def load_aliases (self, dom_node):
     if dom_node:
       for aliasname,aliasdesc in self.iter_children(dom_node, None):
-#        v = aliasdesc
-        if not '#' in aliasdesc:  # auto-label.
-          v = "{}#{}".format(aliasdesc, aliasname)
-        else:
-          if aliasdesc[-1] == '#':  # empty label.
-            v = aliasdesc[:-1]
-          else:  # as-is.
-            v = aliasdesc
+        v = aliasdesc
         self.aliases[aliasname] = v
     return True
 
