@@ -16,8 +16,8 @@ aliases:
   YawRight: <Right_Arrow>
   RollLeft: <Q>
   RollRight: <E>
-  Accelerate: <X>#
-  Decelerate: <Z>#
+  Accelerate: <X>
+  Decelerate: <Z>
   BoostExtension: <Tab>
   BrakeToStop: <Backspace>
   BrakeAndReverse: (LB)
@@ -56,7 +56,7 @@ aliases:
   ViewInfoAboutSelectedObject: <U>
   CurrentShip: <Y>
   PersonalInformation: <P>
-  Navigation: <>
+  Navigation: <Semicolon>
   SectorMap: <Period>
   GalaxyMap: <Comma>
   ShowSelectionOnGalaxyMap: <G>
@@ -81,7 +81,7 @@ aliases:
   OwnedShips: <O>
   ChangeShip: <X>
   # Freight
-  FreightBay: <F>#
+  FreightBay: <F>
   FreightExchange: <>
   # Upgrades
   SETATimeAccelerator: <J>
@@ -108,8 +108,8 @@ aliases:
   ToggleHudDisplay: <Left_Shift><H>
   SelectMonitor: <F4>
   CloseMonitors: <F5>
-  ViewOnLeftMonitor: <Left_Shift><1>#
-  ViewOnRightMonitor: <Left_Shift><2>#
+  ViewOnLeftMonitor: <Left_Shift><1>
+  ViewOnRightMonitor: <Left_Shift><2>
   ZoomIn: <KEYPAD_PLUS>
   ZoomOut: <KEYPAD_MINUS>
   SelectCameraMode: <KEYPAD_0>
@@ -176,15 +176,21 @@ aliases:
   UiLt_TgtNextOwn: <Left_Arrow>#Ui←#@Own+
   UiRt_TgtNextAny: <Right_Arrow>#Ui→#@Any+
 
+  TradePad: "{overlay,apply,Trade1}"
+  EndTradePad: "{overlay,peel,Trade1}{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
+
 action:
 - name: Default
   layer:
   - name: Default
-    LJ: (LJ)
+    LJ:
+      mode: jsmove
+      c: "{overlay,apply,6th_axis}"
     RJ:
       mode: jsmove
       c: $LaunchMissile
-    BK: <2><1>|#Cycle#Weapons#Group _<4><3>|
+#    BK: <2><1>|#Cycle#Weapons#Group _<4><3>|
+    BK: :<2> _<1> <4>
     # LT for speed settings:
     # Lv0: tap = PresetHi/Lo, hold = Boost/Brake
     # Lv1 LB+: MatchSpeed
@@ -199,54 +205,91 @@ action:
         deadzone_outer_radius: 32767
         adaptive_threshold: 5
     RT.c: $BoresightFire
-    BQ.n: $OpenSidebar
-    BQ.w: "+{overlay,apply,Trade1} -{overlay,peel,Trade1}{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
+#    BQ.n: $OpenSidebar
+    BQ.n: +${TradePad} -${EndTradePad}
+    BQ.w: $SectorMap :$GalaxyMap _{overlay,apply,Displays1}#Displays
     BQ.e: $CancelEscape
     BQ.s: $SelectOption
-    DP.u: $UiUp_TgtNearBandit
-    DP.d: $UiDn_TgtNextEnemy
-    DP.l: $UiLt_TgtNextOwn
-    DP.r: $UiRt_TgtNextAny
-    LS: "{overlay,apply,6th_axis}"
+    DP.u: ${UiUp_TgtNearBandit}
+    DP.d: ${UiDn_TgtNextEnemy}
+    DP.l: ${UiLt_TgtNextOwn}
+    DP.r: ${UiRt_TgtNextAny}
     ST: <Delete>
 
   - name: dummy
 
   - name: 6th_axis
-    LS: "{overlay,peel,6th_axis}"
-    LJ.u: $StrafeUp
-    LJ.d: $StrafeDown
-    LJ.l: $RollLeft
-    LJ.r: $RollRight
+    LJ:
+      mode: dpad
+      c: "{overlay,peel,6th_axis}"
+      u: $StrafeUp
+      d: $StrafeDown
+      l: $RollLeft
+      r: $RollRight
+      settings:
+        layout: 2
+        analog_emulation_period: 60
+        analog_emulation_duty_cycle_pct: 20
+
+# Operations that are reasonable to use without flight stick control:
+#*Current Ship (panel)
+#*Personal Info (panel)
+#*Owned Property (panel)
+#*Message Log
+#*Rename object
+#*TradeWithStation
+#*LandedShips
+#*OwnedShips
+#*ChangeShip
+#*BestSell
+#*BestBuy
+#*UnfocusedJump
+# Operations that may be used without flight stick control (but would be nice):
+#*Autopilot
+#*Comms
+#*DockingComputer
+#*SETA
+#*Jumpdrive
+#
+#*MyMissions
+#*Encyclopedia
+#*MyAchievemens
+
 
   - name: Panels1
     # D-pad reflects A-10C throttle's Coolie Hat.
-    DP.u: "{mouse_position,16384,16384,0} [1]@120,0 _$ToggleHudDisplay"
-    DP.d: $SelectMonitor _$FreightBay:750
-    DP.l: "_$ViewOnLeftMonitor:250 {mouse_position,4000,2000,1}@0,120 [1]@90,0"
-    DP.r: "_$ViewOnRightMonitor:250 {mouse_position,30000,2000,1}@0,120 [1]@90,0"
+    # UP=HUD-as-SOI; DOWN=SwapMFCD/QuickLookDSMS
+    # LEFT=CycleLeftMFCD/LeftMFCD-as-SOI RIGHT=CycleRightMFCD/RightMFCD-as-SOI
+    DP.u: "{mouse_position,16384,16384,0} [1]@120,0   _$ToggleHudDisplay"
+    DP.d: $SelectMonitor  _$CloseMonitors   #_$FreightBay:750
+    # Short Press to select monitor; Long Press to show on monitor.
+    DP.l: "[1]^@150,0 _$ViewOnLeftMonitor:250 {mouse_position,4000,2000,1}^@0,200 "
+    DP.r: "[1]^@150,0 _$ViewOnRightMonitor:250 {mouse_position,30000,2000,1}^@0,200 "
     # ButtonQuad bindings should be sensible to use while not piloting.
-    BQ.n: $DefaultView :$SelectViewMode
+    BQ.n: $ActionsForSelectedObject
     BQ.e: $SectorMap :$GalaxyMap 
     BQ.w: $Comms
     BQ.s: $DockWithTarget
-    BK: $LaserTargetingMode
-    #
-    LT.o: $MatchSpeedToTarget _$Decelerate
-    LT.c: $MatchSpeedToTarget _$Decelerate
+    # LeftJoystick reflects Slew Control.
     LJ:
       mode: jsmouse
       c: "[1]"
       settings:
         sensitivity: 50
 
-  - name: Combat1
-    BK: $SelectMissile
+  - name: Panels2
+    # Hold left/right to peel off Panels2 and drop to Long Press.
+    DP.l: "{overlay,peel,Panels2}^/250 -{mouse_position,4000,2000,1}@0,200 -[1]@150,0 -{overlay,peel,Panels2}@200,0"
+    DP.r: "{overlay,peel,Panels2}^/250 -{mouse_position,30000,2000,1}@0,200 -[1]@150,0 -{overlay,peel,Panels2}@200,0"
+
+
+  - name: Displays1
+    BQ.w: -{overlay,peel,Displays1}
     DP:
       u: <KEYPAD_PLUS>#ZoomIn
       d: <KEYPAD_DASH>#ZoomOut
-#      l:
-#      r:
+      l: $SelectCameraMode
+      r: $ChangeMapAxis
     LJ:
       mode: radial
       "c": <KEYPAD_5>
@@ -259,7 +302,7 @@ action:
       "07": <KEYPAD_4>
       "08": <KEYPAD_7>
       settings:
-        touchmenu_button_fire_type: 2
+        touchmenu_button_fire_type: 3
 #    LJ:
 #      mode: dpad
 #      "u": <KEYPAD_8>
@@ -278,26 +321,59 @@ action:
         edge_binding_radius: 0
         deadzone_outer_radius: 32767
 
+  - name: Combat1
+    DP.u: $SelectWeaponGroup1 :$SelectWeaponGroup2
+    DP.d: $SelectWeaponGroup3 :$SelectWeaponGroup4 _$WeaponsMenu
+    DP.l: $MatchSpeedToTarget
+    DP.r: <>
+    LJ.u: $TargetNearestEnemy
+    LJ.l: $TargetNextOwnedObject
+    LJ.r: $TargetNextObject
+    LJ.d: $TargetNextEnemy
+
   - name: Command1
-    BK: $PauseGame
     DP.u: $WingmenAttackTarget
     DP.d: $WingmenProtectMe
     DP.l: $DronesProtectMe
     DP.r: $DronesAttackTarget
-    LT.c: <>
-    LT.o: $Decelerate
+    LT:
+      mode: trigger
+      c: <>
+      o: $Decelerate
+      settings:
+        adaptive_threshold: 0
+
+  - name: SpeedMatch
+    #
+    LT.o: $MatchSpeedToTarget _$Decelerate
+    LT.c: $MatchSpeedToTarget _$Decelerate
 
   - name: SpeedScale
     LT:
       "mode": trigger
       c: <>
-      o: "-{overlay,peel,SpeedScale}"
+      o: +{overlay,apply,SpeedLimbo}
       settings:
         adaptive_threshold: 0
         output_trigger: 1
         deadzone_inner_radius: 0
         deadzone_outer_radius: 32767
         edge_binding_radius: 0
+
+  - name: SpeedLimbo
+    LT:
+      mode: trigger
+      c: -{overlay,peel,SpeedScale}{overlay,peel,SpeedLimbo}
+      o: -{overlay,peel,SpeedScale}{overlay,peel,SpeedLimbo}
+      settings:
+        output_trigger: 1
+
+  # WeaponsMode, Laser
+  - name: WM_Laser
+    BK: $LaserTargetingMode
+  # WeaponsMode, Missile
+  - name: WM_Missile
+    BK: $SelectMissile
 
   - name: Trade1
     # Hold Square to modify trade quanitites.
@@ -339,8 +415,8 @@ action:
       LB: hold 1
       RB: hold 2
     overlay:
-      1: [ Panels1 ]
-      2: [ Combat1 ]
+      1: [ WM_Laser, SpeedMatch, Panels1, Panels2 ]
+      2: [ WM_Missile, SpeedScale, Combat1 ]
       3: [ Command1 ]
     sanity: ST
     hermit:
