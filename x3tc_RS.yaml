@@ -7,6 +7,8 @@ description: "Centered on Right Stick for Pitch+Yaw"
 devtype: controller_ps3
 
 aliases:
+  # no-operation to fill spots in radial/touch menu.
+  NoOp: "{overlay,peel,dummy}"
   # Flight
   ToggleCursorFlightMode: <Space>
   ToggleClassicFlightMode: <Left_Shift><N>
@@ -85,6 +87,7 @@ aliases:
   FreightExchange: <>
   # Upgrades
   SETATimeAccelerator: <J>
+  SETA: $SETATimeAccelerator
   Jumpdrive: <Left_Shift><J>
   UnfocussedJump: <>
   VideoEnhancementGoggles: <Left_Alt>
@@ -188,9 +191,11 @@ action:
       c: "{overlay,apply,6th_axis}"
     RJ:
       mode: jsmove
-      c: $LaunchMissile
+      # Double-tap+hold for missile spam; Hold 3s to cancel missile launch.
+      c: $LaunchMissile :${LaunchMissile}/20#Missile#spam _<>:3000#Cancel#Launch
 #    BK: <2><1>|#Cycle#Weapons#Group _<4><3>|
-    BK: :<2> _<1> <4>
+#    BK: :<2> _<1> <4>
+    BK: $SelectMissile
     # LT for speed settings:
     # Lv0: tap = PresetHi/Lo, hold = Boost/Brake
     # Lv1 LB+: MatchSpeed
@@ -207,7 +212,7 @@ action:
     RT.c: $BoresightFire
 #    BQ.n: $OpenSidebar
     BQ.n: +${TradePad} -${EndTradePad}
-    BQ.w: $SectorMap :$GalaxyMap _{overlay,apply,Displays1}#Displays
+    BQ.w: $SectorMap :$GalaxyMap _{overlay,apply,Displays1}:333#Displays
     BQ.e: $CancelEscape
     BQ.s: $SelectOption
     DP.u: ${UiUp_TgtNearBandit}
@@ -237,19 +242,19 @@ action:
 #*Owned Property (panel)
 #*Message Log
 #*Rename object
-#*TradeWithStation
-#*LandedShips
-#*OwnedShips
-#*ChangeShip
-#*BestSell
-#*BestBuy
+#* TradeWithStation
+#* LandedShips
+#* OwnedShips
+#* ChangeShip
+#* BestSell
+#* BestBuy
 #*UnfocusedJump
 # Operations that may be used without flight stick control (but would be nice):
 #*Autopilot
 #*Comms
-#*DockingComputer
-#*SETA
-#*Jumpdrive
+#* DockingComputer
+#* SETA
+#* Jumpdrive
 #
 #*MyMissions
 #*Encyclopedia
@@ -267,8 +272,8 @@ action:
     DP.r: "[1]^@150,0 _$ViewOnRightMonitor:250 {mouse_position,30000,2000,1}^@0,200 "
     # ButtonQuad bindings should be sensible to use while not piloting.
     BQ.n: $ActionsForSelectedObject
-    BQ.e: $SectorMap :$GalaxyMap 
-    BQ.w: $Comms
+    BQ.e: $SETA _$Jumpdrive
+    BQ.w: <>
     BQ.s: $DockWithTarget
     # LeftJoystick reflects Slew Control.
     LJ:
@@ -381,6 +386,17 @@ action:
     DP.u: "+<Backspace> +<1>@50,0 -{overlay,apply,T1_1}"
     DP.r: "<0>{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
     DP.d: "+<Backspace> +<9>@50,0 -{overlay,apply,T1_9}"
+    LB: $BestBuysLocator
+    RB: $BestSellingPriceLocator
+    LJ:
+      mode: radial
+#      "00": "${NoOp}#BestBuy____BestSell#LB############################RB"
+      "01": $TradeWithStation
+      "02": $ChangeShip
+      "03": $LandedShips
+      "04": $OwnedShips
+    LJ*BQ.r:
+      mode: radial
 
   - name: T1_1
     DP.u: "+<Backspace> +<2>@50,0 -{overlay,peel,T1_1}{overlay,apply,T1_2}"
@@ -416,7 +432,7 @@ action:
       RB: hold 2
     overlay:
       1: [ WM_Laser, SpeedMatch, Panels1, Panels2 ]
-      2: [ WM_Missile, SpeedScale, Combat1 ]
+      2: [ SpeedScale, Combat1 ]
       3: [ Command1 ]
     sanity: ST
     hermit:
