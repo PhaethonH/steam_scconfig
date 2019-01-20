@@ -4,10 +4,10 @@ aliases:
   # Flight
   ToggleCursorFlightMode: <Space>
   ToggleClassicFlightMode: <Left_Shift><N>
-  PitchUp: <Down>
-  PitchDown: <Up>
-  YawLeft: <Left>
-  YawRight: <Right>
+  PitchUp: <Down_Arrow>
+  PitchDown: <Up_Arrow>
+  YawLeft: <Left_Arrow>
+  YawRight: <Right_Arrow>
   RollLeft: <Q>
   RollRight: <E>
   Accelerate: <X>
@@ -119,10 +119,10 @@ aliases:
   # Menus
   CancelEscape: <Escape>
   SelectOption: <Return>
-  MenuCursorUp: <Up>
-  MenuCursorDown: <Down>
-  MenuCursorLeft: <Left>
-  MenuCursorRight: <Right>
+  MenuCursorUp: <Up_Arrow>
+  MenuCursorDown: <Down_Arrow>
+  MenuCursorLeft: <Left_Arrow>
+  MenuCursorRight: <Right_Arrow>
   ScrollUp: "[u]"
   ScrollDown: "[d]"
   ScrollPageUp: <Page_Up>
@@ -158,19 +158,21 @@ aliases:
 
 name: "GeneratedSample_1"
 revision: 2
+author: "PhaethonH"
+description: "Example config to test conversion to VDF"
 devtype: controller_ps4
-actions:
+action:
 - name: Default
-  layers:
+  layer:
   - name: Default
     LJ: (LJ)
     RJ: (RJ)
     ST: <Pause>
     RT.c: $BoresightFire
-    DP.u: $MenuCursorUp
-    DP.l: $MenuCursorLeft
-    DP.r: $MenuCursorRight
-    DP.d: $MenuCursorDown
+    DP.u: "{overlay,hold,Accel}"
+    DP.l: $TargetPrevObject
+    DP.r: $TargetNextObject
+    DP.d: "{overlay,hold,Decel}"
     BQ.n: $TrackTarget
     BQ.w: $SelectMissile
     BQ.e: $BoostExtension
@@ -198,12 +200,31 @@ actions:
     BQ.e: $MatchSpeedToTarget
     BQ.s: <>
 
-  shifters:
-    LB: hold 1
-    RB: hold 4
+  - name: Command1
 
-  shiftlayers:
-    1: [ Commerce1 ]
-    4: [ Combat1 ]
-    5: [ Command1 ]
+  - name: Accel
+    INF: $Accelerate
+    DP.l: <>
+    DP.r: <>
+    DP.d: <>
+    LB: $BoostExtension
+
+  - name: Decel
+    INF: $Decelerate
+    DP.u: <>
+    DP.l: <>
+    DP.r: <>
+    LB: $BrakeToStop
+
+  shiftmap:
+    shifter:
+      LB: hold 1
+      RB: hold 4
+    overlay:
+      1: [ Commerce1 ]
+      4: [ Combat1 ]
+      5: [ Command1 ]
+    sanity: BK
+    hermit:
+      1: -<RETURN>
 
