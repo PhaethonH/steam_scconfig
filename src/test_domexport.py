@@ -394,6 +394,43 @@ class TestDomExporter (unittest.TestCase):
 #    pprint.pprint(s, width=180)
 
 
+  d_modeshifting1 = {
+    'action': {
+      'name': 'Default',
+      'layer': [
+        {
+          'name': 'Default',
+          'BQ': {
+            'n': '<Y>',
+            'w': '<X>',
+            'e': '<B>',
+            's': '<A>',
+            },
+          'LB+BQ': {
+            '00': '<0>',
+            '01': '<1>',
+            '02': '<2>',
+            '03': '<3>',
+            '04': '<4>',
+            '05': '<5>',
+            '06': '<6>',
+            },
+          },
+        ],
+      },
+    }
+  def test_modeshift (self):
+    exporter = domexport.ScconfigExporter(None)
+    d = self.d_modeshifting1
+    conmap = scconfig.Mapping()
+    exporter.export_conmap(d, conmap)
+    z = scvdf.toDict(scconfig.toVDF(conmap))
+    self.assertTrue(z['preset'])
+    self.assertEqual(len(z['preset']['group_source_bindings']), 2)
+    n_modeshifted = len([ x for x in z['preset']['group_source_bindings'].values() if "modeshift" in x ])
+    self.assertEqual(n_modeshifted, 1)
+
+
   def test_sample1 (self):
     with open("../examples/x3tc_2.yaml") as f:
       d_yaml = yaml.load(f)
