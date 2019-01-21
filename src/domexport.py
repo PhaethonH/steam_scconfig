@@ -1009,6 +1009,8 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         cluster_sym = base_sym
         normcluster = self.normalize_cluster(v)
         normcluster.sym = base_sym
+        if base_sym in ("RT", "LT"):
+          normcluster.style = "trigger"
         modeshift_sym = self.MODESHIFT_MAP.get(modeshift_sym, modeshift_sym)
         normcluster.modeshift = modeshift_sym
         paralayer.merge_cluster(normcluster, normcluster.get("style",None))
