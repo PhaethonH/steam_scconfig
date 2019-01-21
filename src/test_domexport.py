@@ -74,7 +74,7 @@ class TestDomExporter (unittest.TestCase):
 
   d_cluster1 = {
     "sym": "DP",
-    "mode": "dpad",
+    "style": "dpad",
     "pole": [
       d_pole1,
       {
@@ -93,9 +93,9 @@ class TestDomExporter (unittest.TestCase):
   def test_export_cluster (self):
     exporter = domexport.ScconfigExporter(None)
     d = self.d_cluster1
-    grpmode = d['mode']
+    grpstyle = d['style']
     grpid = 0
-    grp = scconfig.GroupFactory.make(grpid, grpmode)
+    grp = scconfig.GroupFactory.make(grpid, grpstyle)
     self.assertIsNot(grp, None)
     exporter.export_cluster(d, grp)
     self.assertEqual(grp.MODE, 'dpad')
@@ -112,7 +112,7 @@ class TestDomExporter (unittest.TestCase):
     "name": "Level2",
     "cluster": [
       { "sym": "BQ",
-        "mode": "four_buttons",
+        "style": "four_buttons",
         "pole": [
           { "sym": "a",
             "synthesis": [
@@ -399,19 +399,19 @@ class TestDomExporter (unittest.TestCase):
     self.assertEqual(ll, {"name":None, "cluster":[], "settings": None})
     cl1 = domexport.ClusterDict("DP", "dpad")
     ll.merge_cluster(cl1)
-    self.assertEqual(ll.cluster, [{"sym": "DP", "mode": "dpad", "pole": [], }] )
+    self.assertEqual(ll.cluster, [{"sym": "DP", "style": "dpad", "modeshift": None, "pole": [], }] )
 
     ll = domexport.LayerDict()
     pp = domexport.PoleDict("u")
     cc = domexport.ClusterDict("DP", "dpad")
     cc.merge_pole(pp)
     ll.merge_cluster(cc)
-    self.assertEqual(ll.cluster, [{"sym": "DP", "mode": "dpad", "pole": [{"sym":"u", "synthesis":[]}], }] )
+    self.assertEqual(ll.cluster, [{"sym": "DP", "style": "dpad", "modeshift": None, "pole": [{"sym":"u", "synthesis":[]}], }] )
 
     ll = domexport.LayerDict()
     pp = domexport.PoleDict("u")
     ll.merge_cluster_pole("DP", "dpad", pp)
-    self.assertEqual(ll.cluster, [{"sym": "DP", "mode": "dpad", "pole": [{"sym":"u", "synthesis":[]}], }] )
+    self.assertEqual(ll.cluster, [{"sym": "DP", "style": "dpad", "modeshift": None, "pole": [{"sym":"u", "synthesis":[]}], }] )
 
 
   d_modeshifting1 = {
@@ -420,23 +420,58 @@ class TestDomExporter (unittest.TestCase):
       'layer': [
         {
           'name': 'Default',
-          'BQ': {
-            'n': '<Y>',
-            'w': '<X>',
-            'e': '<B>',
-            's': '<A>',
+          'cluster': [
+            {
+              "sym": "BQ",
+              "modeshift": None,
+              "style": "four_buttons",
+              "n": "<Y>",
+              "w": "<X>",
+              "e": "<B>",
+              "s": "<A>",
             },
-          'LB+BQ': {
-            '00': '<0>',
-            '01': '<1>',
-            '02': '<2>',
-            '03': '<3>',
-            '04': '<4>',
-            '05': '<5>',
-            '06': '<6>',
+            {
+              "sym": "BQ",
+              "modeshift": "left_bumper",
+              "style": "radial_menu",
+              "01": "<1>",
+              "02": "<2>",
+              "03": "<3>",
+              "04": "<4>",
+              "05": "<5>",
+              "06": "<6>",
+              "07": "<7>",
+              "08": "<8>",
             },
+            ],
           },
         ],
+      },
+    }
+  d_modeshifting2 = {
+    'action': {
+      'name': 'Default',
+      'layer': [
+        {
+          'name': 'Default',
+          "BQ": {
+            "n": "<Y>",
+            "w": "<X>",
+            "e": "<B>",
+            "s": "<A>",
+          },
+          "BQ&LB": {
+            "01": "<1>",
+            "02": "<2>",
+            "03": "<3>",
+            "04": "<4>",
+            "05": "<5>",
+            "06": "<6>",
+            "07": "<7>",
+            "08": "<8>",
+          },
+        },
+      ],
       },
     }
   def test_modeshift (self):
@@ -447,6 +482,15 @@ class TestDomExporter (unittest.TestCase):
     z = scvdf.toDict(scconfig.toVDF(conmap))
     self.assertTrue(z['preset'])
     self.assertEqual(len(z['preset']['group_source_bindings']), 2)
+    n_modeshifted = len([ x for x in z['preset']['group_source_bindings'].values() if "modeshift" in x ])
+    self.assertEqual(n_modeshifted, 1)
+
+    exporter = domexport.ScconfigExporter(None)
+    d = self.d_modeshifting2
+    conmap = scconfig.Mapping()
+    exporter.export_conmap(d, conmap)
+    z = scvdf.toDict(scconfig.toVDF(conmap))
+#    print("z"); pprint.pprint(z, width=180)
     n_modeshifted = len([ x for x in z['preset']['group_source_bindings'].values() if "modeshift" in x ])
     self.assertEqual(n_modeshifted, 1)
 

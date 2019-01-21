@@ -14,8 +14,10 @@ def _stringlike (x):
 
 
 # Helper classes
-def dict_alias (propname):
+def dict_alias (propname, elideable=False):
   def getter (self):
+    if elideable and (self[propname] is None):
+      raise KeyError(propname)
     return self[propname]
   def setter (self, val):
     self[propname] = val
@@ -23,8 +25,14 @@ def dict_alias (propname):
     self[propname] = None
   return property(getter, setter, deleter)
 
-def auto_mode (x, strictness=0):
-  """Determine a suitable input mode for the specified srcsym(s).
+def intOrNegOne(z):
+  try:
+    return int(z)
+  except ValueError:
+    return -1
+
+def auto_style (x, strictness=0):
+  """Determine a suitable input style for the specified srcsym(s).
 strictness=0 implies a advisory/speculative first pass detemrination.
 strictness=1 implies a mandatory/definitive second pass for exporting.
 """
@@ -36,16 +44,10 @@ strictness=1 implies a mandatory/definitive second pass for exporting.
   if any(['s' in x, 'e' in x, 'w' in x, 'n' in x]):
     return 'four_buttons'
   if strictness and any (['c' in x, 'o' in x]):
-    # ambiguous, multiple modes.
+    # ambiguous, multiple styles.
     return 'joystick_move'
   if x in ('BK', 'ST', 'LB', 'RB', 'LG', 'RG', 'INF'):
     return 'switches'
-
-  def intOrNegOne(z):
-    try:
-      return int(z)
-    except ValueError:
-      return -1
 
   nums = [ intOrNegOne(z) for z in x ] if len(x) > 0 else [-1]
   m = max(nums)
@@ -87,18 +89,20 @@ class PoleDict (dict):
       self["syntheses"].append(one_synthesis)
 
 class ClusterDict (dict):
-  def __init__ (self, cluster_sym=None, init_mode=None, poles=None):
+  def __init__ (self, cluster_sym=None, init_style=None, poles=None):
     super(ClusterDict,self).__init__()
     self["sym"] = cluster_sym
-    self["mode"] = init_mode
+    self["modeshift"] = None
+    self["style"] = init_style
     if poles is None:
       poles = PolesProxy()
     self["pole"] = poles      # List of PoleDict
 #    self["settings"] = None   # Group.settings
   sym = dict_alias("sym")
-  mode = dict_alias("mode")
+  style = dict_alias("style")
   pole = dict_alias("pole")
-  settings = dict_alias("settings")
+  modeshift = dict_alias("modeshift")
+  settings = dict_alias("settings", True)
 
   def merge_pole (self, pole, syntheses=None):
     r"""merge_pole(pole:PoleDict)
@@ -160,10 +164,10 @@ class PolesProxy (SymmablesProxy):
 
 class ClustersProxy (SymmablesProxy):
   LIST_PROPERTIES = [ "pole" ]
-  def make (self, cluster_sym, cluster_mode=None):
-    if cluster_mode is None:
-      cluster_mode = auto_mode(cluster_sym, 0)
-    retval = ClusterDict(cluster_sym, cluster_mode, None)
+  def make (self, cluster_sym, cluster_style=None):
+    if cluster_style is None:
+      cluster_style = auto_style(cluster_sym, 0)
+    retval = ClusterDict(cluster_sym, cluster_style, None)
     self.append(retval)
     return retval
 
@@ -181,10 +185,10 @@ class LayerDict (dict):
   settings = dict_alias("settings")
   cluster = dict_alias("cluster")
 
-  def merge_cluster (self, cluster, cluster_mode=None):
+  def merge_cluster (self, cluster, cluster_style=None):
     r"""merge_cluster(cluster:ClusterDict)
 merge_cluster(cluster:dict)
-merge_cluster(cluster_sym:str, cluster_mode:str)
+merge_cluster(cluster_sym:str, cluster_style:str)
 """
     extant = None
     try:
@@ -195,6 +199,11 @@ merge_cluster(cluster_sym:str, cluster_mode:str)
       extant = self.cluster[cluster_sym]
       if extant is None:
         extant = self.cluster.make(cluster_sym, None)
+    else:
+      for x in self.cluster:
+        if (x.sym == cluster.sym) and (x.modeshift == cluster.modeshift):
+          extant = x
+          break
     if extant is None:
       self.cluster.append(cluster)
     else:
@@ -207,12 +216,12 @@ merge_cluster(cluster_sym:str, cluster_mode:str)
         else:
           extant[k] = v
 
-  def merge_cluster_pole (self, cluster_sym, cluster_mode, pole):
+  def merge_cluster_pole (self, cluster_sym, cluster_style, pole):
     cluster = self.cluster[cluster_sym]
     if cluster is None:
-      if cluster_mode is None and pole.get("sym", None):
-        cluster_mode = auto_mode(pole["sym"], 0)
-      cluster = self.cluster.make(cluster_sym, cluster_mode)
+      if cluster_style is None and pole.get("sym", None):
+        cluster_style = auto_style(pole["sym"], 0)
+      cluster = self.cluster.make(cluster_sym, cluster_style)
     cluster.merge_pole(pole)
 
   def merge_settings (self, settingsdict):
@@ -241,7 +250,8 @@ Expected format (canonical):
     <name/>
     <cluster>*
       <sym/>
-      <mode/>
+      <modeshift/>
+      <style/>
       <pole>*
         <sym/>
         <synthesis>+
@@ -276,7 +286,7 @@ Shorthand
   <layer>+
     <name/>
     <ClusterSym>
-      <mode/>
+      <style/>
       <ComponentSym>
         [Evspec]
       </ComponentSym>
@@ -825,19 +835,19 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
 
     # Shorthand entire joystick.
     if dom_node in ("LJ", "(LJ)"):
-      extcluster.mode = "jsmove"
+      extcluster.style = "jsmove"
       return extcluster
     if dom_node in ("RJ", "(RJ)"):
-      extcluster.mode = "jscam"
+      extcluster.style = "jscam"
       return extcluster
 
     scanned_syms = []
-    mode = None
-    # First pass, definite mode.
+    style = None
+    # First pass, definite style.
     for k,v in self.iter_children(dom_node, None):
-      if k == 'mode':
-        mode = self.GRPMODE_MAP.get(v, v)
-        extcluster.mode = mode
+      if k == 'style':
+        style = self.GRPSTYLE_MAP.get(v, v)
+        extcluster.style = style
     # Second pass, collect.
     for k,v in self.iter_children(dom_node, None):
       pole_sym = None
@@ -845,8 +855,11 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
         cluster_sym, pole_sym = self.UNIQUE_POLE_SYMS[k]
       elif len(k) == 1:
         pole_sym = k
-      elif k in self.FILTER_SYMS.get(mode, []):
-        pole_sym = self.FILTER_SYMS[mode][k]
+      elif k in self.FILTER_SYMS.get(style, []):
+        pole_sym = self.FILTER_SYMS[style][k]
+      elif intOrNegOne(k) >= 0:
+        # unique to radial/touchmenu.
+        pole_sym = k
       if pole_sym:
         if _stringlike(v):    # Parse from string.
           syntheses = self.expand_shorthand_syntheses(v)
@@ -863,10 +876,10 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
             extcluster.merge_pole(pole)
         else:
           extcluster[k] = v
-    # Determine mode.
-    if not 'mode' in extcluster:
-      mode = self.auto_mode(scanned_syms)
-      extcluster.mode = mode
+    # Determine style.
+    if not 'style' in extcluster:
+      style = auto_style(scanned_syms)
+      extcluster.style = style
 
 #    print("normalized cluster ="); pprint.pprint(extcluster)
     return extcluster
@@ -875,7 +888,7 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
     # Maps to scconfig.Group
     r"""Convert/export cluster subdict as Group.
 {
-  "mode": ...
+  "style": ...
   "pole": [
     `pole`,
     ...
@@ -885,50 +898,23 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
 
 shorthand
 {
-  "mode": ...
+  "style": ...
   <ComponentSym>: [
     `synthesis`,
     ]
   <ComponentSym>: <EvgenSpec>
 """
-    clustermode = self.get_domattr(dom_node, "mode")
+#    print("exporting cluster"); pprint.pprint(dom_node)
+    clusterstyle = self.get_domattr(dom_node, "style")
     for polespec in self.iter_children(dom_node, "pole"):
-#      print("export pole {}/{} to groupobj {}".format(clustermode, polespec, groupobj))
+#      print("export pole {}/{} to groupobj {}".format(clusterstyle, polespec, groupobj))
       self.export_pole(polespec, groupobj)
     for ss in self.iter_children(dom_node, "settings"):
       self.export_settings(ss, groupobj.settings)
       break  # only handle the first.
-    r"""
-    for k,v in self.iter_children(dom_node, None):
-      cluster_sym, pole_sym = None, None
-      if k in self.UNIQUE_POLE_SYMS:
-        cluster_sym, pole_sym = self.UNIQUE_POLE_SYMS[k]
-      elif len(k) == 1:
-        pole_sym = k
-      if pole_sym:
-        syntheses = None
-
-        if _stringlike(v):
-          # parse
-          syntheses = self.expand_shorthand_syntheses(v)
-        elif v:
-          # presume list of Synthesis
-          syntheses = v
-
-        if syntheses is not None:
-          polespec = {
-              "sym": pole_sym,
-              "synthesis": syntheses
-            }
-          self.export_pole(polespec, groupobj)
-"""
-    for pp in self.iter_children(dom_node, "pole"):
-      self.export_pole(pp, groupobj)
+#    for pole in self.iter_children(dom_node, "pole"):
+#      self.export_pole(pole, groupobj)
     return True
-
-  @staticmethod
-  def auto_mode (x, strictness=0):
-    return auto_mode(x, strictness)
 
   # map cluster name to groupsrc name.
   GRPSRC_MAP = {
@@ -943,7 +929,7 @@ shorthand
     "DP": "dpad",
     "RJ": "right_joystick",
   }
-  GRPMODE_MAP = {
+  GRPSTYLE_MAP = {
     'pen': 'absolute_mouse',
     'face': 'four_buttons',
     'jsmove': 'joystick_move',
@@ -958,6 +944,25 @@ shorthand
     'switch': 'switches',
     'trigger': 'trigger',
     }
+  MODESHIFT_MAP = {
+    'BK': "button_escape",
+    'ST': "button_menu",
+    'LB': "left_bumper",
+    'RB': "right_bumper",
+    'LG': "button_back_left",
+    'RG': "button_back_right",
+    'LT': "left_trigger",   'LTf': "left_trigger",   'LT.c': "left_trigger",
+    'RT': "right_trigger",  'RTf': "right_trigger",  'RT.c': "right_trigger",
+    'LT.o': "left_trigger_threshold",   'LTs': "left_trigger_threshold",
+    'RT.o': "right_trigger_threshold",  'RTs': "right_trigger_threshold",
+    'LP': "left_click",
+    'RP': "right_click",
+    'LS': "left_stick_click",
+    'A': "button_a",  'a': "button_a",
+    'B': "button_b",  'b': "button_b",
+    'X': "button_x",  'x': "button_x",
+    'Y': "button_y",  'y': "button_y",
+    }
 
   def normalize_layer (self, dom_node, conmap, layeridx=0):
     r"""Resolve shorthands in a layer subdict.
@@ -967,19 +972,21 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
 
     # Scan shorthands.
     for k,v in self.iter_children(dom_node, None):
+      base_sym, modeshift_sym = k, None
       cluster_sym = pole_sym = None
-      if '.' in k:    # "CLUSTER.POLE"
-        cluster_sym, pole_sym = k.split('.')
-      elif k in self.UNIQUE_POLE_SYMS:   # "POLE(UNIQUE)"
-        cluster_sym, pole_sym = self.UNIQUE_POLE_SYMS[k]
-      elif k in self.GRPSRC_MAP:
+      if '&' in k:
+        # modeshifted.
+        base_sym, modeshift_sym = k.split('&')
+      if base_sym in self.GRPSRC_MAP:
         # short-hand for cluster.
-        cluster_sym = k
+        cluster_sym = base_sym
         normcluster = self.normalize_cluster(v)
-#        print("normalized cluster = "); pprint.pprint(normcluster)
-        normcluster.sym = k
-        paralayer.merge_cluster(normcluster, normcluster.get("mode",None))
+        normcluster.sym = base_sym
+        normcluster.modeshift = self.MODESHIFT_MAP.get(modeshift_sym, modeshift_sym)
+        paralayer.merge_cluster(normcluster, normcluster.get("style",None))
         continue  # bypass cluster.pole case.
+
+      (cluster_sym, pole_sym) = self.normalize_srcsym(base_sym)
 
       if cluster_sym and pole_sym:  # key in the form "cluster.pole".
         if _stringlike(v):
@@ -989,19 +996,19 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         paralayer.merge_cluster_pole(cluster_sym, None, pole)
       else:   # Not recognized as shorthand; assume longhand.
         # copy verbatim.
-        if k == 'cluster':
+        if base_sym == 'cluster':
           vv = [ self.normalize_cluster(cl) for cl in v ]
           for cluster in vv:
             paralayer.merge_cluster(cluster)
         else:
-          paralayer[k] = v
-    # auto-mode from all poles.
-    for cluster in paralayer['cluster']:
-      if cluster.get('mode', None) is None:
+          paralayer[base_sym] = v
+    # auto-style from all poles.
+    for cluster in paralayer.cluster:
+      if not cluster.style:
         polelist = [ x.sym for x in cluster.pole ]
-        automode = self.auto_mode(polelist)
-        cluster.mode = automode
-#        print(" fallback automode {} => {}".format(polelist, automode))
+        autostyle = auto_style(polelist)
+        cluster.style = autostyle
+#        print(" fallback autostyle {} => {}".format(polelist, autostyle))
 #    print("normalized layer "); pprint.pprint(dom_node); print(" =>"); pprint.pprint(paralayer)
 #    print("normalized layer ="); pprint.pprint(paralayer)
     return paralayer
@@ -1027,7 +1034,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
       presetkey = "Preset_{:07d}".format(presetid + 1000000)
     presetobj = conmap.add_preset(presetid, presetkey)
 
-    def export_group (clusterspec, grpmode, clustersym, active, modeshift):
+    def export_group (clusterspec, grpstyle, clustersym, active, modeshift):
       grpsrc = self.GRPSRC_MAP.get(clustersym, clustersym)
       grp = None
       # Find existing.
@@ -1040,20 +1047,21 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
       if not grp:  # Create.
         grpsrc = self.GRPSRC_MAP.get(clustersym, clustersym)
         grpid = len(conmap.groups)
-        # map shorthand mode name to full group mode.
-        grpmode = self.GRPMODE_MAP.get(grpmode, grpmode)
-        grp = conmap.add_group(grpid, grpmode) 
+        # map shorthand style name to full group style.
+        grpstyle = self.GRPSTYLE_MAP.get(grpstyle, grpstyle)
+        grp = conmap.add_group(grpid, grpstyle) 
         presetobj.add_gsb(grpid, grpsrc, active, modeshift)
 #      print("EXPORT GROUP {}".format(clustersym))
       self.export_cluster(clusterspec, grp)
 
     for clusterspec in self.iter_children(dom_node, "cluster"):
-      grpmode = self.get_domattr(clusterspec, "mode")
+      grpstyle = self.get_domattr(clusterspec, "style")
       clustersym = self.get_domattr(clusterspec, "sym")
       active = True
-      modeshift = False
+      modeshifter = self.get_domattr(clusterspec, "modeshift")
+      modeshift = (modeshifter != None)
 
-      export_group(clusterspec, grpmode, clustersym, active, modeshift)
+      export_group(clusterspec, grpstyle, clustersym, active, modeshift)
 
     # add to action_layers[] or actions[]
     if layeridx > 0:
@@ -1072,6 +1080,19 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
     else:
       cluster_sym, pole_sym = None, srcsymspec
     return (cluster_sym, pole_sym)
+
+  # tuple( list-of-fixed-kv, list-of-advbinddef-keys )
+  ADVANCING_TEMPLATE = {
+    "RT": ( [("style","trigger")], "co" ),
+    "LT": ( [("style","trigger")], "co" ),
+    "DP": ( [("style","dpad")], "udlr" ),
+    "BQ": ( [("style","four_buttons")], "abxy" ),
+    "LJ": ( [("style","dpad")], "udlrc" ),
+    "RJ": ( [("style","dpad")], "udlrc" ),
+    "LP": ( [("style","single_button")], "tc" ),
+    "RP": ( [("style","single_button")], "tc" ),
+    "SW": ( [("style","switches")], ["BK","ST","LB","RB","LG","RG"] ),
+    }
 
   def prepare_shifters (self, dom_node, conmap):
     r"""
@@ -1167,6 +1188,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       break
 
     def make_shifter_bind (from_level, bitmask, overlays, hermits, extents):
+      # helper function
       pending = []
       next_level = from_level ^ bitmask
 
@@ -1233,10 +1255,10 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     for shiftsym,bitmask in shifters.items():
       shiftspec = make_shifter_bind(0, bitmask, overlays, hermits, extents)
       cl,po = self.normalize_srcsym(shiftsym)
-      automode = self.auto_mode(po)
+      autostyle = auto_style(po)
       syntheses = self.expand_shorthand_syntheses(shiftspec)
       pole = PoleDict(po, syntheses)
-      baselayer.merge_cluster_pole(cl, automode, pole)
+      baselayer.merge_cluster_pole(cl, autostyle, pole)
 
     # Preshift: find all clusters involved with shift.
     for n in range(1, maxshift+1):
@@ -1252,26 +1274,38 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       preshiftlayer = LayerDict("Preshift_{}".format(n))
       for shiftsym,bitmask in shifters.items():
         cl,po = self.normalize_srcsym(shiftsym,None)
-        automode = self.auto_mode(po)
+        autostyle = auto_style(po)
         shifterspec = make_shifter_bind(n, bitmask, overlays, hermits, extents)
         syntheses = self.expand_shorthand_syntheses(shifterspec)
         if (n in hermits) and (n & bitmask) == bitmask:
           hermitspec = "{}#hermit({})".format(hermits[n], n)
           syntheses.extend(self.expand_shorthand_syntheses(hermitspec))
         pole = PoleDict(po, syntheses)
-        preshiftlayer.merge_cluster_pole(cl, automode, pole)
+        preshiftlayer.merge_cluster_pole(cl, autostyle, pole)
 
       # Generate Preshift's advancer binds for involve clusters.
-      advbinddef = [ {
-        "actsig": 'start',
-        "event": [ { "evtype": "overlay", "evcode": ("apply", "Shift_{}".format(n)) } ],
-        "label": "advance Shift_{}".format(n),
+      advbinddef = [
+        {
+          "actsig": 'start',
+          # apply the new shift state.
+          "event": [ {
+                      "evtype": "overlay",
+                      "evcode": ("apply", "Shift_{}".format(n)),
+                     } ],
+          "label": "advance Shift_{}".format(n),
         },
         {
-        "actsig": 'start',
-        "event": [ {"evtype":"overlay", "evcode": ("apply", ov) } for ov in overlays.get(n,[]) ],
-        "label": "+overlays({})".format(n),
-        } ]
+          "actsig": 'start',
+          # apply all the new overlays
+          "event": [ {
+                      "evtype":"overlay",
+                      "evcode": ("apply", ov)
+                     } for ov in overlays.get(n,[])
+                     ],
+            "label": "+overlays({})".format(n),
+        }
+      ]
+      # Bind all poles in involved clusters to 'advbinddef'.
       for clsym in sorted(preclusters):
         cldef = ClusterDict()
         if clsym in self.ADVANCING_TEMPLATE:
@@ -1281,10 +1315,9 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
             k,v = fixed_kv
             cldef[k] = v
           for advbindkey in templ[1]:
-            # Skip if already serving as shifter key.
             shorthand = "{}.{}".format(clsym, advbindkey)
             if (advbindkey in shifters) or (shorthand in shifters):
-              continue
+              continue    # Skip if already serving as shifter key.
             # Skip if already serving as sanity key.
             if (advbindkey == sanity) or (shorthand == sanity):  # TODO: compare normalized syms.
               continue
@@ -1316,24 +1349,12 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       sanitizeable.append("#sanity")
       if sanitizeable:
         cl,po = self.normalize_srcsym(sanity)
-        sanitizer = self.expand_shorthand_syntheses("".join(sanitizeable))
-        automode = self.auto_mode(po)
+        sanitize_shorthand = "".join(sanitizeable)
+        sanitizer = self.expand_shorthand_syntheses(sanitize_shorthand)
+        autostyle = auto_style(po)
         pole = PoleDict(po, sanitizer)
-        extlayers[0].merge_cluster_pole(cl, automode, pole)
+        extlayers[0].merge_cluster_pole(cl, autostyle, pole)
     return extlayers
-
-  # tuple( list-of-fixed-kv, list-of-advbinddef-keys )
-  ADVANCING_TEMPLATE = {
-    "RT": ( [("mode","trigger")], "co" ),
-    "LT": ( [("mode","trigger")], "co" ),
-    "DP": ( [("mode","dpad")], "udlr" ),
-    "BQ": ( [("mode","four_buttons")], "abxy" ),
-    "LJ": ( [("mode","dpad")], "udlrc" ),
-    "RJ": ( [("mode","dpad")], "udlrc" ),
-    "LP": ( [("mode","single_button")], "tc" ),
-    "RP": ( [("mode","single_button")], "tc" ),
-    "SW": ( [("mode","switches")], ["BK","ST","LB","RB","LG","RG"] ),
-    }
 
   def prepare_action (self, dom_node, conmap):
     # Update layers (self.actionsets, self.actionlayers) with shiftmap.
