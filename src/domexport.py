@@ -23,6 +23,46 @@ def dict_alias (propname):
     self[propname] = None
   return property(getter, setter, deleter)
 
+def auto_mode (x, strictness=0):
+  """Determine a suitable input mode for the specified srcsym(s).
+strictness=0 implies a advisory/speculative first pass detemrination.
+strictness=1 implies a mandatory/definitive second pass for exporting.
+"""
+#    print("* AUTOMODE {},{}".format(x,strictness))
+  if any(['u' in x, 'd' in x, 'l' in x, 'r' in x]):
+    return 'dpad'
+  if any(['a' in x, 'b' in x, 'x' in x, 'y' in x]):
+    return 'four_buttons'
+  if any(['s' in x, 'e' in x, 'w' in x, 'n' in x]):
+    return 'four_buttons'
+  if strictness and any (['c' in x, 'o' in x]):
+    # ambiguous, multiple modes.
+    return 'joystick_move'
+  if x in ('BK', 'ST', 'LB', 'RB', 'LG', 'RG', 'INF'):
+    return 'switches'
+
+  def intOrNegOne(z):
+    try:
+      return int(z)
+    except ValueError:
+      return -1
+
+  nums = [ intOrNegOne(z) for z in x ] if len(x) > 0 else [-1]
+  m = max(nums)
+
+  if 0 in nums:
+    return 'radial'  # '00' - radial center/unselect
+  elif any([2 in nums, 4 in nums, 7 in nums, 9 in nums, 12 in nums, 13 in nums, 16 in nums]):
+    if not strictness: # ambiguously touch or radial.
+      return 'touch_menu'
+  elif m > 0:
+    return 'radial_menu'
+
+  if not strictness:
+    return 'dpad'
+  else:
+    return None
+
 class PoleDict (dict):
   def __init__ (self, pole_sym, syntheses=None):
     super(PoleDict,self).__init__()
@@ -56,6 +96,7 @@ class ClusterDict (dict):
     self["pole"] = poles      # List of PoleDict
 #    self["settings"] = None   # Group.settings
   sym = dict_alias("sym")
+  mode = dict_alias("mode")
   pole = dict_alias("pole")
   settings = dict_alias("settings")
 
@@ -120,6 +161,8 @@ class PolesProxy (SymmablesProxy):
 class ClustersProxy (SymmablesProxy):
   LIST_PROPERTIES = [ "pole" ]
   def make (self, cluster_sym, cluster_mode=None):
+    if cluster_mode is None:
+      cluster_mode = auto_mode(cluster_sym, 0)
     retval = ClusterDict(cluster_sym, cluster_mode, None)
     self.append(retval)
     return retval
@@ -127,9 +170,9 @@ class ClustersProxy (SymmablesProxy):
 class LayerDict (dict):
   """Working-copy of layer dict.
 """
-  def __init__ (self, clusters=None):
+  def __init__ (self, name=None, clusters=None):
     super(LayerDict,self).__init__()
-    self["name"] = None
+    self["name"] = name
     if clusters is None:
       clusters = ClustersProxy()
     self["cluster"] = clusters
@@ -167,6 +210,8 @@ merge_cluster(cluster_sym:str, cluster_mode:str)
   def merge_cluster_pole (self, cluster_sym, cluster_mode, pole):
     cluster = self.cluster[cluster_sym]
     if cluster is None:
+      if cluster_mode is None and pole.get("sym", None):
+        cluster_mode = auto_mode(pole["sym"], 0)
       cluster = self.cluster.make(cluster_sym, cluster_mode)
     cluster.merge_pole(pole)
 
@@ -883,44 +928,7 @@ shorthand
 
   @staticmethod
   def auto_mode (x, strictness=0):
-    """Determine a suitable input mode for the specified srcsym(s).
-strictness=0 implies a advisory/speculative first pass detemrination.
-strictness=1 implies a mandatory/definitive second pass for exporting.
-"""
-#    print("* AUTOMODE {},{}".format(x,strictness))
-    if any(['u' in x, 'd' in x, 'l' in x, 'r' in x]):
-      return 'dpad'
-    if any(['a' in x, 'b' in x, 'x' in x, 'y' in x]):
-      return 'four_buttons'
-    if any(['s' in x, 'e' in x, 'w' in x, 'n' in x]):
-      return 'four_buttons'
-    if strictness and any (['c' in x, 'o' in x]):
-      # ambiguous, multiple modes.
-      return 'joystick_move'
-    if x in ('BK', 'ST', 'LB', 'RB', 'LG', 'RG', 'INF'):
-      return 'switches'
-
-    def intOrNegOne(z):
-      try:
-        return int(z)
-      except ValueError:
-        return -1
-
-    nums = [ intOrNegOne(z) for z in x ] if len(x) > 0 else [-1]
-    m = max(nums)
-
-    if 0 in nums:
-      return 'radial'  # '00' - radial center/unselect
-    elif any([2 in nums, 4 in nums, 7 in nums, 9 in nums, 12 in nums, 13 in nums, 16 in nums]):
-      if not strictness: # ambiguously touch or radial.
-        return 'touch_menu'
-    elif m > 0:
-      return 'radial_menu'
-
-    if not strictness:
-      return 'dpad'
-    else:
-      return None
+    return auto_mode(x, strictness)
 
   # map cluster name to groupsrc name.
   GRPSRC_MAP = {
@@ -955,7 +963,7 @@ strictness=1 implies a mandatory/definitive second pass for exporting.
     r"""Resolve shorthands in a layer subdict.
 Returns a substitute layer which is copy of the original (dom_node), but with shorthand notations for/in clusters resolved.
 """
-    paralayer = {'cluster': []}
+    paralayer = LayerDict()
 
     # Scan shorthands.
     for k,v in self.iter_children(dom_node, None):
@@ -966,55 +974,33 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         cluster_sym, pole_sym = self.UNIQUE_POLE_SYMS[k]
       elif k in self.GRPSRC_MAP:
         # short-hand for cluster.
-        pole_sym = None
-        clusterobj = self.normalize_cluster(v)
-#        print("normalized cluster = "); pprint.pprint(clusterobj)
-        clusterobj['sym'] = k
         cluster_sym = k
-        self.pave_layer_cluster(paralayer, cluster_sym, clusterobj.get("mode",None))
-        scansyms = []
-        for poleobj in clusterobj.get("pole", []):
-          polesym = poleobj['sym']
-          scansyms.append(polesym)
-          self.extend_layer_cluster_pole(paralayer, cluster_sym, polesym, poleobj, None)
-        if not clusterobj.get("mode", None):
-          automode = self.auto_mode(scansyms, 1)
-          clusterobj["mode"] = automode
-        cluster = self.get_layer_cluster(paralayer, cluster_sym)
-        for k,v in clusterobj.items():
-          # TODO: merge instead of overwrite.
-          if not k in cluster:
-            cluster[k] = v
+        normcluster = self.normalize_cluster(v)
+#        print("normalized cluster = "); pprint.pprint(normcluster)
+        normcluster.sym = k
+        paralayer.merge_cluster(normcluster, normcluster.get("mode",None))
         continue  # bypass cluster.pole case.
 
-      if cluster_sym and pole_sym:
-        # Update cluster.
+      if cluster_sym and pole_sym:  # key in the form "cluster.pole".
         if _stringlike(v):
           syntheses = self.expand_shorthand_syntheses(v)
         else: syntheses = v
-        self.pave_layer_cluster_pole(paralayer, cluster_sym, pole_sym, None)
-        poleobj = {
-          'sym': pole_sym,
-          'synthesis': syntheses,
-          }
-        self.extend_layer_cluster_pole(paralayer, cluster_sym, pole_sym, poleobj, None)
+        pole = PoleDict(pole_sym, syntheses)
+        paralayer.merge_cluster_pole(cluster_sym, None, pole)
       else:   # Not recognized as shorthand; assume longhand.
         # copy verbatim.
         if k == 'cluster':
           vv = [ self.normalize_cluster(cl) for cl in v ]
-          #paralayer[k].extend(vv)
           for cluster in vv:
-            for poleobj in cluster['pole']:
-              polesym = poleobj['sym']
-              self.extend_layer_cluster_pole(paralayer, cluster['sym'], polesym, poleobj, None)
+            paralayer.merge_cluster(cluster)
         else:
           paralayer[k] = v
     # auto-mode from all poles.
     for cluster in paralayer['cluster']:
       if cluster.get('mode', None) is None:
-        polelist = [ x.get("sym") for x in cluster['pole'] ]
+        polelist = [ x.sym for x in cluster.pole ]
         automode = self.auto_mode(polelist)
-        cluster['mode'] = automode
+        cluster.mode = automode
 #        print(" fallback automode {} => {}".format(polelist, automode))
 #    print("normalized layer "); pprint.pprint(dom_node); print(" =>"); pprint.pprint(paralayer)
 #    print("normalized layer ="); pprint.pprint(paralayer)
@@ -1086,73 +1072,6 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
     else:
       cluster_sym, pole_sym = None, srcsymspec
     return (cluster_sym, pole_sym)
-
-  def get_layer_cluster (self, lyr, clustersym):
-    if not 'cluster' in lyr:
-      return None
-    for probe in lyr['cluster']:
-      if probe['sym'] == clustersym:
-        return probe
-    return None
-  def pave_layer_cluster (self, lyr, clustersym, clustermode=None):
-    if not 'cluster' in lyr:
-      lyr['cluster'] = []
-    if not any([ x.get('sym',None) == clustersym  for x in lyr['cluster'] ]):
-      clusterspec = {
-        'mode': clustermode,
-        'sym': clustersym,
-        'pole': []
-        }
-      lyr['cluster'].append(clusterspec)
-    return lyr
-  def get_layer_cluster_pole (self, lyr, clustersym, polesym):
-    cluster = self.get_layer_cluster(lyr, clustersym)
-    if cluster:
-      for probe in cluster.get('pole', []):
-        if probe.get('sym',None) == polesym:
-          return (cluster, probe)
-      else:
-        return (cluster, None)
-    return (None, None)
-  def pave_layer_cluster_pole (self, lyr, clustersym, polesym, clustermode=None):
-    if clustermode is None:
-      if clustersym in ('LT', 'RT'):
-        clustermode = 'trigger'
-      elif clustersym in ('SW',):
-        clustermode = 'switches'
-      else:
-        clustermode = self.auto_mode(polesym, 0)
-    self.pave_layer_cluster(lyr, clustersym, clustermode)
-    (cluster, pole) = self.get_layer_cluster_pole(lyr, clustersym, polesym)
-    if not pole:
-      polespec = {
-        "sym": polesym,
-        "synthesis": [],
-        }
-      cluster['pole'].append(polespec)
-    return lyr
-  def extend_layer_cluster_pole (self, lyr, clustersym, polesym, poleobj, clustermode=None):
-    if polesym is None:
-      polesym = poleobj['sym']
-    syntheses = poleobj['synthesis']
-    self.pave_layer_cluster_pole(lyr, clustersym, polesym, clustermode)
-    (cluster, pole) = self.get_layer_cluster_pole(lyr, clustersym, polesym)
-    pole['synthesis'].extend(syntheses)
-    for k,v in poleobj.items():
-      if not k in cluster:
-        cluster[k] = v
-    return lyr
-  def overwrite_layer_cluster_pole (self, lyr, clustersym, polesym, poleobj, clustermode=None):
-    if polesym is None:
-      polesym = poleobj['sym']
-    syntheses = polesym['synthesis']
-    self.pave_layer_cluster_pole(lyr, clustersym, polesym, clustermode)
-    (cluster, pole) = self.get_layer_cluster_pole(lyr, clustersym, polesym)
-    pole['synthesis'] = syntheses
-    for k,v in poleobj.items():
-      if not k in cluster:
-        cluster[k] = v
-    return lyr
 
   def prepare_shifters (self, dom_node, conmap):
     r"""
@@ -1315,13 +1234,9 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       shiftspec = make_shifter_bind(0, bitmask, overlays, hermits, extents)
       cl,po = self.normalize_srcsym(shiftsym)
       automode = self.auto_mode(po)
-      self.pave_layer_cluster_pole(baselayer, cl, po, automode)
       syntheses = self.expand_shorthand_syntheses(shiftspec)
-      poleobj = {
-        'sym': po,
-        'synthesis': syntheses,
-        }
-      self.extend_layer_cluster_pole(baselayer, cl, po, poleobj, automode)
+      pole = PoleDict(po, syntheses)
+      baselayer.merge_cluster_pole(cl, automode, pole)
 
     # Preshift: find all clusters involved with shift.
     for n in range(1, maxshift+1):
@@ -1334,10 +1249,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
               preclusters.add(clusterdef["sym"])
 
       # bind shiftkeys for preshift n; set preclusters to advance to shift n.
-      preshiftlayer = {
-        "name": "Preshift_{}".format(n),
-        "cluster": [],
-        }
+      preshiftlayer = LayerDict("Preshift_{}".format(n))
       for shiftsym,bitmask in shifters.items():
         cl,po = self.normalize_srcsym(shiftsym,None)
         automode = self.auto_mode(po)
@@ -1346,11 +1258,8 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         if (n in hermits) and (n & bitmask) == bitmask:
           hermitspec = "{}#hermit({})".format(hermits[n], n)
           syntheses.extend(self.expand_shorthand_syntheses(hermitspec))
-        poleobj = {
-          'sym': po,
-          'synthesis': syntheses,
-          }
-        self.extend_layer_cluster_pole(preshiftlayer, cl, po, poleobj, automode)
+        pole = PoleDict(po, syntheses)
+        preshiftlayer.merge_cluster_pole(cl, automode, pole)
 
       # Generate Preshift's advancer binds for involve clusters.
       advbinddef = [ {
@@ -1364,10 +1273,10 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         "label": "+overlays({})".format(n),
         } ]
       for clsym in sorted(preclusters):
-        cldef = {}
+        cldef = ClusterDict()
         if clsym in self.ADVANCING_TEMPLATE:
           templ = self.ADVANCING_TEMPLATE[clsym]
-          cldef['sym'] = clsym
+          cldef.sym = clsym
           for fixed_kv in templ[0]:
             k,v = fixed_kv
             cldef[k] = v
@@ -1384,13 +1293,10 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
           cldef = None
           #raise ValueError("no advancing bind possible for {!r}".format(clsym))
         if cldef:
-          preshiftlayer['cluster'].append(cldef)
+          preshiftlayer.merge_cluster(cldef)
 
       # bind shiftkeys for shift n.
-      shiftlayer = {
-        "name": "Shift_{}".format(n),
-        "cluster": [],
-        }
+      shiftlayer = LayerDict("Shift_{}".format(n))
       for shiftsym,bitmask in shifters.items():
         shiftlayer[shiftsym] = make_shifter_bind(n, bitmask, overlays, hermits, extents)
 
@@ -1412,11 +1318,8 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
         cl,po = self.normalize_srcsym(sanity)
         sanitizer = self.expand_shorthand_syntheses("".join(sanitizeable))
         automode = self.auto_mode(po)
-        poleobj = {
-          'sym': po,
-          'synthesis': sanitizer,
-          }
-        self.extend_layer_cluster_pole(extlayers[0], cl, po, poleobj, automode)
+        pole = PoleDict(po, sanitizer)
+        extlayers[0].merge_cluster_pole(cl, automode, pole)
     return extlayers
 
   # tuple( list-of-fixed-kv, list-of-advbinddef-keys )
