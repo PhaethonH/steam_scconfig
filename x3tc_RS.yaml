@@ -187,10 +187,10 @@ action:
   layer:
   - name: Default
     LJ:
-      mode: jsmove
+      style: jsmove
       c: "{overlay,apply,6th_axis}"
     RJ:
-      mode: jsmove
+      style: jsmove
       # Double-tap+hold for missile spam; Hold 3s to cancel missile launch.
       c: $LaunchMissile :${LaunchMissile}/20#Missile#spam _<>:3000#Cancel#Launch
 #    BK: <2><1>|#Cycle#Weapons#Group _<4><3>|
@@ -202,7 +202,7 @@ action:
     # Lv2 RB+: ThrottleScale
     # Lv3 LB+RB+: Reverse
     LT:
-      mode: trigger
+      style: trigger
       o: $BrakeToStop +${Accelerate}@50,250#SpeedPresetLo
       c: $BoostExtension +${Decelerate}@50,250#SpeedPresetHi
       settings:
@@ -225,7 +225,7 @@ action:
 
   - name: 6th_axis
     LJ:
-      mode: dpad
+      style: dpad
       c: "{overlay,peel,6th_axis}"
       u: $StrafeUp
       d: $StrafeDown
@@ -277,7 +277,7 @@ action:
     BQ.s: $DockWithTarget
     # LeftJoystick reflects Slew Control.
     LJ:
-      mode: jsmouse
+      style: jsmouse
       c: "[1]"
       settings:
         sensitivity: 50
@@ -296,7 +296,7 @@ action:
       l: $SelectCameraMode
       r: $ChangeMapAxis
     LJ:
-      mode: radial
+      style: radial
       "c": <KEYPAD_5>
       "01": <KEYPAD_8>
       "02": <KEYPAD_9>
@@ -309,7 +309,7 @@ action:
       settings:
         touchmenu_button_fire_type: 3
 #    LJ:
-#      mode: dpad
+#      style: dpad
 #      "u": <KEYPAD_8>
 #      "d": <KEYPAD_2>
 #      "l": <KEYPAD_4>
@@ -342,7 +342,7 @@ action:
     DP.l: $DronesProtectMe
     DP.r: $DronesAttackTarget
     LT:
-      mode: trigger
+      style: trigger
       c: <>
       o: $Decelerate
       settings:
@@ -367,7 +367,7 @@ action:
 
   - name: SpeedLimbo
     LT:
-      mode: trigger
+      style: trigger
       c: -{overlay,peel,SpeedScale}{overlay,peel,SpeedLimbo}
       o: -{overlay,peel,SpeedScale}{overlay,peel,SpeedLimbo}
       settings:
@@ -389,14 +389,12 @@ action:
     LB: $BestBuysLocator
     RB: $BestSellingPriceLocator
     LJ:
-      mode: radial
+      style: radial
 #      "00": "${NoOp}#BestBuy____BestSell#LB############################RB"
       "01": $TradeWithStation
       "02": $ChangeShip
       "03": $LandedShips
       "04": $OwnedShips
-    LJ*BQ.r:
-      mode: radial
 
   - name: T1_1
     DP.u: "+<Backspace> +<2>@50,0 -{overlay,peel,T1_1}{overlay,apply,T1_2}"
