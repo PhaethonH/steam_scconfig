@@ -493,6 +493,7 @@ class TestDomExporter (unittest.TestCase):
 #    print("z"); pprint.pprint(z, width=180)
     n_modeshifted = len([ x for x in z['preset']['group_source_bindings'].values() if "modeshift" in x ])
     self.assertEqual(n_modeshifted, 1)
+    self.assertTrue(any([ x for x in z['group'] if 'mode_shift' in str(z['group'])]))
 
 
   def test_sample1 (self):

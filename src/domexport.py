@@ -7,6 +7,7 @@ import scconfig, scvdf
 import re
 import pprint
 import sys, yaml
+from collections import OrderedDict
 
 def _stringlike (x):
   try: return x.isalpha
@@ -65,7 +66,7 @@ strictness=1 implies a mandatory/definitive second pass for exporting.
   else:
     return None
 
-class PoleDict (dict):
+class PoleDict (OrderedDict):
   def __init__ (self, pole_sym, syntheses=None):
     super(PoleDict,self).__init__()
     self["sym"] = pole_sym
@@ -88,7 +89,7 @@ class PoleDict (dict):
       one_synthesis = syntheses
       self["syntheses"].append(one_synthesis)
 
-class ClusterDict (dict):
+class ClusterDict (OrderedDict):
   def __init__ (self, cluster_sym=None, init_style=None, poles=None):
     super(ClusterDict,self).__init__()
     self["sym"] = cluster_sym
@@ -171,7 +172,7 @@ class ClustersProxy (SymmablesProxy):
     self.append(retval)
     return retval
 
-class LayerDict (dict):
+class LayerDict (OrderedDict):
   """Working-copy of layer dict.
 """
   def __init__ (self, name=None, clusters=None):
@@ -228,6 +229,18 @@ merge_cluster(cluster_sym:str, cluster_style:str)
     if self.settings is None:
       self.settings = dict()
     self.settings.update(settingsdict)
+
+
+class ModeshiftIntermediate (object):
+  """mode_shift intermediate form."""
+  def __init__ (self, grpid=-1, evgen=None):
+    self.grpid = -1
+    self.evgen = evgen
+  def __repr__ (self):
+    return "{}(grpid={!r}, evgen={!r})".format(
+      self.__class__.__name__,
+      self.grpid,
+      self.evgen)
 
 
 class ScconfigExporter (object):
@@ -299,6 +312,7 @@ Shorthand
     self.actionlayers = []  # List of action layers in Steam config order.
     self.actions = []   # list of action sets/layers in Steam config order.
     self.aliases = {}
+    self.rewrite_modeshift = []  # pending modeshifter rewrites.
 
 
   # Attributes: for machine-readable values.
@@ -445,6 +459,16 @@ element_name of None to iterate through all children as (element_name,element_co
       return scconfig.EvgenFactory.make_gamepad(evcode)
     elif evtype in ('mouse',):
       return scconfig.EvgenFactory.make_mouseswitch(evcode)
+    elif evtype in ("mode_shift", "modeshift"):
+      (cluster_sym, tokenid) = evcode
+      tokenid = int(tokenid)
+      semimodeshift = self.rewrite_modeshift[tokenid]
+      grpid = semimodeshift.grpid   # -1=placeholder (group not yet exported).
+      inpsrc = self.GRPSRC_MAP.get(cluster_sym, cluster_sym)
+      retval = scconfig.EvgenFactory.make_modeshift(inpsrc, grpid)
+      semimodeshift.evgen = retval  # save placeholder for future group export.
+      return retval
+      #return scconfig.EvgenFactory.make_modeshift("joystick", -1)
     elif evtype in ('host',):
       host_evcode = " ".join(evcode)
       return scconfig.EvgenFactory.make_hostcall(host_evcode)
@@ -699,6 +723,9 @@ e.g. "#FirstButton" => label="FirstButton",
           evcode = evcode.split(',')
         if evcode[0] == 'overlay':
           evtype = 'overlay'
+          evcode = evcode[1:]
+        elif evcode[0] in ("modeshift", "mode_shift"):
+          evtype = 'mode_shift'
           evcode = evcode[1:]
         else:
           evtype = 'host'
@@ -968,7 +995,7 @@ shorthand
     r"""Resolve shorthands in a layer subdict.
 Returns a substitute layer which is copy of the original (dom_node), but with shorthand notations for/in clusters resolved.
 """
-    paralayer = LayerDict()
+    paralayer = LayerDict(self.get_domtext(dom_node, "name"))
 
     # Scan shorthands.
     for k,v in self.iter_children(dom_node, None):
@@ -982,8 +1009,21 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         cluster_sym = base_sym
         normcluster = self.normalize_cluster(v)
         normcluster.sym = base_sym
-        normcluster.modeshift = self.MODESHIFT_MAP.get(modeshift_sym, modeshift_sym)
+        modeshift_sym = self.MODESHIFT_MAP.get(modeshift_sym, modeshift_sym)
+        normcluster.modeshift = modeshift_sym
         paralayer.merge_cluster(normcluster, normcluster.get("style",None))
+
+        # Hook mode_shift command.
+        if modeshift_sym:
+          tokenid = len(self.rewrite_modeshift)
+          semimodeshift = ModeshiftIntermediate()
+          self.rewrite_modeshift.append(semimodeshift)
+          normcluster["will_modeshift"] = semimodeshift
+
+          shorthand = "{{mode_shift,{},{}}}".format(cluster_sym, tokenid)
+          syntheses = self.expand_shorthand_syntheses(shorthand)
+          modeshift_pole = PoleDict(normcluster.modeshift, syntheses)
+          paralayer.merge_cluster_pole("SW", "switches", modeshift_pole)
         continue  # bypass cluster.pole case.
 
       (cluster_sym, pole_sym) = self.normalize_srcsym(base_sym)
@@ -1051,6 +1091,14 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         grpstyle = self.GRPSTYLE_MAP.get(grpstyle, grpstyle)
         grp = conmap.add_group(grpid, grpstyle) 
         presetobj.add_gsb(grpid, grpsrc, active, modeshift)
+
+        if 'will_modeshift' in clusterspec:
+          semimodeshift = clusterspec["will_modeshift"]
+          semimodeshift.grpid = grpid  # for any future mode_shift.
+          if semimodeshift.evgen:
+            # Already instantiated with placeholder value.
+            semimodeshift.evgen.group_id = grpid
+
 #      print("EXPORT GROUP {}".format(clustersym))
       self.export_cluster(clusterspec, grp)
 
