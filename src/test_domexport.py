@@ -55,18 +55,18 @@ class TestDomExporter (unittest.TestCase):
     self.assertEqual(inode.activators[0].bindings[0].geninfo._evtype, "key_press")
     self.assertEqual(inode.activators[0].bindings[1].geninfo._evtype, "key_press")
 
-  d_component1 = {
+  d_pole1 = {
     "sym": "u",
     "synthesis": [
       d_synthesis1,
       ],
   }
-  def test_export_component (self):
+  def test_export_pole (self):
     exporter = domexport.ScconfigExporter(None)
-    d = self.d_component1
+    d = self.d_pole1
     grpid = None
     grp = scconfig.GroupDpad(grpid)
-    exporter.export_component(d, grp)
+    exporter.export_pole(d, grp)
     self.assertEqual(grp.MODE, 'dpad')
     self.assertEqual(len(grp.inputs), 1)
     self.assertEqual(len(grp.inputs['dpad_north'].activators), 1)
@@ -75,8 +75,8 @@ class TestDomExporter (unittest.TestCase):
   d_cluster1 = {
     "sym": "DP",
     "mode": "dpad",
-    "component": [
-      d_component1,
+    "pole": [
+      d_pole1,
       {
         "sym": "d",
         "synthesis": [
@@ -113,7 +113,7 @@ class TestDomExporter (unittest.TestCase):
     "cluster": [
       { "sym": "BQ",
         "mode": "four_buttons",
-        "component": [
+        "pole": [
           { "sym": "a",
             "synthesis": [
               { "actsig": 'full',
@@ -392,6 +392,26 @@ class TestDomExporter (unittest.TestCase):
     s = scvdf.toDict(scconfig.toVDF(conmap))
     self.assertTrue(any([ 'always_on_action' in x['inputs'] for x in s['group'] ]))
 #    pprint.pprint(s, width=180)
+
+
+  def test_layerproxy (self):
+    ll = domexport.LayerDict()
+    self.assertEqual(ll, {"name":None, "cluster":[], "settings": None})
+    cl1 = domexport.ClusterDict("DP", "dpad")
+    ll.merge_cluster(cl1)
+    self.assertEqual(ll.cluster, [{"sym": "DP", "mode": "dpad", "pole": [], }] )
+
+    ll = domexport.LayerDict()
+    pp = domexport.PoleDict("u")
+    cc = domexport.ClusterDict("DP", "dpad")
+    cc.merge_pole(pp)
+    ll.merge_cluster(cc)
+    self.assertEqual(ll.cluster, [{"sym": "DP", "mode": "dpad", "pole": [{"sym":"u", "synthesis":[]}], }] )
+
+    ll = domexport.LayerDict()
+    pp = domexport.PoleDict("u")
+    ll.merge_cluster_pole("DP", "dpad", pp)
+    self.assertEqual(ll.cluster, [{"sym": "DP", "mode": "dpad", "pole": [{"sym":"u", "synthesis":[]}], }] )
 
 
   d_modeshifting1 = {

@@ -12,6 +12,170 @@ def _stringlike (x):
   try: return x.isalpha
   except AttributeError: return False
 
+
+# Helper classes
+def dict_alias (propname):
+  def getter (self):
+    return self[propname]
+  def setter (self, val):
+    self[propname] = val
+  def deleter (self):
+    self[propname] = None
+  return property(getter, setter, deleter)
+
+class PoleDict (dict):
+  def __init__ (self, pole_sym, syntheses=None):
+    super(PoleDict,self).__init__()
+    self["sym"] = pole_sym
+    if syntheses is None:
+      syntheses = []
+    self["synthesis"] = syntheses     # List of EventDict
+  sym = dict_alias("sym")
+  synthesis = dict_alias("synthesis")
+
+  def merge_syntheses (self, syntheses):
+    r"""merge_syntheses(syntheses:list)
+"""
+    try:
+      syntheses.keys()
+    except (AttributeError,):
+      # assume list-like.
+      self["synthesis"].extend(syntheses)
+    else:
+      # assume single instance.
+      one_synthesis = syntheses
+      self["syntheses"].append(one_synthesis)
+
+class ClusterDict (dict):
+  def __init__ (self, cluster_sym=None, init_mode=None, poles=None):
+    super(ClusterDict,self).__init__()
+    self["sym"] = cluster_sym
+    self["mode"] = init_mode
+    if poles is None:
+      poles = PolesProxy()
+    self["pole"] = poles      # List of PoleDict
+#    self["settings"] = None   # Group.settings
+  sym = dict_alias("sym")
+  pole = dict_alias("pole")
+  settings = dict_alias("settings")
+
+  def merge_pole (self, pole, syntheses=None):
+    r"""merge_pole(pole:PoleDict)
+merge_pole(pole_sym:str, syntheses:list)
+"""
+    pole_sym = None
+    try:
+      pole_sym = pole["sym"]
+    except (TypeError,):
+      pole_sym = pole
+    extant = None
+    for x in self["pole"]:
+      if x["sym"] == pole_sym:
+        extant = x
+    if extant is None:
+      self["pole"].append(pole)
+    else:
+      for k,v in pole.items():
+        if k == "synthesis":
+          extant.merge_syntheses(v)
+        elif k == "settings":
+          extant[k].update(v)
+        else:
+          extant[k] = v
+
+class SymmablesProxy (list):
+  LIST_PROPERTIES = []
+  DICT_PROPERTIES = []
+  def __init__ (self):
+    super(SymmablesProxy,self).__init__()
+  def __getitem__ (self, sym):
+    for x in self:
+      if x.get("sym",None) == sym:
+        return x
+    try:
+      return super(SymmablesProxy,self).__getitem__(sym)
+    except (IndexError,TypeError):
+      return None
+  def __setitem__ (self, sym, val):
+    for x in self:
+      if x.get("sym",None) == sym:
+        for k,v in val.items():
+          if k in self.LIST_PROPERTIES:
+            self[k].append(v)
+          elif k in self.DICT_PROPERTIES:
+            self[k].update(v)
+          else:
+            self[k] = v
+        return
+    self.append(val)
+
+class PolesProxy (SymmablesProxy):
+  LIST_PROPERTIES = [ "synthesis" ]
+  DICT_PROPERTIES = [ "settings" ]
+  def make (self, pole_sym, syntheses=None):
+    retval = PoleDict(pole_sym, syntheses)
+    self.append(retval)
+    return retval
+
+class ClustersProxy (SymmablesProxy):
+  LIST_PROPERTIES = [ "pole" ]
+  def make (self, cluster_sym, cluster_mode=None):
+    retval = ClusterDict(cluster_sym, cluster_mode, None)
+    self.append(retval)
+    return retval
+
+class LayerDict (dict):
+  """Working-copy of layer dict.
+"""
+  def __init__ (self, clusters=None):
+    super(LayerDict,self).__init__()
+    self["name"] = None
+    if clusters is None:
+      clusters = ClustersProxy()
+    self["cluster"] = clusters
+    self["settings"] = None
+  name = dict_alias("name")
+  settings = dict_alias("settings")
+  cluster = dict_alias("cluster")
+
+  def merge_cluster (self, cluster, cluster_mode=None):
+    r"""merge_cluster(cluster:ClusterDict)
+merge_cluster(cluster:dict)
+merge_cluster(cluster_sym:str, cluster_mode:str)
+"""
+    extant = None
+    try:
+      cluster.keys()
+    except (AttributeError,):
+      # resolve to cluster obj.
+      cluster_sym = cluster
+      extant = self.cluster[cluster_sym]
+      if extant is None:
+        extant = self.cluster.make(cluster_sym, None)
+    if extant is None:
+      self.cluster.append(cluster)
+    else:
+      for k,v in cluster.items():
+        if k == "pole":
+          for one_pole in v:
+            extant.merge_pole(one_pole)
+        elif k == "settings":
+          extant[k].update(v)
+        else:
+          extant[k] = v
+
+  def merge_cluster_pole (self, cluster_sym, cluster_mode, pole):
+    cluster = self.cluster[cluster_sym]
+    if cluster is None:
+      cluster = self.cluster.make(cluster_sym, cluster_mode)
+    cluster.merge_pole(pole)
+
+  def merge_settings (self, settingsdict):
+    if self.settings is None:
+      self.settings = dict()
+    self.settings.update(settingsdict)
+
+
 class ScconfigExporter (object):
   r"""
 Expected format (canonical):
@@ -33,16 +197,18 @@ Expected format (canonical):
     <cluster>*
       <sym/>
       <mode/>
-      <component>*
+      <pole>*
         <sym/>
-        <generator>+
+        <synthesis>+
           <signal/>
           <event_sym>+
             <evtype/>
             <evcode/>
           </event_sym>
-        </generator>
-      </component>
+          <settings/>
+        </synthesis>
+      </pole>
+      <settings/>
     </cluster>
   </layer>
   <shiftmap>
@@ -134,7 +300,7 @@ element_name of None to iterate through all children as (element_name,element_co
     }
 
   def export_frob (self, dom_node, settings_obj):
-    r"""
+    r"""Convert/export settings subdict to Frob object.
 {
   "specific": ...
   "toggle": ...
@@ -209,7 +375,7 @@ element_name of None to iterate through all children as (element_name,element_co
     return retval
 
   def translate_event (self, dom_node):
-    r"""
+    r"""Convert/export event subdict to Evgen object.
 {
   "evtype": ...
   "evcode": ...
@@ -245,7 +411,7 @@ element_name of None to iterate through all children as (element_name,element_co
     return None
 
   def export_synthesis (self, dom_node, inputobj):
-    r"""
+    r"""Convert/export synthesis subdict to Input object.
 {
   "actsig": ...
   "label": ...
@@ -380,13 +546,40 @@ element_name of None to iterate through all children as (element_name,element_co
     },
   }
 
+
   RE_ACTSIG = r"([:=_&+-])"
   RE_EVENTS = r"(<[A-Za-z0-9_]*>|\[[A-Za-z0-9_]*\]|\([A-Za-z0-9]*\)|{[^}]*})"
   RE_FROBS = r"(\||\%|\^|~[0-9]?|:[0-9]+|/[0-9]+|@[0-9]+,[0-9]+)"
   RE_LABEL = r"(#[^#]*)"
   RE_SYM = r"{}?({}+)({}*)({}*)".format(RE_ACTSIG, RE_EVENTS, RE_FROBS, RE_LABEL)
   RE_ALIAS = r"\$(\{[^}]*\}|[A-Za-z_][A-Za-z0-9_]*)"
+
   def expand_synthesis (self, evspec):
+    r"""Expand shorthand synthesis into canonical synthesis subdict.
+
+Keypresses indicated by angle brackets: <A>, <Up_Arrow>, <Left_Shift>, <Escape>
+Gamepad buttons indicaed by parenthess: (A), (DUP), (LB), (ST)
+Mouse buttons are indicated by brackets: [1], [u]
+Host calls and other specials use braces, arguments separated with commas:
+  {overlay,apply,Default}, {mouse_position,16384,16384,0}
+
+Trailing characters specify behavior modifiers that map to Settings:
+  %   Toggle on
+  ^   Interruptible on
+  |   Cycle on
+  /N  Repeat on, with interval set to N [milliseconds] (0 to force off)
+  ~H  Haptic intensity, 0=off, 1=low, 2=medium, 3=high
+  @S,E  Delay start to S, Delay end by E [milliseconds]
+  :X  activator-specific setting:
+        Long_Press: affects Long Press Time [milliseconds]
+        Double_Press: affect Double Press Time [milliseconds]
+        chord: specifies the chorded button [enumeration]
+
+A '#' starts label segment.  Additional instances of '#' turn into spaces.
+e.g. "#FirstButton" => label="FirstButton",
+     "#First#Button" => label="First Button",
+     "#First###Button" => label="First   Button",
+"""
     # TODO: rename variables to more reasonable ones.
 
     if evspec is None:
@@ -420,6 +613,7 @@ element_name of None to iterate through all children as (element_name,element_co
     frobspec = matches[3]
     labelspec = matches[5]
 
+    # Extract signal fragment.
     SIGMAP = {
       '': 'full',
       '_': 'long',
@@ -431,6 +625,7 @@ element_name of None to iterate through all children as (element_name,element_co
       }
     actsig = SIGMAP.get(sigspec, 'Full_Press')
 
+    # Extract event fragment.
     matches = re_events.findall(evspecs)
     evgenlist = []
     for evspec in matches:
@@ -464,6 +659,7 @@ element_name of None to iterate through all children as (element_name,element_co
       ev = d
       evgenlist.append(ev)
 
+    # Extract frob fragment.
     frobdef = {}
     matches = re_frobs.findall(frobspec)
     for frobmark in matches:
@@ -489,6 +685,7 @@ element_name of None to iterate through all children as (element_name,element_co
     if not frobdef:
       frobdef = None
 
+    # Extract label fragment.
     labelparts = None
     matches = re_label.findall(labelspec)
     for labelfragment in matches:
@@ -500,6 +697,7 @@ element_name of None to iterate through all children as (element_name,element_co
     else:
       label = None
 
+    # Normalize to synthesis dict.
     d = {
       "actsig": actsig,
       "event": evgenlist,
@@ -511,6 +709,13 @@ element_name of None to iterate through all children as (element_name,element_co
 
 
   def expand_shorthand_syntheses (self, evlistspec):
+    r"""Convert space-separated shorthand syntheses into list of synthesis subdict.
+
+e.g. "<A> <B>" =>
+[ { "evtype": "keystroke", "evcode": "A" },
+  { "evtype": "keystroke", "evcode": 'B" }
+  ]
+"""
     if ' ' in evlistspec:
       evspecs = evlistspec.split()
     else:
@@ -522,9 +727,9 @@ element_name of None to iterate through all children as (element_name,element_co
     return retval
 
 
-  def export_component (self, dom_node, groupobj):
+  def export_pole (self, dom_node, groupobj):
     # Maps to scconfig.ControllerInput
-    r"""
+    r"""Convert/export pole subdict to Input object attached to Group.
 {
   "sym": ...
   "synthesis": [
@@ -538,10 +743,10 @@ element_name of None to iterate through all children as (element_name,element_co
 # Filter sym based on groupobj type.
     partsym = self.FILTER_SYMS.get(groupobj.MODE, {}).get(partsym, partsym)
 
-    inode = scconfig.ControllerInput(partsym)
+    inputobj = scconfig.ControllerInput(partsym)
     for syndesc in self.iter_children(dom_node, "synthesis"):
-      self.export_synthesis(syndesc, inode)
-    groupobj.add_input(inode)
+      self.export_synthesis(syndesc, inputobj)
+    groupobj.add_input(inputobj)
     return True
 
   def export_settings (self, dom_node, settingsobj):
@@ -553,69 +758,7 @@ element_name of None to iterate through all children as (element_name,element_co
     return settingsobj
 
 
-  def normalize_cluster (self, dom_node):
-    """Resolve shorthand notations for components.
-
-Returns a cluster DOM which is a copy of the original but with shorthand notation resolved.
-"""
-#    print("normalizing cluster {}".format(dom_node))
-    extcluster = {'component':[]}
-
-    # Shorthand entire joystick.
-    if dom_node in ("LJ", "(LJ)"):
-      extcluster["mode"] = "jsmove"
-      return extcluster
-    if dom_node in ("RJ", "(RJ)"):
-      extcluster["mode"] = "jscam"
-      return extcluster
-
-    scanned_syms = []
-    mode = None
-    # First pass, definite mode.
-    for k,v in self.iter_children(dom_node, None):
-      if k == 'mode':
-        mode = self.GRPMODE_MAP.get(v, v)
-        extcluster['mode'] = mode
-    # Second pass, collect.
-    for k,v in self.iter_children(dom_node, None):
-      component_sym = None
-      if k in self.UNIQUE_COMPONENT_SYMS:
-        cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
-      elif len(k) == 1:
-        component_sym = k
-      elif k in self.FILTER_SYMS.get(mode, []):
-        component_sym = self.FILTER_SYMS[mode][k]
-      if component_sym:
-        syntheses = None
-
-        if _stringlike(v):
-          # parse
-          syntheses = self.expand_shorthand_syntheses(v)
-        elif v:
-          # presume list of Synthesis
-          syntheses = v
-
-        if syntheses is not None:
-          compspec = {
-              "sym": component_sym,
-              "synthesis": syntheses
-            }
-          scanned_syms.append(component_sym)
-          extcluster['component'].append(compspec)
-      else:
-        if k == 'component':
-          extcluster[k].extend(v)
-        else:
-          extcluster[k] = v
-    # Determine mode.
-    if not 'mode' in extcluster:
-      mode = self.auto_mode(scanned_syms)
-      extcluster['mode'] = mode
-
-#    print("normalized cluster ="); pprint.pprint(extcluster)
-    return extcluster
-
-  UNIQUE_COMPONENT_SYMS = {
+  UNIQUE_POLE_SYMS = {
     "BK": ("SW", "BK"),
     "ST": ("SW", "ST"),
     "LB": ("SW", "LB"),
@@ -626,13 +769,70 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
     "LS": ("LJ", "c"),
     "RS": ("RJ", "c"),
     }
+
+  def normalize_cluster (self, dom_node):
+    """Resolve shorthand notations for poles.
+
+Returns a cluster DOM which is a copy of the original but with shorthand notation expanded/resolved.
+"""
+#    print("normalizing cluster {}".format(dom_node))
+    extcluster = ClusterDict()
+
+    # Shorthand entire joystick.
+    if dom_node in ("LJ", "(LJ)"):
+      extcluster.mode = "jsmove"
+      return extcluster
+    if dom_node in ("RJ", "(RJ)"):
+      extcluster.mode = "jscam"
+      return extcluster
+
+    scanned_syms = []
+    mode = None
+    # First pass, definite mode.
+    for k,v in self.iter_children(dom_node, None):
+      if k == 'mode':
+        mode = self.GRPMODE_MAP.get(v, v)
+        extcluster.mode = mode
+    # Second pass, collect.
+    for k,v in self.iter_children(dom_node, None):
+      pole_sym = None
+      if k in self.UNIQUE_POLE_SYMS:
+        cluster_sym, pole_sym = self.UNIQUE_POLE_SYMS[k]
+      elif len(k) == 1:
+        pole_sym = k
+      elif k in self.FILTER_SYMS.get(mode, []):
+        pole_sym = self.FILTER_SYMS[mode][k]
+      if pole_sym:
+        if _stringlike(v):    # Parse from string.
+          syntheses = self.expand_shorthand_syntheses(v)
+        elif v:       # presume list of Synthesis
+          syntheses = v
+        # Merge or create poles with the syntheses.
+        if syntheses is not None:
+          pole = extcluster.pole[pole_sym] or extcluster.pole.make(pole_sym)
+          pole.merge_syntheses(syntheses)
+          scanned_syms.append(pole_sym)
+      else:
+        if k == 'pole':
+          for pole in v:
+            extcluster.merge_pole(pole)
+        else:
+          extcluster[k] = v
+    # Determine mode.
+    if not 'mode' in extcluster:
+      mode = self.auto_mode(scanned_syms)
+      extcluster.mode = mode
+
+#    print("normalized cluster ="); pprint.pprint(extcluster)
+    return extcluster
+
   def export_cluster (self, dom_node, groupobj):
     # Maps to scconfig.Group
-    r"""
+    r"""Convert/export cluster subdict as Group.
 {
   "mode": ...
-  "component": [
-    `component`,
+  "pole": [
+    `pole`,
     ...
   ]
 }
@@ -647,19 +847,20 @@ shorthand
   <ComponentSym>: <EvgenSpec>
 """
     clustermode = self.get_domattr(dom_node, "mode")
-    for compspec in self.iter_children(dom_node, "component"):
-#      print("export component {}/{} to groupobj {}".format(clustermode, compspec, groupobj))
-      self.export_component(compspec, groupobj)
+    for polespec in self.iter_children(dom_node, "pole"):
+#      print("export pole {}/{} to groupobj {}".format(clustermode, polespec, groupobj))
+      self.export_pole(polespec, groupobj)
     for ss in self.iter_children(dom_node, "settings"):
       self.export_settings(ss, groupobj.settings)
-      break
+      break  # only handle the first.
+    r"""
     for k,v in self.iter_children(dom_node, None):
-      cluster_sym, component_sym = None, None
-      if k in self.UNIQUE_COMPONENT_SYMS:
-        cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
+      cluster_sym, pole_sym = None, None
+      if k in self.UNIQUE_POLE_SYMS:
+        cluster_sym, pole_sym = self.UNIQUE_POLE_SYMS[k]
       elif len(k) == 1:
-        component_sym = k
-      if component_sym:
+        pole_sym = k
+      if pole_sym:
         syntheses = None
 
         if _stringlike(v):
@@ -670,15 +871,22 @@ shorthand
           syntheses = v
 
         if syntheses is not None:
-          compspec = {
-              "sym": component_sym,
+          polespec = {
+              "sym": pole_sym,
               "synthesis": syntheses
             }
-          self.export_component(compspec, groupobj)
+          self.export_pole(polespec, groupobj)
+"""
+    for pp in self.iter_children(dom_node, "pole"):
+      self.export_pole(pp, groupobj)
     return True
 
   @staticmethod
   def auto_mode (x, strictness=0):
+    """Determine a suitable input mode for the specified srcsym(s).
+strictness=0 implies a advisory/speculative first pass detemrination.
+strictness=1 implies a mandatory/definitive second pass for exporting.
+"""
 #    print("* AUTOMODE {},{}".format(x,strictness))
     if any(['u' in x, 'd' in x, 'l' in x, 'r' in x]):
       return 'dpad'
@@ -698,7 +906,7 @@ shorthand
       except ValueError:
         return -1
 
-    nums = [ intOrNegOne(z) for z in x ]
+    nums = [ intOrNegOne(z) for z in x ] if len(x) > 0 else [-1]
     m = max(nums)
 
     if 0 in nums:
@@ -744,28 +952,28 @@ shorthand
     }
 
   def normalize_layer (self, dom_node, conmap, layeridx=0):
-    r"""resolve shorthands.
+    r"""Resolve shorthands in a layer subdict.
 Returns a substitute layer which is copy of the original (dom_node), but with shorthand notations for/in clusters resolved.
 """
     paralayer = {'cluster': []}
 
     # Scan shorthands.
     for k,v in self.iter_children(dom_node, None):
-      cluster_sym = component_sym = None
+      cluster_sym = pole_sym = None
       if '.' in k:    # "CLUSTER.POLE"
-        cluster_sym, component_sym = k.split('.')
-      elif k in self.UNIQUE_COMPONENT_SYMS:   # "POLE(UNIQUE)"
-        cluster_sym, component_sym = self.UNIQUE_COMPONENT_SYMS[k]
+        cluster_sym, pole_sym = k.split('.')
+      elif k in self.UNIQUE_POLE_SYMS:   # "POLE(UNIQUE)"
+        cluster_sym, pole_sym = self.UNIQUE_POLE_SYMS[k]
       elif k in self.GRPSRC_MAP:
         # short-hand for cluster.
-        component_sym = None
+        pole_sym = None
         clusterobj = self.normalize_cluster(v)
 #        print("normalized cluster = "); pprint.pprint(clusterobj)
         clusterobj['sym'] = k
         cluster_sym = k
         self.pave_layer_cluster(paralayer, cluster_sym, clusterobj.get("mode",None))
         scansyms = []
-        for poleobj in clusterobj.get("component", []):
+        for poleobj in clusterobj.get("pole", []):
           polesym = poleobj['sym']
           scansyms.append(polesym)
           self.extend_layer_cluster_pole(paralayer, cluster_sym, polesym, poleobj, None)
@@ -779,41 +987,41 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
             cluster[k] = v
         continue  # bypass cluster.pole case.
 
-      if cluster_sym and component_sym:
+      if cluster_sym and pole_sym:
         # Update cluster.
         if _stringlike(v):
           syntheses = self.expand_shorthand_syntheses(v)
         else: syntheses = v
-        self.pave_layer_cluster_pole(paralayer, cluster_sym, component_sym, None)
+        self.pave_layer_cluster_pole(paralayer, cluster_sym, pole_sym, None)
         poleobj = {
-          'sym': component_sym,
+          'sym': pole_sym,
           'synthesis': syntheses,
           }
-        self.extend_layer_cluster_pole(paralayer, cluster_sym, component_sym, poleobj, None)
+        self.extend_layer_cluster_pole(paralayer, cluster_sym, pole_sym, poleobj, None)
       else:   # Not recognized as shorthand; assume longhand.
         # copy verbatim.
         if k == 'cluster':
           vv = [ self.normalize_cluster(cl) for cl in v ]
           #paralayer[k].extend(vv)
           for cluster in vv:
-            for poleobj in cluster['component']:
+            for poleobj in cluster['pole']:
               polesym = poleobj['sym']
               self.extend_layer_cluster_pole(paralayer, cluster['sym'], polesym, poleobj, None)
         else:
           paralayer[k] = v
-    # auto-mode from all components.
+    # auto-mode from all poles.
     for cluster in paralayer['cluster']:
       if cluster.get('mode', None) is None:
-        complist = [ x.get("sym") for x in cluster['component'] ]
-        automode = self.auto_mode(complist)
+        polelist = [ x.get("sym") for x in cluster['pole'] ]
+        automode = self.auto_mode(polelist)
         cluster['mode'] = automode
-#        print(" fallback automode {} => {}".format(complist, automode))
+#        print(" fallback automode {} => {}".format(polelist, automode))
 #    print("normalized layer "); pprint.pprint(dom_node); print(" =>"); pprint.pprint(paralayer)
 #    print("normalized layer ="); pprint.pprint(paralayer)
     return paralayer
 
   def export_layer (self, dom_node, conmap, layeridx=0, parent_name=None):
-    r"""
+    r"""Convert/export layer subdict to ActionLayer, Preset, Groups.
 {
   "name": ...
   "cluster": [
@@ -873,8 +1081,8 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
   def normalize_srcsym (self, srcsymspec, implied_cluser=None):
     if '.' in srcsymspec:
       cluster_sym, pole_sym = srcsymspec.split('.', 1)
-    elif srcsymspec in self.UNIQUE_COMPONENT_SYMS:
-      cluster_sym, pole_sym = self.UNIQUE_COMPONENT_SYMS[srcsymspec]
+    elif srcsymspec in self.UNIQUE_POLE_SYMS:
+      cluster_sym, pole_sym = self.UNIQUE_POLE_SYMS[srcsymspec]
     else:
       cluster_sym, pole_sym = None, srcsymspec
     return (cluster_sym, pole_sym)
@@ -893,14 +1101,14 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
       clusterspec = {
         'mode': clustermode,
         'sym': clustersym,
-        'component': []
+        'pole': []
         }
       lyr['cluster'].append(clusterspec)
     return lyr
   def get_layer_cluster_pole (self, lyr, clustersym, polesym):
     cluster = self.get_layer_cluster(lyr, clustersym)
     if cluster:
-      for probe in cluster.get('component', []):
+      for probe in cluster.get('pole', []):
         if probe.get('sym',None) == polesym:
           return (cluster, probe)
       else:
@@ -921,7 +1129,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         "sym": polesym,
         "synthesis": [],
         }
-      cluster['component'].append(polespec)
+      cluster['pole'].append(polespec)
     return lyr
   def extend_layer_cluster_pole (self, lyr, clustersym, polesym, poleobj, clustermode=None):
     if polesym is None:
@@ -1238,7 +1446,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
     return paralayers
 
   def export_action (self, dom_node, conmap, phase=0):
-    r"""
+    r"""Convert/export action subdict to ActionSet, ActionLayer, Preset, Group.
 {
   "name":
   "layer": [
