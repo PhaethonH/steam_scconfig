@@ -5,6 +5,7 @@ import domexport, scconfig, scvdf
 import unittest
 import pprint
 import yaml
+from collections import OrderedDict
 
 
 class TestDomExporter (unittest.TestCase):
@@ -452,15 +453,15 @@ class TestDomExporter (unittest.TestCase):
     'action': {
       'name': 'Default',
       'layer': [
-        {
-          'name': 'Default',
-          "BQ": {
+        OrderedDict([
+          ('name', "Default"),
+          ('BQ', {
             "n": "<Y>",
             "w": "<X>",
             "e": "<B>",
             "s": "<A>",
-          },
-          "BQ&LB": {
+          }),
+          ("BQ&LB", {
             "01": "<1>",
             "02": "<2>",
             "03": "<3>",
@@ -469,8 +470,34 @@ class TestDomExporter (unittest.TestCase):
             "06": "<6>",
             "07": "<7>",
             "08": "<8>",
-          },
-        },
+          }),
+        ]),
+      ],
+      },
+    }
+  d_modeshifting3 = {
+    'action': {
+      'name': 'Default',
+      'layer': [
+        OrderedDict([
+          ('name', "Default"),
+          ("BQ&LB", {
+            "01": "<1>",
+            "02": "<2>",
+            "03": "<3>",
+            "04": "<4>",
+            "05": "<5>",
+            "06": "<6>",
+            "07": "<7>",
+            "08": "<8>",
+          }),
+          ('BQ', {
+            "n": "<Y>",
+            "w": "<X>",
+            "e": "<B>",
+            "s": "<A>",
+          }),
+        ]),
       ],
       },
     }
@@ -494,6 +521,51 @@ class TestDomExporter (unittest.TestCase):
     n_modeshifted = len([ x for x in z['preset']['group_source_bindings'].values() if "modeshift" in x ])
     self.assertEqual(n_modeshifted, 1)
     self.assertTrue(any([ x for x in z['group'] if 'mode_shift' in str(z['group'])]))
+    found = []
+    for grp in z['group']:
+      inp = grp.get("inputs", None)
+      if inp:
+        lb = inp.get("left_bumper", None)
+        if lb:
+          acts = lb.get("activators", None)
+          if acts:
+            fp = acts.get("Full_Press", None)
+            if fp:
+              bb = fp.get("bindings", None)
+              if bb:
+                b = bb.get("binding", None)
+                found.append(b)
+    self.assertEqual(len(found), 1)
+    parts = found[0].split()
+    self.assertEqual(parts[1], "button_diamond")
+    self.assertGreater(int(parts[2]), -1)
+
+    exporter = domexport.ScconfigExporter(None)
+    d = self.d_modeshifting3
+    conmap = scconfig.Mapping()
+    exporter.export_conmap(d, conmap)
+    z = scvdf.toDict(scconfig.toVDF(conmap))
+    n_modeshifted = len([ x for x in z['preset']['group_source_bindings'].values() if "modeshift" in x ])
+    self.assertEqual(n_modeshifted, 1)
+    self.assertTrue(any([ x for x in z['group'] if 'mode_shift' in str(z['group'])]))
+    found = []
+    for grp in z['group']:
+      inp = grp.get("inputs", None)
+      if inp:
+        lb = inp.get("left_bumper", None)
+        if lb:
+          acts = lb.get("activators", None)
+          if acts:
+            fp = acts.get("Full_Press", None)
+            if fp:
+              bb = fp.get("bindings", None)
+              if bb:
+                b = bb.get("binding", None)
+                found.append(b)
+    self.assertEqual(len(found), 1)
+    parts = found[0].split()
+    self.assertEqual(parts[1], "button_diamond")
+    self.assertGreater(int(parts[2]), -1)
 
 
   def test_sample1 (self):
