@@ -319,7 +319,7 @@ action:
 #        analog_emulation_period: 50
 #        analog_emulation_duty_cycle_pct: 15
     LT:
-      "mode": trigger
+      "style": trigger
       o: "+{overlay,apply,SpeedScale}"
       settings:
         output_trigger: 0
@@ -355,7 +355,7 @@ action:
 
   - name: SpeedScale
     LT:
-      "mode": trigger
+      "style": trigger
       c: <>
       o: +{overlay,apply,SpeedLimbo}
       settings:
