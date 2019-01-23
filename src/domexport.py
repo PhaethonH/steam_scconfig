@@ -87,7 +87,7 @@ class PoleDict (OrderedDict):
     else:
       # assume single instance.
       one_synthesis = syntheses
-      self["syntheses"].append(one_synthesis)
+      self["synthesis"].append(one_synthesis)
 
 class ClusterDict (OrderedDict):
   def __init__ (self, cluster_sym=None, init_style=None, poles=None):
@@ -1029,7 +1029,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         normcluster.sym = base_sym
         if base_sym in ("RT", "LT"):
           normcluster.style = "trigger"
-        modeshift_sym = self.MODESHIFT_MAP.get(modeshift_sym, modeshift_sym)
+#        modeshift_sym = self.MODESHIFT_MAP.get(modeshift_sym, modeshift_sym)
         normcluster.modeshift = modeshift_sym
         paralayer.merge_cluster(normcluster, normcluster.get("style",None))
 
@@ -1410,6 +1410,24 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       normalized_shiftlayer = self.normalize_layer(shiftlayer, conmap)
       extlayers.append(normalized_shiftlayer)
       sanitizeable.append(shiftlayer['name'])
+
+      for n in range(1, maxshift+1):
+        for shiftcl in normalized_shiftlayer.cluster:
+          for shiftpo in shiftcl.pole:
+            print("// pend merge {}.{}".format(shiftcl, shiftpo))
+            for ovname in overlays[n]:
+              ovidx = [ x for x in range(len(extlayers)) if extlayers[x].get("name",None) == ovname ][0]
+              cl,po = self.normalize_srcsym(shiftsym,None)
+              print("//ovidx = {} / {}.{}".format(ovidx, cl,po))
+              ovcl = extlayers[ovidx].cluster[cl]
+              if ovcl:
+                print("//  ovcl = {}".format(ovcl))
+                ovpo = ovcl.pole[po]
+                print("//  ovpo = {}".format(ovpo))
+                if ovpo:
+                  print("//  merging ovpo into shiftpo {}".format(shiftpo))
+                  shiftpo.merge_syntheses(ovpo.synthesis)
+                  print("//   => {}".format(shiftpo))
 
     # Establish sanity bind.
     if sanity:
