@@ -231,6 +231,24 @@ merge_cluster(cluster_sym:str, cluster_style:str)
     self.settings.update(settingsdict)
 
 
+class MutableEvgen_Modeshift (scconfig.Evgen_Modeshift):
+  def __init__ (self, input_source, grpid):
+    super(MutableEvgen_Modeshift,self).__init__(input_source, grpid)
+    self._inpsrc = input_source
+    self._grpid = grpid
+  @property
+  def inpsrc (self): return self._inpsrc
+  @inpsrc.setter
+  def inpsrc (self, val):
+    self._inpsrc = scconfig.filter_enum(self.ACCEPTABLE, val)
+    self._evdetails = (self._inpsrc, self._evdetails[1])
+  @property
+  def group_id (self): return self._grpid
+  @group_id.setter
+  def group_id (self, val):
+    self._grpid = val
+    self._evdetails = (self._evdetails[0], str(val))
+
 class ModeshiftIntermediate (object):
   """mode_shift intermediate form."""
   def __init__ (self, grpid=-1, evgen=None):
@@ -465,8 +483,9 @@ element_name of None to iterate through all children as (element_name,element_co
       semimodeshift = self.rewrite_modeshift[tokenid]
       grpid = semimodeshift.grpid   # -1=placeholder (group not yet exported).
       inpsrc = self.GRPSRC_MAP.get(cluster_sym, cluster_sym)
-      retval = scconfig.EvgenFactory.make_modeshift(inpsrc, grpid)
+      retval = MutableEvgen_Modeshift(inpsrc, grpid)
       semimodeshift.evgen = retval  # save placeholder for future group export.
+      print("// modeshifter rewriter {} is {}/{}".format(tokenid, id(semimodeshift.evgen), semimodeshift.evgen))
       return retval
       #return scconfig.EvgenFactory.make_modeshift("joystick", -1)
     elif evtype in ('host',):
@@ -1026,6 +1045,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
           syntheses = self.expand_shorthand_syntheses(shorthand)
           modeshift_pole = PoleDict(normcluster.modeshift, syntheses)
           paralayer.merge_cluster_pole("SW", "switches", modeshift_pole)
+          print("// tabled modeshifter {}".format(tokenid))
         continue  # bypass cluster.pole case.
 
       (cluster_sym, pole_sym) = self.normalize_srcsym(base_sym)
@@ -1097,9 +1117,12 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         if 'will_modeshift' in clusterspec:
           semimodeshift = clusterspec["will_modeshift"]
           semimodeshift.grpid = grpid  # for any future mode_shift.
+          print("// update modeshifter ({}) with {}:".format(semimodeshift.evgen, grpid))
           if semimodeshift.evgen:
             # Already instantiated with placeholder value.
+            print("// updating modeshifter placeholder {}".format(id(semimodeshift.evgen)))
             semimodeshift.evgen.group_id = grpid
+            print("//  => ({})".format(semimodeshift.evgen))
 
 #      print("EXPORT GROUP {}".format(clustersym))
       self.export_cluster(clusterspec, grp)
