@@ -98,7 +98,7 @@ class ClusterDict (OrderedDict):
     if poles is None:
       poles = PolesProxy()
     self["pole"] = poles      # List of PoleDict
-#    self["settings"] = None   # Group.settings
+    self["settings"] = {}     # Group.settings
   sym = dict_alias("sym")
   style = dict_alias("style")
   pole = dict_alias("pole")
@@ -858,6 +858,351 @@ e.g. "<A> <B>" =>
     return settingsobj
 
 
+  def normalize_settings (self, dom_node, grpclass):
+    def _falselike (x):
+      if x in (False, 0, 0.):
+        return True
+      try:
+        if x.lower() in ("off", "no", "false", "disable"):
+          return True
+      except (AttributeError,):
+        pass
+      return False
+    def _truelike (x):
+      if x in (True, 1, 1.):
+        return True
+      try:
+        if x.lower() in ("on", "yes", "true", "enable"):
+          return True
+      except (AttributeError,):
+        pass
+      return False
+    def _scale_or_int (v, scaling_base=100.0):
+      """float values are multiplied against scaling_base, integers are returned verbatim."""
+      try:
+        # String representation.
+        if '.' in v or ',' in v:
+          return int(float(v) * scaling_base)
+        else:
+          return int(v)
+      except TypeError:
+        pass
+      try:
+        v.is_integer
+      except AttributeError:
+        return int(v)
+      else:
+        # float type provides means to check if it would be equal to an int.
+        return int(float(v) * scaling_base)
+
+    def _is_edge_binding (k):
+      return k in ("outer", "outerring", "outer-ring", "outer_ring",
+                   "ring", "edge", "threshold")
+    def _common_edge_binding (k, v):
+      MAX_THRESHOLD = 32767
+      if _stringlike(v):
+        if v[-1] == '%':
+          # as percent.
+          threshold = int(v) * MAX_THRESHOLD / 100
+        elif ord(v[-1]) == 0x2030:
+          # as per mille.
+          threshold = int(v) * MAX_THRESHOLD / 1000
+        elif '.' in v or ',' in v:
+          threshold = float(v)
+      threshold = _scale_or_int(threshold, MAX_THRESHOLD)
+      threshold = max(-MAX_THRESHOLD, min(threshold, MAX_THRESHOLD))  # clamp.
+
+      S = scconfig.GroupBase.Settings._VSC_KEYS
+      if (threshold > 0):
+        return { S.EDGE_BINDING_RADIUS: threshold }
+      elif (threshold < 0):
+        # shorthand for inverted outer ring.
+        return {
+          S.EDGE_BINDING_INVERT: True,
+          S.EDGE_BINDING_RADIUS: threshold
+          }
+      else:
+        # Ignore threshold settings.
+        return None
+
+    def _is_haptic (k):
+      return k in ("haptics", "haptic", "haptic-intensity", "haptic_intensity")
+    def _common_haptic (k, v):
+      if _falselike(v):
+        v = 0
+      elif v in ("low", "L"):
+        v = 1
+      elif v in ("medium", "med", "M"):
+        v = 2
+      elif v in ("high", "H"):
+        v = 3
+      return { k: v }
+
+    def dpad (k, v):
+      retval = None
+      S = scconfig.GroupBase.Settings._VSC_KEYS
+      if _is_edge_binding(k):
+        retval = _common_edge_binding(k, v)
+      elif _is_haptic(k):
+        retval = _common_haptic(S.HAPTIC_INTENSITY_OVERRIDE, v)
+      elif k == "layout":
+        if v in ("4", "4way", "4-way", "four", "four-way", "cardinal", "cardinals"):
+          layout = 0
+        elif v in ("8", "8way", "8-way", "eight", "eight-way", "diagonals"):
+          layout = 1
+        elif v in ("analog", "analog-emulation"):
+          layout = 2
+        elif v in ("cross", "cross-gate"):
+          layout = 3
+        else:
+          layout = v
+        retval = { S.LAYOUT: layout }
+      elif k == "period":
+        retval = { S.ANALOG_EMULATION_PERIOD: v }
+      elif k == "duty":
+        retval = { S.ANALOG_EMULATION_DUTY_CYCLE_PCT: _scale_or_int(v, 100.0) }
+      elif k == "overlap":
+        retval = { S.OVERLAP_REGION: v }
+      return retval
+
+    def jsmove (k, v):
+      retval = None
+      S = scconfig.GroupBase.Settings._VSC_KEYS
+      if _is_edge_binding(k):
+        retval = _common_edge_binding(k, v)
+      elif k in ("curve",):
+        curvestyle, curvexp = 5, 0
+        if v in ("linear",): 
+          curvestyle = 0
+        elif v in ("aggressive", "aggro"): 
+          curvestyle = 1
+        elif v in ("relaxed", "relax"):
+          curvestyle = 2
+        elif v in ("wide",):
+          curvestyle = 3
+        elif v in ("xwide", "extrawide", "extra-wide", "extra_wide"):
+          curvestyle = 4
+        else:
+          curvestyle = 5
+          curvexp = int(v)
+        retval = { S.CURVE_EXPONENT: curvestyle }
+        if curvestyle == 5:
+          retval[S.CUSTOM_CURVE_EXPONENT] = curvexp
+      elif k in ("joystick", "js"):
+        if v in ("left", "L", "LJ", "(LJ"):         outjs = 0
+        elif v in ("right", "R", "RJ", "(RJ)"):     outjs = 1
+        elif v in ("mouse",):                       outjs = 2
+        else:                                       outjs = int(v)
+        retval = { S.OUTPUT_JOYSTICK: outjs }
+      elif k in ("deadzone_shape",):
+        deadshape = 0
+        if v in ("cross",):         deadshape = 0
+        elif v in ("circle",):      deadshape = 1
+        elif v in ("square",):      deadshape = 2
+        else:                       deadshape = int(v)
+        retval = { S.DEADZONE_SHAPE: deadzone }
+      elif k in ("invert",):
+        retval = dict()
+        if 'x' in v:
+          retval[S.INVERT_X] = True
+        if 'y' in v:
+          retval[S.INVERT_Y] = True
+      # TODO: anti-deadzone, deadzones inner & outer, output_axis, sensitivity H & V, gyro stuff
+      return retval
+
+    def radial (k, v):
+      retval = None
+      S = scconfig.GroupBase.Settings._VSC_KEYS
+      if k in ("activate", "activation"):
+        firetype = 0
+        if v in ("click",):
+          firetype = 0
+        elif v in ("release",):
+          firetype = 1
+        elif v in ("close",):
+          firetype = 2
+        elif v in ("always",):
+          firetype = 3
+        else:
+          firetype = int(v)
+        retval = { S.TOUCHMENU_BUTTON_FIRE_TYPE: firetype }
+      elif k in ("opacity",):
+        retval = { S.TOUCH_MENU_OPACITY: _scale_or_int(v, 100.0) }
+      elif k in ("position",):
+        if _stringlike(v):
+          x,y = v.split()
+        else: # presume sequence-like
+          x,y = v
+        retval = {
+          S.TOUCH_MENU_POSITION_X: _scale_or_int(x, 100.0),
+          S.TOUCH_MENU_POSITION_Y: _scale_or_int(y, 100.0),
+          }
+      elif k in ("x",):
+        retval = { S.TOUCH_MENU_POSITION_X: _scale_or_int(v, 100.0) }
+      elif k in ("y",):
+        retval = { S.TOUCH_MENU_POSITION_Y: _scale_or_int(v, 100.0) }
+      elif k in ("scale",):
+        retval = { S.TOUCH_MENU_SCALE: _scale_or_int(v, 100.0) }
+      elif k in ("labels",):
+        if _falselike(v):
+          retval = { S.TOUCH_MENU_SHOW_LABELS: False }
+        elif _truelike(v):
+          retval = { S.TOUCH_MENU_SHOW_LABELS: True }
+        # else invalid, do not set.
+      return retval
+
+    def trigger (k, v):
+      retval = None
+      S = scconfig.GroupBase.Settings._VSC_KEYS
+      if _is_edge_binding(k):
+        retval = _common_edge_binding(k, v)
+      elif k in ("output", "trigger", "analog"):
+        if _falselike(v):
+          trigger = 0
+        elif v in ("left", "L", "LT", "(LT)"):
+          trigger = 1
+        elif v in ("right", "R", "RT", "(RT)"):
+          trigger = 2
+        else:
+          trigger = int(v)
+        retval = { S.OUTPUT_TRIGGER: trigger }
+      elif k in ("soft", "hip-fire", "hip_fire", "hipfire"):
+        val = 0
+        if v in ("simple",):
+          val = 0
+        elif v in ("hair", "hair-trigger", "default"):
+          val = 1
+        elif v in ("aggressive", "aggro"):
+          val = 2
+        elif v in ("normal",):
+          val = 3
+        elif v in ("relaxed", "relax"):
+          val = 4
+        elif v in ("exclusive",):
+          val = 5
+        else:
+          val = int(v)
+        retval = { S.ADAPTIVE_THRESHOLD: val }
+      elif k in ("curve",):
+        curvestyle, curvexp = 5, 0
+        if curvestyle in ("linear", "default"):
+          curvestyle = 0
+        elif curvestyle in ("aggressive", "aggro"):
+          curvestyle = 1
+        elif curvestyle in ("relaxed", "relax"):
+          curvestyle = 2
+        elif curvestyle in ("wide",):
+          curvestyle = 3
+        elif curvestyle in ("xwide", "extrawide", "extra-wide", "extra_wide"):
+          curvestyle = 4
+        else:
+          curvestyle = 5
+          curvexp = int(v)
+        retval = { S.CURVE_EXPONENT: curvestyle }
+        if curvestyle == 5:
+          retval[S.CUSTOM_CURVE_EXPONENT] = curvexp
+      # TODO: deadzone inner & outer
+      return retval
+
+    def region (k, v):
+      retval = None
+      S = scconfig.GroupBase.Settings._VSC_KEYS
+      if _is_edge_binding(k):
+        retval = _common_edge_binding(k, v)
+      elif k in ("rect", "rectangle"):
+        # Calculate position, scale, and sensitivities in one expression.
+        # "WxH+X+Y"
+        RE_RECT = "([0-9]+)x([0-9]+)[+]([0-9]+)[+]([0-9]+)"
+        matches = re.findall(RE_RECT, v)
+        # TODO: check against actual Steam behavior.
+        w = int(matches[0][0])
+        h = int(matches[0][1])
+        x = int(matches[0][2])
+        y = int(matches[0][3])
+        position_x = int(x + w/2)
+        position_y = int(y + h/2)
+        w, h = abs(w), abs(h)
+        scale = max(w, h)
+        sens_h = int(w * 100 / scale)
+        sens_v = int(h * 100 / scale)
+        retval = {
+          S.POSITION_X: position_x,
+          S.POSITION_Y: position_y,
+          S.SCALE: int(scale/2),
+          S.SENSITIVITY_HORIZ_SCALE: sens_h,
+          S.SENSITIVITY_VERT_SCALE: sens_v,
+          }
+      elif k in ("x",):
+        retval = { S.POSITION_X: _scale_or_int(v, 100.0) }
+      elif k in ("y",):
+        retval = { S.POSITION_Y: _scale_or_int(v, 100.0) }
+      elif k in ("sensitivityh", "sensitivity-h", "sensitivity_h", "horizontal"):
+        retval = { S.SENSITIVITY_HORIZ_SCALE: int(v) }
+      elif k in ("sensitivityv", "sensitivity-v", "sensitivity_v", "vertical"):
+        retval = { S.SENSITIVITY_VERT_SCALE: int(v) }
+      elif k in ("snapback", "snap"):
+        if _falselike(v):
+          retval = { S.TELEPORT_SNAP: False }
+        elif _truelike(v):
+          retval = { S.TELEPORT_SNAP: True }
+        # else do not set.
+      elif k in ("dampen", "dampening"):
+        # 0 = no dampen
+        # 1 = Left Trigger Soft Pull
+        # 2 = Right Trigger Soft Pull
+        # 3 = Both Trigger Soft Pull
+        # 4 = Left Trigger Soft/Full Pull
+        # 5 = Right Trigger Soft/Full Pull
+        # 6 = Both Trigger Soft/Full Pull
+        if _falselike(v):
+          val = 0
+        else:
+          lefty = True
+          righty = True
+          softonly = True
+          val = 1  # left trigger soft-only pull
+          if "L" in v or "l" in v:
+            righty = False
+          if "R" in v or "r" in v:
+            lefty = False
+          if "S" in v or "s" in v:
+            softonly = True
+          if "F" in v or "f" in v:
+            softonly = False
+          if not softonly:
+            val += 3   # soft+full pull.
+          if lefty == righty:   # both
+            val += 2
+          elif righty:  # right only
+            val += 1
+          # else left-only, which val starts at.
+        retval = { S.MOUSE_DAMPENING_TRIGGER: val }
+        # TODO: trigger clamp amount (dampening threshold)
+      return retval
+
+    # TODO: touchmenu, jscam, buttonquad, mousejs, scrollwheel, etc.
+
+    def unfiltered (k, v):
+      return { k: v }
+
+    normsettings = dict()
+    FILTERFUNC_MAP = {
+      scconfig.GroupDpad: dpad,
+      scconfig.GroupMouseRegion: region,
+      scconfig.GroupJoystickMove: jsmove,
+      scconfig.GroupRadialMenu: radial,
+      scconfig.GroupTrigger: trigger,
+      }
+    filterfunc = FILTERFUNC_MAP.get(grpclass, unfiltered)
+    for k,v in self.iter_children(dom_node, None):
+      filtered = filterfunc(k, v)
+      if filtered:
+        normsettings.update(filtered)
+      else:
+        normsettings[k] = v
+    return normsettings
+
+
   UNIQUE_POLE_SYMS = {
     "BK": ("SW", "BK"),
     "ST": ("SW", "ST"),
@@ -905,6 +1250,10 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
       elif intOrNegOne(k) >= 0:
         # unique to radial/touchmenu.
         pole_sym = k
+      elif k[0] == '.':
+        # dot-symbol => shorthand frob.
+        setting_key = k[1:]
+        extcluster.settings[setting_key] = v
       if pole_sym:
         if _stringlike(v):    # Parse from string.
           syntheses = self.expand_shorthand_syntheses(v)
@@ -955,7 +1304,9 @@ shorthand
 #      print("export pole {}/{} to groupobj {}".format(clusterstyle, polespec, groupobj))
       self.export_pole(polespec, groupobj)
     for ss in self.iter_children(dom_node, "settings"):
-      self.export_settings(ss, groupobj.settings)
+#      self.export_settings(ss, groupobj.settings)
+      normsettings = self.normalize_settings(ss, groupobj.__class__)
+      self.export_settings(normsettings, groupobj.settings)
       break  # only handle the first.
 #    for pole in self.iter_children(dom_node, "pole"):
 #      self.export_pole(pole, groupobj)
@@ -1022,6 +1373,10 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
       if '&' in k:
         # modeshifted.
         base_sym, modeshift_sym = k.split('&')
+      elif '.' == k[0]:
+        # short-hand settings.
+        setting_key = k[1:]
+        paralayer["settings"][setting_key] = v
       if base_sym in self.GRPSRC_MAP:
         # short-hand for cluster.
         cluster_sym = base_sym

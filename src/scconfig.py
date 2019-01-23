@@ -1077,7 +1077,7 @@ class GroupBase (object):
       EDGE_BINDING_RADIUS = "edge_binding_radius",
       EDGE_BINDING_INVERT = "edge_binding_invert",
       ANALOG_EMULATION_PERIOD = "analog_emulation_period",
-      ANALOG_EMULATION_DUTY_CYCLE = "analog_emulation_duty_cycle",
+      ANALOG_EMULATION_DUTY_CYCLE_PCT = "analog_emulation_duty_cycle_pct",
       OVERLAP_REGION = "overlap_region",
       GYRO_BUTTON_INVERT = "gyro_button_invert",
       HAPTIC_INTENSITY_OVERRIDE = "haptic_intensity_override",
@@ -1442,6 +1442,7 @@ class GroupDpad (GroupBase):
       S.EDGE_BINDING_RADIUS: (10000, 32000),
       S.EDGE_BINDING_INVERT: bool,
       S.ANALOG_EMULATION_PERIOD: (1, 500),
+      S.ANALOG_EMULATION_DUTY_CYCLE_PCT: (1, 99),
       S.OVERLAP_REGION: (2000, 16000),
       S.GYRO_BUTTON_INVERT: bool,
       S.GYRO_BUTTON: GyroButton,
@@ -1455,6 +1456,7 @@ class GroupDpad (GroupBase):
     edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
     edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
     analog_emulation_period = SettingsBase._alias(S.ANALOG_EMULATION_PERIOD)
+    analog_emulation_duty_cycle_pct = SettingsBase._alias(S.ANALOG_EMULATION_DUTY_CYCLE_PCT)
     overlap_region = SettingsBase._alias(S.OVERLAP_REGION)
     gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
     gyro_button = SettingsBase._alias(S.GYRO_BUTTON)

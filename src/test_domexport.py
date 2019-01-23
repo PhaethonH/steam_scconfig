@@ -567,6 +567,145 @@ class TestDomExporter (unittest.TestCase):
     self.assertEqual(parts[1], "button_diamond")
     self.assertGreater(int(parts[2]), -1)
 
+  d_dotfrob1 = {
+    'action': {
+      'name': 'Default',
+      'layer': [
+        {
+          'name': 'Default',
+          'cluster': [
+            {
+              "sym": "BQ",
+              "modeshift": None,
+              "style": "dpad",
+              "u": "<Y>",
+              "d": "<X>",
+              "l": "<B>",
+              "r": "<A>",
+              "settings": {
+                "layout": 2,
+                "analog_emulation_period": 50,
+                "analog_emulation_duty_cycle_pct": 15,
+              }
+            },
+            ],
+          },
+        ],
+      },
+    }
+  d_dotfrob2 = {
+    'action': {
+      'name': 'Default',
+      'layer': [
+        {
+          'name': 'Default',
+          'cluster': [
+            {
+              "sym": "BQ",
+              "modeshift": None,
+              "style": "dpad",
+              "u": "<Y>",
+              "d": "<X>",
+              "l": "<B>",
+              "r": "<A>",
+              ".layout": "analog",
+              ".period": 50,
+              ".duty": 15,
+            },
+            ],
+          },
+        ],
+      },
+    }
+
+  d_dotsettings1 = {
+    "layout": "analog",
+    "period": 50,
+    "duty": 25,
+    "haptics": "off",
+    }
+  d_dotsettings3 = {
+    "rect": "10x10+45+45",
+    }
+  d_dotsettings4 = {
+    "rect": "16x4+22+30",
+    }
+  d_dotsettings5 = {
+    "opacity": 33,
+    "position": "30 25",
+    "scale": 100,
+    }
+  d_dotsettings6 = {
+    "position": [20,10],
+    "opacity": .25,
+    "scale": "0.75",
+    }
+  def test_dotfrob (self):
+    exporter = domexport.ScconfigExporter(None)
+    d = self.d_dotsettings1
+    z = exporter.normalize_settings(d, scconfig.GroupDpad)
+    self.assertEqual(z, { "layout": 2, "analog_emulation_period": 50, "analog_emulation_duty_cycle_pct": 25, "haptic_intensity_override": 0 })
+
+    d = self.d_dotsettings3
+    z = exporter.normalize_settings(d, scconfig.GroupMouseRegion)
+    self.assertEqual(z, {
+      "position_x": 50,
+      "position_y": 50,
+      "scale": 5,
+      "sensitivity_horiz_scale": 100,
+      "sensitivity_vert_scale": 100,
+      })
+
+    d = self.d_dotsettings4
+    z = exporter.normalize_settings(d, scconfig.GroupMouseRegion)
+    self.assertEqual(z, {
+      "position_x": 30,
+      "position_y": 32,
+      "scale": 8,
+      "sensitivity_horiz_scale": 100,
+      "sensitivity_vert_scale": 25,
+      })
+
+    d = self.d_dotsettings5
+    z = exporter.normalize_settings(d, scconfig.GroupRadialMenu)
+    self.assertEqual(z, {
+      "touch_menu_position_x": 30,
+      "touch_menu_position_y": 25,
+      "touch_menu_scale": 100,
+      "touch_menu_opacity": 33,
+      })
+
+    d = self.d_dotsettings6
+    z = exporter.normalize_settings(d, scconfig.GroupRadialMenu)
+    self.assertEqual(z, {
+      "touch_menu_position_x": 20,
+      "touch_menu_position_y": 10,
+      "touch_menu_scale": 75,
+      "touch_menu_opacity": 25,
+      })
+
+    exporter = domexport.ScconfigExporter(None)
+    d = self.d_dotfrob1
+    conmap = scconfig.Mapping()
+    exporter.export_conmap(d, conmap)
+    z = scvdf.toDict(scconfig.toVDF(conmap))
+
+    probe_ss = [ x[1] for x in z['group'].items() if x[0]=="settings" ]
+    self.assertEqual(len(probe_ss), 1)
+    ss = probe_ss[0]
+    self.assertEqual(ss, {"layout": "2", "analog_emulation_period":"50", "analog_emulation_duty_cycle_pct":"15"})
+
+    exporter = domexport.ScconfigExporter(None)
+    d = self.d_dotfrob2
+    conmap = scconfig.Mapping()
+    exporter.export_conmap(d, conmap)
+    z = scvdf.toDict(scconfig.toVDF(conmap))
+
+    probe_ss = [ x[1] for x in z['group'].items() if x[0]=="settings" ]
+    self.assertEqual(len(probe_ss), 1)
+    ss = probe_ss[0]
+    self.assertEqual(ss, {"layout": "2", "analog_emulation_period":"50", "analog_emulation_duty_cycle_pct":"15"})
+
 
   def test_sample1 (self):
     with open("../examples/x3tc_2.yaml") as f:
