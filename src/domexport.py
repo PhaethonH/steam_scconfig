@@ -1411,23 +1411,18 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       extlayers.append(normalized_shiftlayer)
       sanitizeable.append(shiftlayer['name'])
 
+      # Merge overlay's bind conflicts into Shift layer.
       for n in range(1, maxshift+1):
         for shiftcl in normalized_shiftlayer.cluster:
           for shiftpo in shiftcl.pole:
-            print("// pend merge {}.{}".format(shiftcl, shiftpo))
             for ovname in overlays[n]:
               ovidx = [ x for x in range(len(extlayers)) if extlayers[x].get("name",None) == ovname ][0]
               cl,po = self.normalize_srcsym(shiftsym,None)
-              print("//ovidx = {} / {}.{}".format(ovidx, cl,po))
               ovcl = extlayers[ovidx].cluster[cl]
               if ovcl:
-                print("//  ovcl = {}".format(ovcl))
                 ovpo = ovcl.pole[po]
-                print("//  ovpo = {}".format(ovpo))
                 if ovpo:
-                  print("//  merging ovpo into shiftpo {}".format(shiftpo))
                   shiftpo.merge_syntheses(ovpo.synthesis)
-                  print("//   => {}".format(shiftpo))
 
     # Establish sanity bind.
     if sanity:
