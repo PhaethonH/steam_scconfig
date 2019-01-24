@@ -114,7 +114,7 @@ aliases:
   ViewOnLeftMonitor: <Left_Shift><1>
   ViewOnRightMonitor: <Left_Shift><2>
   ZoomIn: <KEYPAD_PLUS>
-  ZoomOut: <KEYPAD_MINUS>
+  ZoomOut: <KEYPAD_DASH>
   SelectCameraMode: <KEYPAD_0>
   DefaultView: <KEYPAD_5>
   ViewFromNorth: <KEYPAD_8>
@@ -189,6 +189,20 @@ action:
     LJ:
       style: jsmove
       c: "{overlay,apply,6th_axis}"
+    LJ&X:
+      style: radial
+      "c": <KEYPAD_5>
+      "00": "${NoOp}#ZoomOut___ZoomIn#LB###########################RB"
+      "01": <KEYPAD_8>
+      "02": <KEYPAD_9>
+      "03": <KEYPAD_6>
+      "04": <KEYPAD_3>
+      "05": <KEYPAD_2>
+      "06": <KEYPAD_1>
+      "07": <KEYPAD_4>
+      "08": <KEYPAD_7>
+      settings:
+        touchmenu_button_fire_type: 3
     RJ:
       style: jsmove
       # Double-tap+hold for missile spam; Hold 3s to cancel missile launch.
@@ -212,13 +226,29 @@ action:
     RT.c: $BoresightFire
 #    BQ.n: $OpenSidebar
     BQ.n: +${TradePad} -${EndTradePad}
-    BQ.w: $SectorMap :$GalaxyMap _{overlay,apply,Displays1}:333#Displays
+#    BQ.w: $SectorMap :$GalaxyMap _{overlay,apply,Displays1}:333#Displays
+    BQ.w: $SectorMap :$GalaxyMap _<>:333#Displays
+#    BQ.w: "+{overlay,hold,Displays1}"
     BQ.e: $CancelEscape
     BQ.s: $SelectOption
-    DP.u: ${UiUp_TgtNearBandit}
-    DP.d: ${UiDn_TgtNextEnemy}
-    DP.l: ${UiLt_TgtNextOwn}
-    DP.r: ${UiRt_TgtNextAny}
+#    DP.u: ${UiUp_TgtNearBandit}
+#    DP.d: ${UiDn_TgtNextEnemy}
+#    DP.l: ${UiLt_TgtNextOwn}
+#    DP.r: ${UiRt_TgtNextAny}
+    DP:
+      style: dpad
+      u: ${UiUp_TgtNearBandit}
+      d: ${UiDn_TgtNextEnemy}
+      l: ${UiLt_TgtNextOwn}
+      r: ${UiRt_TgtNextAny}
+    DP&X:
+      style: dpad
+      u: $ZoomIn
+      d: $ZoomOut
+      l: $SelectCameraMode
+      r: $ChangeMapAxis
+    LB: "&${ZoomOut}:12"
+    RB: "&${ZoomIn}:12"
     ST: <Delete>
 
   - name: dummy
@@ -227,8 +257,10 @@ action:
     LJ:
       style: dpad
       c: "{overlay,peel,6th_axis}"
-      u: $StrafeUp
-      d: $StrafeDown
+#      u: $StrafeUp
+#      d: $StrafeDown
+      u: $Accelerate
+      d: $Decelerate
       l: $RollLeft
       r: $RollRight
       settings:
@@ -272,8 +304,8 @@ action:
     DP.r: "[1]^@150,0 _$ViewOnRightMonitor:250 {mouse_position,30000,2000,1}^@0,200 "
     # ButtonQuad bindings should be sensible to use while not piloting.
     BQ.n: $ActionsForSelectedObject
-    BQ.e: $SETA _$Jumpdrive
-    BQ.w: <>
+    BQ.e: $Comms
+    BQ.w: $SETA _$Jumpdrive
     BQ.s: $DockWithTarget
     # LeftJoystick reflects Slew Control.
     LJ:
@@ -289,7 +321,10 @@ action:
 
 
   - name: Displays1
-    BQ.w: -{overlay,peel,Displays1}
+#    BQ.w: "{overlay,hold,Displays1} ${SectorMap} :${GalaxyMap} _<>:333"
+#    BQ.w: "-{overlay,hold,Displays1}"
+    LB: $ZoomOut
+    RB: $ZoomIn
     DP:
       u: <KEYPAD_PLUS>#ZoomIn
       d: <KEYPAD_DASH>#ZoomOut
@@ -325,16 +360,31 @@ action:
         output_trigger: 0
         edge_binding_radius: 0
         deadzone_outer_radius: 32767
+    ST: "{overlay,peel,Displays1}"
 
   - name: Combat1
+    # Weapon Hat
     DP.u: $SelectWeaponGroup1 :$SelectWeaponGroup2
-    DP.d: $SelectWeaponGroup3 :$SelectWeaponGroup4 _$WeaponsMenu
+    DP.d: $SelectWeaponGroup3 :$SelectWeaponGroup4
     DP.l: $MatchSpeedToTarget
-    DP.r: <>
+    DP.r:  _$WeaponsMenu
+    # Targeting Hat
     LJ.u: $TargetNearestEnemy
     LJ.l: $TargetNextOwnedObject
     LJ.r: $TargetNextObject
     LJ.d: $TargetNextEnemy
+#    LJ:
+#      style: jsmove
+#    LJ&RB:
+#      style: radial
+#      "01": $TargetNearestEnemy
+#      "02": $TargetNextObject
+#      "03": $TargetNextEnemy
+#      "04": $TargetNextOwnedObject
+#      label: "Stuff like stuff stuff like that"
+#      settings:
+#        touchmenu_button_fire_type: 2
+    BK: $ToggleAutopilot _$LaserTargetingMode
 
   - name: Command1
     DP.u: $WingmenAttackTarget
@@ -347,6 +397,12 @@ action:
       o: $Decelerate
       settings:
         adaptive_threshold: 0
+    BQ:
+      style: face
+      n: $EjectFromShip
+      e: $CommandConsoleForCurrentShip
+      w: $OwnedProperty
+      s: <>
 
   - name: SpeedMatch
     #
@@ -386,15 +442,20 @@ action:
     DP.u: "+<Backspace> +<1>@50,0 -{overlay,apply,T1_1}"
     DP.r: "<0>{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
     DP.d: "+<Backspace> +<9>@50,0 -{overlay,apply,T1_9}"
+    BQ.u: "-{overlay,peel,Trade1}{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
     LB: $BestBuysLocator
     RB: $BestSellingPriceLocator
+    ST: "{overlay,peel,Trade1}{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
     LJ:
+      style: jsmove
+    LJ&Y:
       style: radial
-#      "00": "${NoOp}#BestBuy____BestSell#LB############################RB"
+      "00": "${NoOp}#BestBuy____BestSell#LB############################RB"
       "01": $TradeWithStation
       "02": $ChangeShip
       "03": $LandedShips
       "04": $OwnedShips
+    BK: $FreightBay
 
   - name: T1_1
     DP.u: "+<Backspace> +<2>@50,0 -{overlay,peel,T1_1}{overlay,apply,T1_2}"
@@ -429,7 +490,7 @@ action:
       LB: hold 1
       RB: hold 2
     overlay:
-      1: [ WM_Laser, SpeedMatch, Panels1, Panels2 ]
+      1: [ SpeedMatch, Panels1, Panels2 ]
       2: [ SpeedScale, Combat1 ]
       3: [ Command1 ]
     sanity: ST
