@@ -400,7 +400,7 @@ class TestDomExporter (unittest.TestCase):
     self.assertEqual(ll, {"name":None, "cluster":[], "settings": None})
     cl1 = domexport.ClusterDict("DP", "dpad")
     ll.merge_cluster(cl1)
-    self.assertEqual(ll.cluster, [{"sym": "DP", "style": "dpad", "modeshift": None, "pole": [], }] )
+    self.assertEqual([dict(x) for x in ll.cluster], [{"sym": "DP", "style": "dpad", "modeshift": None, "pole": [], }] )
 
     ll = domexport.LayerDict()
     pp = domexport.PoleDict("u")

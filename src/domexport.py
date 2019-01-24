@@ -98,7 +98,7 @@ class ClusterDict (OrderedDict):
     if poles is None:
       poles = PolesProxy()
     self["pole"] = poles      # List of PoleDict
-    self["settings"] = {}     # Group.settings
+#    self["settings"] = None   # Group.settings
   sym = dict_alias("sym")
   style = dict_alias("style")
   pole = dict_alias("pole")
@@ -411,7 +411,7 @@ element_name of None to iterate through all children as (element_name,element_co
         retval.double_tap_time = int(specific)
       elif isinstance(settings_obj, scconfig.ActivatorChord.Settings):
         # TODO: resolve symbolic
-        specific = CHORD_MAP.get(specific, specific)
+        specific = self.CHORD_MAP.get(specific, specific)
         retval.chord_button = int(specific)
 
     toggle = None
@@ -1253,7 +1253,10 @@ Returns a cluster DOM which is a copy of the original but with shorthand notatio
       elif k[0] == '.':
         # dot-symbol => shorthand frob.
         setting_key = k[1:]
-        extcluster.settings[setting_key] = v
+        try:
+          extcluster.settings[setting_key] = v
+        except KeyError:
+          extcluster.settings = { setting_key: v }
       if pole_sym:
         if _stringlike(v):    # Parse from string.
           syntheses = self.expand_shorthand_syntheses(v)
@@ -1359,6 +1362,20 @@ shorthand
     'X': "button_x",  'x': "button_x",
     'Y': "button_y",  'y': "button_y",
     }
+#  MODESHIFT_MAP = {
+#    'A': "BQ.s", 'a': "BQ.s",
+#    'B': "BQ.e", 'b': "BQ.e",
+#    'X': "BQ.w", 'x': "BQ.w",
+#    'Y': "BQ.n", 'y': "BQ.n",
+#    'LT': "LT.c", 'LTf': "LT.c",
+#    'RT': "RT.c", 'RTf': "RT.c",
+#    'LTs': "LT.o",
+#    'RTs': "RT.o",
+#    'LP': "LP.c",
+#    'RP': "RP.c",
+#    'LS': "LJ.c",
+#    'RS': "RJ.c",
+#    }
 
   def normalize_layer (self, dom_node, conmap, layeridx=0):
     r"""Resolve shorthands in a layer subdict.
@@ -1397,7 +1414,9 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
 
           shorthand = "{{mode_shift,{},{}}}".format(cluster_sym, tokenid)
           syntheses = self.expand_shorthand_syntheses(shorthand)
-          modeshift_pole = PoleDict(normcluster.modeshift, syntheses)
+          modeshift_sym = self.MODESHIFT_MAP.get(normcluster.modeshift, normcluster.modeshift)
+#          modeshift_pole = PoleDict(normcluster.modeshift, syntheses)
+          modeshift_pole = PoleDict(modeshift_sym, syntheses)
           paralayer.merge_cluster_pole("SW", "switches", modeshift_pole)
         continue  # bypass cluster.pole case.
 
@@ -1624,7 +1643,7 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       # Apply next level.
       if (next_level & bitmask) == bitmask:
         # on key press.
-        pending.append("+")
+        #pending.append("+")
 
         if next_level != 0:   # can't apply 0 - achieved by removing all layers.
           if next_level in hermits:
@@ -1770,14 +1789,15 @@ Existing layers may have to be modified (e.g. unbinding conflicted keys).
       for n in range(1, maxshift+1):
         for shiftcl in normalized_shiftlayer.cluster:
           for shiftpo in shiftcl.pole:
-            for ovname in overlays[n]:
-              ovidx = [ x for x in range(len(extlayers)) if extlayers[x].get("name",None) == ovname ][0]
-              cl,po = self.normalize_srcsym(shiftsym,None)
-              ovcl = extlayers[ovidx].cluster[cl]
-              if ovcl:
-                ovpo = ovcl.pole[po]
-                if ovpo:
-                  shiftpo.merge_syntheses(ovpo.synthesis)
+            if n in overlays:
+              for ovname in overlays[n]:
+                ovidx = [ x for x in range(len(extlayers)) if extlayers[x].get("name",None) == ovname ][0]
+                cl,po = self.normalize_srcsym(shiftsym,None)
+                ovcl = extlayers[ovidx].cluster[cl]
+                if ovcl:
+                  ovpo = ovcl.pole[po]
+                  if ovpo:
+                    shiftpo.merge_syntheses(ovpo.synthesis)
 
     # Establish sanity bind.
     if sanity:
