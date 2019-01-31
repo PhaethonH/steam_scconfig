@@ -61,7 +61,7 @@ strictness=1 implies a mandatory/definitive second pass for exporting.
   elif m > 0:
     return 'radial_menu'
 
-  if not strictness:
+  if strictness:
     return 'dpad'
   else:
     return None
@@ -1220,7 +1220,7 @@ e.g. "<A> <B>" =>
 
 Returns a cluster DOM which is a copy of the original but with shorthand notation expanded/resolved.
 """
-#    print("normalizing cluster {}".format(dom_node))
+#    print("// normalizing cluster {}".format(dom_node))
     extcluster = ClusterDict()
 
     # Shorthand entire joystick.
@@ -1400,7 +1400,7 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
         normcluster = self.normalize_cluster(v)
         normcluster.sym = base_sym
         if base_sym in ("RT", "LT"):
-          normcluster.style = "trigger"
+          normcluster.style = scconfig.GroupTrigger.MODE
 #        modeshift_sym = self.MODESHIFT_MAP.get(modeshift_sym, modeshift_sym)
         normcluster.modeshift = modeshift_sym
         paralayer.merge_cluster(normcluster, normcluster.get("style",None))
@@ -1438,9 +1438,13 @@ Returns a substitute layer which is copy of the original (dom_node), but with sh
           paralayer[base_sym] = v
     # auto-style from all poles.
     for cluster in paralayer.cluster:
+      cluster_sym = cluster.get("sym", None)
       if not cluster.style:
-        polelist = [ x.sym for x in cluster.pole ]
-        autostyle = auto_style(polelist)
+        if cluster_sym in ("LT", "RT"):
+          autostyle = scconfig.GroupTrigger.MODE
+        else:
+          polelist = [ x.sym for x in cluster.pole ]
+          autostyle = auto_style(polelist)
         cluster.style = autostyle
 #        print(" fallback autostyle {} => {}".format(polelist, autostyle))
 #    print("normalized layer "); pprint.pprint(dom_node); print(" =>"); pprint.pprint(paralayer)

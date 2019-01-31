@@ -1579,7 +1579,16 @@ class GroupJoystickMouse (GroupBase):
       S.EDGE_BINDING_INVERT: bool,
       S.ANTI_DEADZONE: (0, 32767),
       S.ANTI_DEADZONE_BUFFER: (0, 32767),
+      S.DEADZONE_INNER_RADIUS: (0, 32000),
+      S.DEADZONE_OUTER_RADIUS: (0, 32000),
+      S.DEADZONE_SHAPE: [0, 1, 2],
+      S.INVERT_X: bool,
+      S.INVERT_Y: bool,
+      S.SENSITIVITY: (10, 1000),
+      S.SENSITIVITY_HORIZ_SCALE: (0, 200),
+      S.SENSITIVITY_VERT_SCALE: (0, 200),
       S.OUTPUT_JOYSTICK: OutputJoystick,
+      S.OUTPUT_AXIS: [ 0, 1, 2 ],
     }
     curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
     custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
@@ -1587,7 +1596,16 @@ class GroupJoystickMouse (GroupBase):
     edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
     anti_deadzone = SettingsBase._alias(S.ANTI_DEADZONE)
     anti_deadzone_buffer = SettingsBase._alias(S.ANTI_DEADZONE_BUFFER)
+    deadzone_inner_radius = SettingsBase._alias(S.DEADZONE_INNER_RADIUS)
+    deadzone_outer_radius = SettingsBase._alias(S.DEADZONE_OUTER_RADIUS)
+    deadzone_shape = SettingsBase._alias(S.DEADZONE_SHAPE)
+    invert_x = SettingsBase._alias(S.INVERT_X)
+    invert_y = SettingsBase._alias(S.INVERT_Y)
+    sensitivity = SettingsBase._alias(S.SENSITIVITY)
+    sensitivity_horiz_scale = SettingsBase._alias(S.SENSITIVITY_HORIZ_SCALE)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
     output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
+    output_axis = SettingsBase._alias(S.OUTPUT_AXIS)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
