@@ -1,7 +1,7 @@
 # X3:TC configuration
 
 name: "RightStick FpsLook"
-revision: 2
+revision: 672
 author: "PhaethonH"
 description: "Centered on Right Stick for Pitch+Yaw"
 devtype: controller_ps3
@@ -182,6 +182,71 @@ aliases:
   TradePad: "{overlay,apply,Trade1}"
   EndTradePad: "{overlay,peel,Trade1}{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
 
+Hats:
+  - &MenuHat
+    u: <Up_Arrow>
+    l: <Left_Arrow>
+    r: <Right_Arrow>
+    d: <Down_Arrow>
+  - &MenuHat2
+    u: <Page_Up>
+    d: <Page_Down>
+    l: $SelectCameraMode
+    r: $ChangeMapAxis
+  - &SixthAxis
+    u: $Accelerate
+    d: $Decelerate
+    l: $RollLeft
+    r: $RollRight
+    .layout: analog
+    .period: 60
+    .duty: 20
+  - &WingmateHat
+    u: $WingmenAttackTarget
+    d: $WingmenProtectMe
+    l: $DronesProtectMe
+    r: $DronesAttackTarget
+  - &ArsenalHat
+    u: $SelectWeaponGroup1 :$SelectWeaponGroup2
+    d: $SelectWeaponGroup3 :$SelectWeaponGroup4
+    l: $MatchSpeedToTarget
+    r:  _$WeaponsMenu
+    .layout: four-way
+  - &TargetingHat
+    style: dpad
+    u: $TargetNearestEnemy
+    l: $TargetNextOwnedObject
+    r: $TargetNextObject
+    d: $TargetNextEnemy
+    .layout: four-way
+  - &BogeyHat
+    u: $ActionsForSelectedObject _$ViewInfoAboutSelectedObject
+    l: $SETA _$Jumpdrive  :${ToggleAutopilot}#SETA+Autopilot :${SETA}@200,0
+    r: $Comms :$CommandConsoleForCurrentShip
+    d: $DockWithTarget :$CommandConsoleForCurrentShip
+  - &FriendlyHat
+    u: $ActionsForSelectedObject _$ViewInfoAboutSelectedObject
+    l: $LandedShips :$OwnedProperty _$Jumpdrive
+    r: $FreightBay
+    d: $CurrentShip :$PersonalInformation _$ChangeShip
+  - &MapCursor
+    style: radial
+    "c": <KEYPAD_5>
+    "00": "${NoOp}#ZoomOut___ZoomIn#LB###########################RB"
+    "01": <KEYPAD_8>
+    "02": <KEYPAD_9>
+    "03": <KEYPAD_6>
+    "04": <KEYPAD_3>
+    "05": <KEYPAD_2>
+    "06": <KEYPAD_1>
+    "07": <KEYPAD_4>
+    "08": <KEYPAD_7>
+    .activate: always
+    .x: 7
+    .y: 77
+    .scale: 100
+
+
 action:
 - name: Default
   layer:
@@ -189,30 +254,20 @@ action:
     LJ:
       style: jsmove
       c: "{overlay,apply,6th_axis}"
-    LJ&X:
-      style: radial
-      "c": <KEYPAD_5>
-      "00": "${NoOp}#ZoomOut___ZoomIn#LB###########################RB"
-      "01": <KEYPAD_8>
-      "02": <KEYPAD_9>
-      "03": <KEYPAD_6>
-      "04": <KEYPAD_3>
-      "05": <KEYPAD_2>
-      "06": <KEYPAD_1>
-      "07": <KEYPAD_4>
-      "08": <KEYPAD_7>
-      settings:
-        touchmenu_button_fire_type: 3
+#    # Displays1 as modeshift
+#    LJ&X:
+#      <<: *MapCursor
+#      .opacity: 40
     RJ:
       style: jsmove
       # Double-tap+hold for missile spam; Hold 3s to cancel missile launch.
       c: $LaunchMissile :${LaunchMissile}/20#Missile#spam _<>:3000#Cancel#Launch
 #    BK: <2><1>|#Cycle#Weapons#Group _<4><3>|
 #    BK: :<2> _<1> <4>
-    BK: $SelectMissile
+    BK: $SelectMissile _$SETA
     # LT for speed settings:
     # Lv0: tap = PresetHi/Lo, hold = Boost/Brake
-    # Lv1 LB+: MatchSpeed
+    # Lv1 LB+: MatchSpeed / Reverse
     # Lv2 RB+: ThrottleScale
     # Lv3 LB+RB+: Reverse
     LT:
@@ -223,33 +278,19 @@ action:
         deadzone_inner_radius: 0
         deadzone_outer_radius: 32767
         adaptive_threshold: 5
+        edge_binding_radius: 0
     RT.c: $BoresightFire
 #    BQ.n: $OpenSidebar
     BQ.n: +${TradePad} -${EndTradePad}
-#    BQ.w: $SectorMap :$GalaxyMap _{overlay,apply,Displays1}:333#Displays
-    BQ.w: $SectorMap :$GalaxyMap _<>:333#Displays
-#    BQ.w: "+{overlay,hold,Displays1}"
+    BQ.w: $SectorMap :$GalaxyMap _{overlay,hold,Displays1}:333#Displays
     BQ.e: $CancelEscape
     BQ.s: $SelectOption
-#    DP.u: ${UiUp_TgtNearBandit}
-#    DP.d: ${UiDn_TgtNextEnemy}
-#    DP.l: ${UiLt_TgtNextOwn}
-#    DP.r: ${UiRt_TgtNextAny}
-    DP:
-      style: dpad
-      u: ${UiUp_TgtNearBandit}
-      d: ${UiDn_TgtNextEnemy}
-      l: ${UiLt_TgtNextOwn}
-      r: ${UiRt_TgtNextAny}
-    DP&X:
-      style: dpad
-      u: $ZoomIn
-      d: $ZoomOut
-      l: $SelectCameraMode
-      r: $ChangeMapAxis
+    DP: *MenuHat
+    # Displays1 as modeshift
+    DP&X: *MenuHat2
     LB: "&${ZoomOut}:12"
     RB: "&${ZoomIn}:12"
-    ST: <Delete>
+    ST: <Delete>{overlay,peel,Displays1}
 
   - name: dummy
 
@@ -257,16 +298,7 @@ action:
     LJ:
       style: dpad
       c: "{overlay,peel,6th_axis}"
-#      u: $StrafeUp
-#      d: $StrafeDown
-      u: $Accelerate
-      d: $Decelerate
-      l: $RollLeft
-      r: $RollRight
-      settings:
-        layout: 2
-        analog_emulation_period: 60
-        analog_emulation_duty_cycle_pct: 20
+      <<: *SixthAxis
 
 # Operations that are reasonable to use without flight stick control:
 #*Current Ship (panel)
@@ -292,27 +324,42 @@ action:
 #*Encyclopedia
 #*MyAchievemens
 
+# Right Hand Panels: NAV, AP, WYPT, SHIP STATUS, Cockpit
+## n: 
+## w: 
+## e: (eject?)
+## s: ShipPanel _PlayerPanel
+# Left Hand Panels: Comms, Manual Reversion, Landing, FFI
+## n: TargetActions :TargetInfo
+## w: SETA _Jumpdrive
+## e: Freight
+## s: Comms
+
+# RH: Target Ops Friendly
+# LH: Target Ops Bogey
+## n: TargetActions :TargetInfo
+## w: 
+## e: CommandConsole
+## s:  _ChangeShip
+
 
   - name: Panels1
     # D-pad reflects A-10C throttle's Coolie Hat.
     # UP=HUD-as-SOI; DOWN=SwapMFCD/QuickLookDSMS
     # LEFT=CycleLeftMFCD/LeftMFCD-as-SOI RIGHT=CycleRightMFCD/RightMFCD-as-SOI
     DP.u: "{mouse_position,16384,16384,0} [1]@120,0   _$ToggleHudDisplay"
-    DP.d: $SelectMonitor  _$CloseMonitors   #_$FreightBay:750
+    DP.d: $SelectMonitor  _$CloseMonitors
     # Short Press to select monitor; Long Press to show on monitor.
     DP.l: "[1]^@150,0 _$ViewOnLeftMonitor:250 {mouse_position,4000,2000,1}^@0,200 "
     DP.r: "[1]^@150,0 _$ViewOnRightMonitor:250 {mouse_position,30000,2000,1}^@0,200 "
     # ButtonQuad bindings should be sensible to use while not piloting.
-    BQ.n: $ActionsForSelectedObject
-    BQ.e: $Comms
-    BQ.w: $SETA _$Jumpdrive
-    BQ.s: $DockWithTarget
+    BQ: *BogeyHat
     # LeftJoystick reflects Slew Control.
     LJ:
       style: jsmouse
       c: "[1]"
       settings:
-        sensitivity: 50
+        sensitivity: 63
 
   - name: Panels2
     # Hold left/right to peel off Panels2 and drop to Long Press.
@@ -321,82 +368,48 @@ action:
 
 
   - name: Displays1
-#    BQ.w: "{overlay,hold,Displays1} ${SectorMap} :${GalaxyMap} _<>:333"
-#    BQ.w: "-{overlay,hold,Displays1}"
-    LB: $ZoomOut
-    RB: $ZoomIn
-    DP:
-      u: <KEYPAD_PLUS>#ZoomIn
-      d: <KEYPAD_DASH>#ZoomOut
-      l: $SelectCameraMode
-      r: $ChangeMapAxis
-    LJ:
-      style: radial
-      "c": <KEYPAD_5>
-      "01": <KEYPAD_8>
-      "02": <KEYPAD_9>
-      "03": <KEYPAD_6>
-      "04": <KEYPAD_3>
-      "05": <KEYPAD_2>
-      "06": <KEYPAD_1>
-      "07": <KEYPAD_4>
-      "08": <KEYPAD_7>
-      settings:
-        touchmenu_button_fire_type: 3
-#    LJ:
-#      style: dpad
-#      "u": <KEYPAD_8>
-#      "d": <KEYPAD_2>
-#      "l": <KEYPAD_4>
-#      "r": <KEYPAD_6>
-#      "c": <KEYPAD_5>
+    BQ: { style: face }
+    DP: { style: dpad}
+    LJ: { style: jsmove }
+    RJ: { style: jsmove }
+#    LB: "&${ZoomOut}:12"
+#    RB: "&${ZoomIn}:12"
+    LB: $ZoomOut :$ZoomMapOut
+    RB: $ZoomIn :$ZoomMapIn
+    DP: *MenuHat2
+    LJ&X:
+      <<: *MapCursor
+      opacity: 80
+#    LT&X:
+#      "style": trigger
+#      o: "+{overlay,apply,SpeedScale}"
 #      settings:
-#        analog_emulation_period: 50
-#        analog_emulation_duty_cycle_pct: 15
-    LT:
-      "style": trigger
-      o: "+{overlay,apply,SpeedScale}"
-      settings:
-        output_trigger: 0
-        edge_binding_radius: 0
-        deadzone_outer_radius: 32767
+#        output_trigger: 0
+#        edge_binding_radius: 0
+#        deadzone_outer_radius: 32767
     ST: "{overlay,peel,Displays1}"
 
   - name: Combat1
     # Weapon Hat
-    DP.u: $SelectWeaponGroup1 :$SelectWeaponGroup2
-    DP.d: $SelectWeaponGroup3 :$SelectWeaponGroup4
-    DP.l: $MatchSpeedToTarget
-    DP.r:  _$WeaponsMenu
+    DP: *ArsenalHat
     # Targeting Hat
-    LJ.u: $TargetNearestEnemy
-    LJ.l: $TargetNextOwnedObject
-    LJ.r: $TargetNextObject
-    LJ.d: $TargetNextEnemy
-#    LJ:
-#      style: jsmove
-#    LJ&RB:
-#      style: radial
-#      "01": $TargetNearestEnemy
-#      "02": $TargetNextObject
-#      "03": $TargetNextEnemy
-#      "04": $TargetNextOwnedObject
-#      label: "Stuff like stuff stuff like that"
-#      settings:
-#        touchmenu_button_fire_type: 2
-    BK: $ToggleAutopilot _$LaserTargetingMode
+    LJ: *TargetingHat
+    # ?
+    BQ: *FriendlyHat
+# click = ToggleAutoPilot, long = LaserTargetingMode, double = ToggleAutopilot + SETATimeAccelerator
+    BK: $ToggleAutopilot _$LaserTargetingMode  :${ToggleAutopilot}:250#SETA+Autopilot :${SETATimeAccelerator}:250@400,0
 
   - name: Command1
-    DP.u: $WingmenAttackTarget
-    DP.d: $WingmenProtectMe
-    DP.l: $DronesProtectMe
-    DP.r: $DronesAttackTarget
+    # Wingmen Hat
+    DP: *WingmateHat
+    # LT: deceleration
     LT:
       style: trigger
       c: <>
       o: $Decelerate
       settings:
         adaptive_threshold: 0
+    # Misc Hat
     BQ:
       style: face
       n: $EjectFromShip
@@ -412,8 +425,8 @@ action:
   - name: SpeedScale
     LT:
       "style": trigger
-      c: <>
-      o: +{overlay,apply,SpeedLimbo}
+      c: +{overlay,apply,SpeedLock}
+      o: +{overlay,apply,SpeedLock}
       settings:
         adaptive_threshold: 0
         output_trigger: 1
@@ -421,13 +434,76 @@ action:
         deadzone_outer_radius: 32767
         edge_binding_radius: 0
 
+  # Throttle engaged, start monitoring.
+  - name: SpeedLock
+    RB: "-(LS){overlay,apply,SpeedLimbo}"
+    LT:
+      style: trigger
+      c: <>
+      o: "-{overlay,apply,SpeedLock0}"
+      settings:
+        adaptive_threshold: 0
+        output_trigger: 1
+        deadzone_inner_radius: 0
+        deadzone_outer_radius: 32767
+        edge_binding_radius: 0
+
+  # Throttle returned to center while monitored.
+  - name: SpeedLock0
+    # Manually revert shifting.
+    RB: "-(LS){overlay,peel,SpeedLock0}{overlay,peel,SpeedLock}{overlay,peel,Shift_2}{overlay,peel,Combat1}{overlay,peel,SpeedScale}"
+    LT:
+      style: trigger
+      # Re-engaging throttle.
+      c: "+{overlay,peel,SpeedLock0}"
+      o: "+{overlay,peel,SpeedLock0}"
+      settings:
+        adaptive_threshold: 0
+        output_trigger: 1
+        deadzone_inner_radius: 0
+        deadzone_outer_radius: 32767
+        edge_binding_radius: 0
+
+  # Throttle set, wait for return to center.
   - name: SpeedLimbo
     LT:
       style: trigger
-      c: -{overlay,peel,SpeedScale}{overlay,peel,SpeedLimbo}
-      o: -{overlay,peel,SpeedScale}{overlay,peel,SpeedLimbo}
+#      c: -{overlay,peel,SpeedScale}{overlay,peel,SpeedLock}{overlay,peel,SpeedLimbo}
+      # Manually revert shifting.
+      o: -{overlay,peel,SpeedLock}{overlay,peel,SpeedLock0}{overlay,peel,SpeedLimbo}{overlay,peel,Shift_2}{overlay,peel,Combat1}{overlay,peel,SpeedScale}
       settings:
+        adaptive_threshold: 0
         output_trigger: 1
+        deadzone_inner_radius: 0
+        deadzone_outer_radius: 32767
+        edge_binding_radius: 0
+
+
+#  - name: SpeedScale
+#    LT:
+#      style: trigger
+#      c: +{overlay,apply,SpeedLimbo}
+#      o: +{overlay,apply,SpeedLimbo}
+#      settings:
+#        adaptive_threshold: 0
+#        output_trigger: 1
+#        deadzone_inner_radius: 0
+#        deadzone_outer_radius: 32767
+#        edge_binding_radius: 0
+#
+#  - name: SpeedLimbo
+#    LT:
+#      style: trigger
+##      c: -{overlay,peel,SpeedScale}{overlay,peel,SpeedLock}{overlay,peel,SpeedLimbo}
+#      c: -{overlay,peel,SpeedLimbo}
+#      o: -{overlay,peel,SpeedLimbo}
+#      settings:
+#        adaptive_threshold: 0
+#        output_trigger: 1
+#        deadzone_inner_radius: 0
+#        deadzone_outer_radius: 32767
+#        edge_binding_radius: 0
+
 
   # WeaponsMode, Laser
   - name: WM_Laser
@@ -442,10 +518,10 @@ action:
     DP.u: "+<Backspace> +<1>@50,0 -{overlay,apply,T1_1}"
     DP.r: "<0>{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
     DP.d: "+<Backspace> +<9>@50,0 -{overlay,apply,T1_9}"
-    BQ.u: "-{overlay,peel,Trade1}{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
+    BQ.n: -$EndTradePad $TradeWithStation _<>:250
     LB: $BestBuysLocator
     RB: $BestSellingPriceLocator
-    ST: "{overlay,peel,Trade1}{overlay,peel,T1_1}{overlay,peel,T1_2}{overlay,peel,T1_3}{overlay,peel,T1_4}{overlay,peel,T1_5}{overlay,peel,T1_6}{overlay,peel,T1_7}{overlay,peel,T1_8}{overlay,peel,T1_9}"
+    ST: $EndTradePad
     LJ:
       style: jsmove
     LJ&Y:
@@ -496,6 +572,6 @@ action:
     sanity: ST
     hermit:
       1: -<T>
-    extend:
-      2: -(LS)
+#    extend:
+#      2: -(LS)
 
