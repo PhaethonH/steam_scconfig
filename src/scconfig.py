@@ -1077,7 +1077,7 @@ class GroupBase (object):
       EDGE_BINDING_RADIUS = "edge_binding_radius",
       EDGE_BINDING_INVERT = "edge_binding_invert",
       ANALOG_EMULATION_PERIOD = "analog_emulation_period",
-      ANALOG_EMULATION_DUTY_CYCLE = "analog_emulation_duty_cycle",
+      ANALOG_EMULATION_DUTY_CYCLE_PCT = "analog_emulation_duty_cycle_pct",
       OVERLAP_REGION = "overlap_region",
       GYRO_BUTTON_INVERT = "gyro_button_invert",
       HAPTIC_INTENSITY_OVERRIDE = "haptic_intensity_override",
@@ -1442,6 +1442,7 @@ class GroupDpad (GroupBase):
       S.EDGE_BINDING_RADIUS: (10000, 32000),
       S.EDGE_BINDING_INVERT: bool,
       S.ANALOG_EMULATION_PERIOD: (1, 500),
+      S.ANALOG_EMULATION_DUTY_CYCLE_PCT: (1, 99),
       S.OVERLAP_REGION: (2000, 16000),
       S.GYRO_BUTTON_INVERT: bool,
       S.GYRO_BUTTON: GyroButton,
@@ -1455,6 +1456,7 @@ class GroupDpad (GroupBase):
     edge_binding_radius = SettingsBase._alias(S.EDGE_BINDING_RADIUS)
     edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
     analog_emulation_period = SettingsBase._alias(S.ANALOG_EMULATION_PERIOD)
+    analog_emulation_duty_cycle_pct = SettingsBase._alias(S.ANALOG_EMULATION_DUTY_CYCLE_PCT)
     overlap_region = SettingsBase._alias(S.OVERLAP_REGION)
     gyro_button_invert = SettingsBase._alias(S.GYRO_BUTTON_INVERT)
     gyro_button = SettingsBase._alias(S.GYRO_BUTTON)
@@ -1577,7 +1579,16 @@ class GroupJoystickMouse (GroupBase):
       S.EDGE_BINDING_INVERT: bool,
       S.ANTI_DEADZONE: (0, 32767),
       S.ANTI_DEADZONE_BUFFER: (0, 32767),
+      S.DEADZONE_INNER_RADIUS: (0, 32000),
+      S.DEADZONE_OUTER_RADIUS: (0, 32000),
+      S.DEADZONE_SHAPE: [0, 1, 2],
+      S.INVERT_X: bool,
+      S.INVERT_Y: bool,
+      S.SENSITIVITY: (10, 1000),
+      S.SENSITIVITY_HORIZ_SCALE: (0, 200),
+      S.SENSITIVITY_VERT_SCALE: (0, 200),
       S.OUTPUT_JOYSTICK: OutputJoystick,
+      S.OUTPUT_AXIS: [ 0, 1, 2 ],
     }
     curve_exponent = SettingsBase._alias(S.CURVE_EXPONENT)
     custom_curve_exponent = SettingsBase._alias(S.CUSTOM_CURVE_EXPONENT)
@@ -1585,7 +1596,16 @@ class GroupJoystickMouse (GroupBase):
     edge_binding_invert = SettingsBase._alias(S.EDGE_BINDING_INVERT)
     anti_deadzone = SettingsBase._alias(S.ANTI_DEADZONE)
     anti_deadzone_buffer = SettingsBase._alias(S.ANTI_DEADZONE_BUFFER)
+    deadzone_inner_radius = SettingsBase._alias(S.DEADZONE_INNER_RADIUS)
+    deadzone_outer_radius = SettingsBase._alias(S.DEADZONE_OUTER_RADIUS)
+    deadzone_shape = SettingsBase._alias(S.DEADZONE_SHAPE)
+    invert_x = SettingsBase._alias(S.INVERT_X)
+    invert_y = SettingsBase._alias(S.INVERT_Y)
+    sensitivity = SettingsBase._alias(S.SENSITIVITY)
+    sensitivity_horiz_scale = SettingsBase._alias(S.SENSITIVITY_HORIZ_SCALE)
+    sensitivity_vert_scale = SettingsBase._alias(S.SENSITIVITY_VERT_SCALE)
     output_joystick = SettingsBase._alias(S.OUTPUT_JOYSTICK)
+    output_axis = SettingsBase._alias(S.OUTPUT_AXIS)
 
   class Inputs (GroupBase.Inputs):
     CLICK = "click"
